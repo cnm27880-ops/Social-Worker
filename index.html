@@ -2,6 +2,7 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' https://unpkg.com; style-src 'unsafe-inline'; img-src blob:;">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>互動式電子家系圖產生器 - 表單驅動版</title>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
@@ -80,6 +81,8 @@
     .status-badge[data-status="cohab"]     { background: #fef3c7; color: #92400e; border-color: #fcd34d; }
     .status-badge[data-status="separated"] { background: #fee2e2; color: #991b1b; border-color: #fca5a5; }
     .status-badge[data-status="divorced"]  { background: #fce7f3; color: #9d174d; border-color: #f9a8d4; }
+    .status-badge[data-status="horizontal"] { background: #e0f2fe; color: #0369a1; border-color: #7dd3fc; }
+    .status-badge[data-status="vertical"]   { background: #f0e7ff; color: #6b21a8; border-color: #c4b5fd; }
   </style>
 </head>
 <body>
@@ -94,6 +97,8 @@
     const COUPLE_GAP = 64;       // 夫妻中心距
     const SIBLING_GAP = 100;     // 手足中心距
     const GEN_Y = [80, 180, 280]; // 三代 Y 座標
+
+    const TEXT_FONT = "'Times New Roman', 'DFKai-SB', 'BiauKai', serif";
 
     /* ===== 字串解析器 ===== */
     function parseGenders(str) {
@@ -110,21 +115,44 @@
     const App = () => {
       /* --- state --- */
       const [gen2Str, setGen2Str]       = useState('');
-      const [gen2Cfg, setGen2Cfg]       = useState([]);   // [{gender, married, g3Str}]
-      const [positions, setPositions]   = useState({});    // nodeId → {x,y}
+      const [gen2Cfg, setGen2Cfg]       = useState([]);
+      const [positions, setPositions]   = useState({});
       const [indexId, setIndexId]       = useState(null);
-      const [drag, setDrag]             = useState(null);  // {id, ox, oy}
-      const [mode, setMode] = useState('drag'); // 紀錄目前的點擊模式
-      const [cohabMembers, setCohabMembers] = useState([]); // 紀錄同住者
-      const [deceasedIds, setDeceasedIds] = useState([]); // 紀錄已歿者
-      const [shortcuts, setShortcuts] = useState({ drag: 'd', index: 'i', cohab: 'c', deceased: 'x' });
-      const [g1Status, setG1Status] = useState('married'); // 'married' | 'divorced'
+      const [drag, setDrag]             = useState(null);
+      const [mode, setMode] = useState('drag');
+      const [cohabMembers, setCohabMembers] = useState([]);
+      const [deceasedIds, setDeceasedIds] = useState([]);
+      const [g1Status, setG1Status] = useState('married');
+
+      /* --- 快捷鍵 (localStorage) --- */
+      const DEFAULT_SHORTCUTS = { drag: 'q', index: 'w', cohab: 'e', deceased: 'r' };
+      const [shortcuts, setShortcuts] = useState(() => {
+        try {
+          const saved = localStorage.getItem('genogram-shortcuts');
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            return { ...DEFAULT_SHORTCUTS, ...parsed };
+          }
+        } catch {}
+        return DEFAULT_SHORTCUTS;
+      });
+
+      useEffect(() => {
+        try { localStorage.setItem('genogram-shortcuts', JSON.stringify(shortcuts)); } catch {}
+      }, [shortcuts]);
+
+      /* --- 自由文字方塊 --- */
+      const [texts, setTexts] = useState([]);
+      const [selectedTextId, setSelectedTextId] = useState(null);
+      const [textDrag, setTextDrag] = useState(null);
+      const [textResize, setTextResize] = useState(null);
+      const [textDirection, setTextDirection] = useState('horizontal');
+      const textDragMoved = useRef(false);
 
       // 快捷鍵監聽器
       useEffect(() => {
         const handleKeyDown = (e) => {
-          // 如果使用者正在輸入框打字，就不要觸發快捷鍵
-          if (e.target.tagName === 'INPUT' && e.target.type === 'text') return; 
+          if (e.target.tagName === 'INPUT' && e.target.type === 'text') return;
           const key = e.key.toLowerCase();
           if (key === shortcuts.drag.toLowerCase()) setMode('drag');
           if (key === shortcuts.index.toLowerCase()) setMode('index');
@@ -135,29 +163,59 @@
         return () => window.removeEventListener('keydown', handleKeyDown);
       }, [shortcuts]);
 
-      // 更新快捷鍵的函數
       const updateShortcut = (modeName, key) => {
         setShortcuts(prev => ({ ...prev, [modeName]: key }));
       };
 
-      // 切換雙胞胎的函數
       const toggleTwin = (i) => {
         setGen2Cfg(p => p.map((d, j) => j === i ? { ...d, isTwin: !d.isTwin } : d));
       };
       const svgRef = useRef(null);
 
-      /* --- 下載 JPG (精準裁切) --- */
+      /* --- 狀態標籤文字對照 --- */
+      const G2_STATUSES = ['none', 'married', 'cohab', 'separated', 'divorced'];
+      const G2_LABELS = { none: '未婚', married: '已婚', cohab: '同居', separated: '分居', divorced: '離婚' };
+      const G1_STATUSES = ['married', 'divorced'];
+      const G1_LABELS = { married: '已婚', divorced: '離婚' };
+      const TEXT_DIRS = ['horizontal', 'vertical'];
+      const TEXT_DIR_LABELS = { horizontal: '橫式排版', vertical: '直式排版' };
+
+      const wheelRef = (el, list, current, setter) => {
+        if (!el) return;
+        el.onwheel = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const dir = e.deltaY > 0 ? 1 : -1;
+          const idx = list.indexOf(current);
+          const next = (idx + dir + list.length) % list.length;
+          setter(list[next]);
+        };
+      };
+
+      /* --- 下載 JPG (精準裁切，含文字方塊) --- */
       const downloadJPG = () => {
         const PAD = 40;
         const allIds = nodes.map(n => n.id);
-        if (allIds.length === 0) return;
+        if (allIds.length === 0 && texts.length === 0) return;
 
-        const xs = allIds.map(id => pos(id).x);
-        const ys = allIds.map(id => pos(id).y);
-        const minX = Math.min(...xs) - R - PAD;
-        const minY = Math.min(...ys) - R - PAD;
-        const maxX = Math.max(...xs) + R + PAD;
-        const maxY = Math.max(...ys) + R + PAD;
+        const allXs = [], allYs = [];
+        allIds.forEach(id => {
+          const p = pos(id);
+          allXs.push(p.x - R, p.x + R);
+          allYs.push(p.y - R, p.y + R);
+        });
+        texts.forEach(t => {
+          const w = t.vertical ? t.fontSize * 1.5 : t.text.length * t.fontSize * 0.7;
+          const h = t.vertical ? t.text.length * t.fontSize * 1.2 : t.fontSize * 1.5;
+          allXs.push(t.x - 4, t.x + (t.vertical ? t.fontSize * 1.5 : w));
+          allYs.push(t.y - (t.vertical ? 4 : t.fontSize + 4), t.y + (t.vertical ? h : 8));
+        });
+        if (allXs.length === 0) return;
+
+        const minX = Math.min(...allXs) - PAD;
+        const minY = Math.min(...allYs) - PAD;
+        const maxX = Math.max(...allXs) + PAD;
+        const maxY = Math.max(...allYs) + PAD;
         const cropW = maxX - minX;
         const cropH = maxY - minY;
 
@@ -204,6 +262,8 @@
           setDeceasedIds([]);
           setPositions({});
           setG1Status('married');
+          setTexts([]);
+          setSelectedTextId(null);
         }
       };
 
@@ -225,39 +285,24 @@
       const toggleMulti = (i) =>
         setGen2Cfg(p => p.map((d, j) => j === i ? { ...d, isMulti: !d.isMulti } : d));
 
-      /* --- 狀態標籤文字對照 --- */
-      const G2_STATUSES = ['none', 'married', 'cohab', 'separated', 'divorced'];
-      const G2_LABELS = { none: '未婚', married: '已婚', cohab: '同居', separated: '分居', divorced: '離婚' };
-      const G1_STATUSES = ['married', 'divorced'];
-      const G1_LABELS = { married: '已婚', divorced: '離婚' };
-
-      const wheelCycle = (e, list, current, setter) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const dir = e.deltaY > 0 ? 1 : -1;
-        const idx = list.indexOf(current);
-        const next = (idx + dir + list.length) % list.length;
-        setter(list[next]);
+      /* --- 文字方塊操作 --- */
+      const addText = () => {
+        const id = 'txt_' + Date.now();
+        setTexts(prev => [...prev, {
+          id, x: 300, y: 200, text: '文字',
+          fontSize: 16, vertical: textDirection === 'vertical'
+        }]);
       };
 
-      // 綁定 non-passive wheel 事件的 ref callback，確保 preventDefault 能正常運作
-      const wheelRef = (el, list, current, setter) => {
-        if (!el) return;
-        el.onwheel = (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          const dir = e.deltaY > 0 ? 1 : -1;
-          const idx = list.indexOf(current);
-          const next = (idx + dir + list.length) % list.length;
-          setter(list[next]);
-        };
+      const deleteText = (id) => {
+        setTexts(prev => prev.filter(t => t.id !== id));
+        setSelectedTextId(null);
       };
 
-      /* ===== 計算節點與連線 ===== */
+      /* ===== 計算節點與連線 (含單一子代置中修正) ===== */
       const { nodes, lines } = useMemo(() => {
         const N = [], L = [];
 
-        // --- 計算每個 gen2 家庭單元寬度 ---
         const units = gen2Cfg.map((c, i) => {
           const isMarried = c.partner !== 'none';
           const g3 = isMarried ? parseGenders(c.g3Str) : [];
@@ -279,6 +324,7 @@
         const fX = originX + totalW / 2 - COUPLE_GAP / 2;
         const mX = originX + totalW / 2 + COUPLE_GAP / 2;
         const g1Y = GEN_Y[0];
+        const parentMidX = (fX + mX) / 2;
 
         N.push({ id: 'fa', gender: 'M', gen: 0, dx: fX, dy: g1Y, label: '父' });
         N.push({ id: 'mo', gender: 'F', gen: 0, dx: mX, dy: g1Y, label: '母' });
@@ -293,8 +339,16 @@
           const midU = cx + u.w / 2;
 
           if (u.isMarried) {
-            const lx = midU - COUPLE_GAP / 2;
-            const rx = midU + COUPLE_GAP / 2;
+            let lx, rx;
+            // 單一子代時，強制置中於父母婚姻線正中央
+            if (units.length === 1) {
+              lx = parentMidX;
+              rx = parentMidX + COUPLE_GAP;
+            } else {
+              lx = midU - COUPLE_GAP / 2;
+              rx = midU + COUPLE_GAP / 2;
+            }
+            const coupleMidX = (lx + rx) / 2;
             const sid = `s${i}`;
             const spG = u.gender === 'M' ? 'F' : 'M';
 
@@ -303,10 +357,10 @@
             L.push({ id: `ml-c${i}`, type: 'marry', a: cid, b: sid, status: u.partner });
             g2ids.push(cid);
 
-            // Gen3
+            // Gen3 — 以夫妻中心點為基準置中
             if (u.g3.length > 0) {
               const g3W = (u.g3.length - 1) * SIBLING_GAP;
-              const g3Start = midU - g3W / 2;
+              const g3Start = coupleMidX - g3W / 2;
               const g3ids = [];
               u.g3.forEach((g, j) => {
                 const gid = `g${i}_${j}`;
@@ -346,7 +400,7 @@
         return n ? { x: n.dx, y: n.dy } : { x: 0, y: 0 };
       }, [positions, nodes]);
 
-      /* ===== 拖曳 ===== */
+      /* ===== 拖曳 (節點 + 文字 + 縮放) ===== */
       const svgPt = useCallback((e) => {
         const svg = svgRef.current;
         const p = svg.createSVGPoint();
@@ -361,7 +415,46 @@
         setDrag({ id, ox: sp.x - p.x, oy: sp.y - p.y });
       }, [svgPt, pos]);
 
-const onMove = useCallback((e) => {
+      const onTextDown = useCallback((e, id) => {
+        e.stopPropagation();
+        textDragMoved.current = false;
+        const sp = svgPt(e);
+        const t = texts.find(t => t.id === id);
+        if (t) setTextDrag({ id, ox: sp.x - t.x, oy: sp.y - t.y });
+      }, [svgPt, texts]);
+
+      const onTextClick = useCallback((e, id) => {
+        e.stopPropagation();
+        if (textDragMoved.current) return;
+        setSelectedTextId(id);
+        const t = texts.find(t => t.id === id);
+        const newText = window.prompt('編輯文字內容：', t?.text || '');
+        if (newText !== null && newText !== '') {
+          setTexts(prev => prev.map(t => t.id === id ? { ...t, text: newText } : t));
+        }
+      }, [texts]);
+
+      const onResizeDown = useCallback((e, id) => {
+        e.stopPropagation();
+        const sp = svgPt(e);
+        const t = texts.find(t => t.id === id);
+        if (t) setTextResize({ id, startY: sp.y, startSize: t.fontSize });
+      }, [svgPt, texts]);
+
+      const onMove = useCallback((e) => {
+        if (textResize) {
+          const sp = svgPt(e);
+          const delta = sp.y - textResize.startY;
+          const newSize = Math.max(10, Math.min(72, Math.round(textResize.startSize + delta * 0.3)));
+          setTexts(prev => prev.map(t => t.id === textResize.id ? { ...t, fontSize: newSize } : t));
+          return;
+        }
+        if (textDrag) {
+          textDragMoved.current = true;
+          const sp = svgPt(e);
+          setTexts(prev => prev.map(t => t.id === textDrag.id ? { ...t, x: sp.x - textDrag.ox, y: sp.y - textDrag.oy } : t));
+          return;
+        }
         if (!drag) return;
         const sp = svgPt(e);
         const rawX = sp.x - drag.ox;
@@ -370,27 +463,28 @@ const onMove = useCallback((e) => {
         setPositions(prev => {
           let newX = rawX;
           let newY = rawY;
-          const snapDist = 12; // 磁吸感應距離 (像素)
+          const snapDist = 12;
 
-          // 尋找畫布上其他節點的座標來進行對齊
           for (const [id, pos] of Object.entries(prev)) {
             if (id === drag.id) continue;
-            // 靠近其他節點的垂直線 (X軸相同) 時，自動吸附
             if (Math.abs(newX - pos.x) < snapDist) newX = pos.x;
-            // 靠近其他節點的水平線 (Y軸相同) 時，自動吸附
             if (Math.abs(newY - pos.y) < snapDist) newY = pos.y;
           }
           return { ...prev, [drag.id]: { x: newX, y: newY } };
         });
-      }, [drag, svgPt]);
+      }, [drag, textDrag, textResize, svgPt]);
 
-      const onUp = useCallback(() => setDrag(null), []);
+      const onUp = useCallback(() => {
+        setDrag(null);
+        setTextDrag(null);
+        setTextResize(null);
+      }, []);
 
-/* ===== 依據模式處理點擊 ===== */
+      /* ===== 依據模式處理點擊 ===== */
       const onClick = useCallback((e, id) => {
         e.stopPropagation();
-        if (mode === 'drag') return; // 拖曳模式不觸發點擊
-        
+        if (mode === 'drag') return;
+
         if (mode === 'index') {
           setIndexId(prev => prev === id ? null : id);
         } else if (mode === 'cohab') {
@@ -400,27 +494,35 @@ const onMove = useCallback((e) => {
         }
       }, [mode]);
 
-      /* ===== SVG 尺寸 ===== */
+      /* ===== SVG 尺寸 (含文字) ===== */
       const svgW = useMemo(() => {
         const xs = nodes.map(n => (positions[n.id]?.x ?? n.dx));
+        texts.forEach(t => {
+          const w = t.vertical ? t.fontSize * 1.5 : t.text.length * t.fontSize * 0.7;
+          xs.push(t.x + w + 30);
+        });
         return Math.max(800, (xs.length ? Math.max(...xs) : 0) + 160);
-      }, [nodes, positions]);
+      }, [nodes, positions, texts]);
 
       const svgH = useMemo(() => {
         const ys = nodes.map(n => (positions[n.id]?.y ?? n.dy));
+        texts.forEach(t => {
+          const h = t.vertical ? t.text.length * t.fontSize * 1.2 : t.fontSize * 1.5;
+          ys.push(t.y + h + 20);
+        });
         return Math.max(520, (ys.length ? Math.max(...ys) : 0) + 80);
-      }, [nodes, positions]);
-      
+      }, [nodes, positions, texts]);
+
       /* ===== 計算同住虛線框 ===== */
       const cohabitationBox = useMemo(() => {
         if (cohabMembers.length === 0) return null;
         const members = nodes.filter(n => cohabMembers.includes(n.id));
         if (members.length === 0) return null;
 
-        const padding = 25; // 框線與圖形的間距
+        const padding = 25;
         const xs = members.map(n => pos(n.id).x);
         const ys = members.map(n => pos(n.id).y);
-        
+
         const minX = Math.min(...xs) - R - padding;
         const maxX = Math.max(...xs) + R + padding;
         const minY = Math.min(...ys) - R - padding;
@@ -428,7 +530,8 @@ const onMove = useCallback((e) => {
 
         return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
       }, [cohabMembers, nodes, positions, pos]);
-     /* ===== 渲染連線 ===== */
+
+      /* ===== 渲染連線 ===== */
       const drawLines = () => lines.map(ln => {
         if (ln.type === 'marry') {
           const a = pos(ln.a), b = pos(ln.b);
@@ -436,17 +539,17 @@ const onMove = useCallback((e) => {
           const nB = nodes.find(n => n.id === ln.b);
           const x1 = a.x + (nA?.gender === 'M' ? R : R);
           const x2 = b.x - (nB?.gender === 'M' ? R : R);
-          
+
           const els = [];
-          const isDashed = ln.status === 'cohab'; // 同居畫虛線
+          const isDashed = ln.status === 'cohab';
           els.push(<line key={ln.id} x1={x1} y1={a.y} x2={x2} y2={b.y} stroke="#444" strokeWidth="2" strokeDasharray={isDashed ? "8,6" : "0"} />);
-          
+
           const midX = (x1 + x2) / 2;
           const midY = a.y;
-          
-          if (ln.status === 'separated') { // 分居 (單斜線)
+
+          if (ln.status === 'separated') {
             els.push(<line key={`${ln.id}-s`} x1={midX - 6} y1={midY + 12} x2={midX + 6} y2={midY - 12} stroke="#444" strokeWidth="2" />);
-          } else if (ln.status === 'divorced') { // 離婚 (打叉叉)
+          } else if (ln.status === 'divorced') {
             els.push(<line key={`${ln.id}-d1`} x1={midX - 8} y1={midY - 8} x2={midX + 8} y2={midY + 8} stroke="#444" strokeWidth="2" />);
             els.push(<line key={`${ln.id}-d2`} x1={midX - 8} y1={midY + 8} x2={midX + 8} y2={midY - 8} stroke="#444" strokeWidth="2" />);
           }
@@ -464,10 +567,8 @@ const onMove = useCallback((e) => {
           const barY = parentY + (childY - parentY - R) * 0.4 + R;
 
           const els = [];
-          // 從父母婚姻線中間垂直往下
           els.push(<line key={`${ln.id}-v`} x1={midX} y1={parentY} x2={midX} y2={barY} stroke="#444" strokeWidth="2" />);
 
-          // 水平橫桿
           const minKX = Math.min(midX, ...kidPos.map(p => p.x));
           const maxKX = Math.max(midX, ...kidPos.map(p => p.x));
           els.push(<line key={`${ln.id}-h`} x1={minKX} y1={barY} x2={maxKX} y2={barY} stroke="#444" strokeWidth="2" />);
@@ -485,16 +586,13 @@ const onMove = useCallback((e) => {
           });
           if (currentGroup.length >= 2) multiGroups.push(currentGroup);
 
-          // 每個子代垂直連下 (包含多胞胎倒 V 邏輯)
           kidPos.forEach((kp, j) => {
             const group = multiGroups.find(g => g.includes(j));
             if (group) {
-              // 屬於有效多胞胎，算出共同頂點 X
               const groupXs = group.map(gIdx => kidPos[gIdx].x);
               const centerX = groupXs.reduce((sum, x) => sum + x, 0) / groupXs.length;
               els.push(<line key={`${ln.id}-m${j}`} x1={centerX} y1={barY} x2={kp.x} y2={kp.y - R} stroke="#444" strokeWidth="2" />);
             } else {
-              // 一般垂直線
               els.push(<line key={`${ln.id}-k${j}`} x1={kp.x} y1={barY} x2={kp.x} y2={kp.y - R} stroke="#444" strokeWidth="2" />);
             }
           });
@@ -503,7 +601,7 @@ const onMove = useCallback((e) => {
         return null;
       });
 
-/* ===== 渲染節點 ===== */
+      /* ===== 渲染節點 ===== */
       const drawNodes = () => nodes.map(nd => {
         const p = pos(nd.id);
         const isIP = nd.id === indexId;
@@ -517,16 +615,75 @@ const onMove = useCallback((e) => {
             {nd.gender === 'M'
               ? <rect x={-R} y={-R} width={SZ} height={SZ} fill={fill} stroke="#333" strokeWidth="2.5" rx="2" />
               : <circle cx="0" cy="0" r={R} fill={fill} stroke="#333" strokeWidth="2.5" />}
-            
-            {/* 保留案主標示，移除預設的父母子女文字 */}
+
             {isIP && <text x="0" y="4" textAnchor="middle" fontSize="11" fontWeight="bold" fill={txtC}>案主</text>}
-            
-            {/* 死亡狀態：打叉 (如果被設為案主反黑，叉叉就變白色) */}
+
             {deceasedIds.includes(nd.id) && (
               <g stroke={isIP ? 'white' : '#333'} strokeWidth="2.5">
                 <line x1={-R} y1={-R} x2={R} y2={R} />
                 <line x1={R} y1={-R} x2={-R} y2={R} />
-             </g>
+              </g>
+            )}
+          </g>
+        );
+      });
+
+      /* ===== 渲染自由文字 ===== */
+      const drawTexts = () => texts.map(t => {
+        const isSelected = selectedTextId === t.id;
+        const estW = t.vertical ? t.fontSize * 1.3 : t.text.length * t.fontSize * 0.65;
+        const estH = t.vertical ? t.text.length * t.fontSize * 1.15 : t.fontSize * 1.3;
+
+        // 選取框與控制按鈕的座標
+        const selX = t.vertical ? -4 : -4;
+        const selY = t.vertical ? -4 : -estH;
+        const selW = (t.vertical ? t.fontSize * 1.5 : estW) + 8;
+        const selH = (t.vertical ? estH : t.fontSize * 1.3) + 8;
+
+        const delX = selX + selW;
+        const delY = selY;
+        const resX = selX + selW;
+        const resY = selY + selH;
+
+        return (
+          <g key={t.id} transform={`translate(${t.x},${t.y})`}>
+            {/* 選取虛線框 */}
+            {isSelected && (
+              <rect x={selX} y={selY} width={selW} height={selH}
+                    fill="none" stroke="#3b82f6" strokeWidth="1.5" strokeDasharray="4,3" rx="3" />
+            )}
+            {/* 文字本體 */}
+            <text
+              style={{
+                fontFamily: TEXT_FONT,
+                fontSize: t.fontSize,
+                writingMode: t.vertical ? 'vertical-rl' : undefined
+              }}
+              fill="#333"
+              cursor="move"
+              onMouseDown={e => onTextDown(e, t.id)}
+              onClick={e => onTextClick(e, t.id)}
+            >
+              {t.text}
+            </text>
+            {/* 選取時顯示控制元件 */}
+            {isSelected && (
+              <>
+                {/* ❌ 刪除按鈕 (右上角) */}
+                <g transform={`translate(${delX},${delY})`}
+                   style={{ cursor: 'pointer' }}
+                   onClick={e => { e.stopPropagation(); deleteText(t.id); }}>
+                  <circle cx="0" cy="0" r="10" fill="white" stroke="#ef4444" strokeWidth="1.5" />
+                  <text x="0" y="4" textAnchor="middle" fontSize="11" fill="#ef4444" pointerEvents="none">✕</text>
+                </g>
+                {/* ↘️ 縮放拉桿 (右下角) */}
+                <g transform={`translate(${resX},${resY})`}
+                   style={{ cursor: 'nwse-resize' }}
+                   onMouseDown={e => onResizeDown(e, t.id)}>
+                  <circle cx="0" cy="0" r="8" fill="#3b82f6" opacity="0.85" />
+                  <text x="0" y="3.5" textAnchor="middle" fontSize="9" fill="white" pointerEvents="none">↘</text>
+                </g>
+              </>
             )}
           </g>
         );
@@ -548,12 +705,12 @@ const onMove = useCallback((e) => {
               </div>
             </div>
 
-{/* 互動模式選單與快捷鍵 */}
+            {/* 互動模式選單與快捷鍵 */}
             <div className="section" style={{ background: '#eff6ff', borderColor: '#bfdbfe' }}>
               <label>🛠️ 畫布互動模式 (可用快捷鍵切換)</label>
               <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '8px', fontSize: '13px', alignItems: 'center' }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <input type="radio" name="mode" checked={mode === 'drag'} onChange={() => setMode('drag')} /> 🤚 拖曳 
+                  <input type="radio" name="mode" checked={mode === 'drag'} onChange={() => setMode('drag')} /> 🤚 拖曳
                   [<input type="text" maxLength="1" value={shortcuts.drag} onChange={e => updateShortcut('drag', e.target.value)} style={{ width: '18px', padding: '0', textAlign: 'center', fontSize: '11px', background: 'transparent', border: 'none', borderBottom: '1px solid #3b82f6', outline: 'none' }} />]
                 </label>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -624,6 +781,21 @@ const onMove = useCallback((e) => {
               </div>
             )}
 
+            {/* 自由文字方塊 */}
+            <div className="section">
+              <label>📝 自由文字方塊</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                <span style={{ fontSize: '12px', color: '#64748b' }}>方向：</span>
+                <span className="status-badge" data-status={textDirection}
+                  ref={el => wheelRef(el, TEXT_DIRS, textDirection, setTextDirection)}
+                  title="滾輪切換方向">{TEXT_DIR_LABELS[textDirection]}</span>
+                <button onClick={addText} style={{ padding: '4px 12px', fontSize: '12px', background: '#10b981', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', marginLeft: 'auto' }}>
+                  ➕ 新增至畫布
+                </button>
+              </div>
+              <div className="hint">點擊畫布上的文字可編輯內容；選取後可刪除或拖曳右下角縮放。</div>
+            </div>
+
             {/* 使用說明 */}
             <div className="section">
               <label>操作說明</label>
@@ -632,6 +804,7 @@ const onMove = useCallback((e) => {
                 點擊節點 → 標示 / 取消「案主」<br/>
                 拖曳節點 → 微調位置，連線即時跟隨<br/>
                 滑鼠滾輪於狀態標籤 → 循環切換婚姻狀態<br/>
+                📝 文字方塊 → 可拖曳、編輯、縮放、刪除<br/>
                 📥 下載 JPG → 自動裁切白邊並匯出
               </div>
             </div>
@@ -641,6 +814,7 @@ const onMove = useCallback((e) => {
           <div className="canvas-wrap">
             <svg ref={svgRef} width={svgW} height={svgH}
                  onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp}
+                 onClick={() => setSelectedTextId(null)}
                  style={{ background: '#fefefe', minWidth: '600px' }}>
               {/* 背景格線 */}
               <defs>
@@ -652,10 +826,10 @@ const onMove = useCallback((e) => {
 
               {/* 繪製同住家屬外框 */}
               {cohabitationBox && (
-                <rect 
-                  x={cohabitationBox.x} y={cohabitationBox.y} 
-                  width={cohabitationBox.width} height={cohabitationBox.height} 
-                  fill="none" stroke="#ef4444" strokeWidth="2" strokeDasharray="8,6" rx="15" 
+                <rect
+                  x={cohabitationBox.x} y={cohabitationBox.y}
+                  width={cohabitationBox.width} height={cohabitationBox.height}
+                  fill="none" stroke="#ef4444" strokeWidth="2" strokeDasharray="8,6" rx="15"
                 />
               )}
 
@@ -666,6 +840,7 @@ const onMove = useCallback((e) => {
 
               {drawLines()}
               {drawNodes()}
+              {drawTexts()}
             </svg>
           </div>
         </div>
