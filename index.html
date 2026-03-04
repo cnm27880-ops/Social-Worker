@@ -82,7 +82,7 @@
     const R  = SZ / 2;           // 半徑 / 半邊長
     const COUPLE_GAP = 64;       // 夫妻中心距
     const SIBLING_GAP = 100;     // 手足中心距
-    const GEN_Y = [80, 260, 440]; // 三代 Y 座標
+    const GEN_Y = [80, 180, 280]; // 三代 Y 座標
 
     /* ===== 字串解析器 ===== */
     function parseGenders(str) {
@@ -133,6 +133,18 @@
         setGen2Cfg(p => p.map((d, j) => j === i ? { ...d, isTwin: !d.isTwin } : d));
       };
       const svgRef = useRef(null);
+
+      // 一鍵重製畫布
+      const resetCanvas = () => {
+        if (window.confirm('確定要清空畫布並重新開始嗎？(可按 Enter 確認)')) {
+          setGen2Str('');
+          setGen2Cfg([]);
+          setIndexId(null);
+          setCohabMembers([]);
+          setDeceasedIds([]);
+          setPositions({});
+        }
+      };
 
       /* --- 第二代字串變更 --- */
       const onGen2Change = (val) => {
@@ -258,10 +270,27 @@
         setDrag({ id, ox: sp.x - p.x, oy: sp.y - p.y });
       }, [svgPt, pos]);
 
-      const onMove = useCallback((e) => {
+const onMove = useCallback((e) => {
         if (!drag) return;
         const sp = svgPt(e);
-        setPositions(prev => ({ ...prev, [drag.id]: { x: sp.x - drag.ox, y: sp.y - drag.oy } }));
+        const rawX = sp.x - drag.ox;
+        const rawY = sp.y - drag.oy;
+
+        setPositions(prev => {
+          let newX = rawX;
+          let newY = rawY;
+          const snapDist = 12; // 磁吸感應距離 (像素)
+
+          // 尋找畫布上其他節點的座標來進行對齊
+          for (const [id, pos] of Object.entries(prev)) {
+            if (id === drag.id) continue;
+            // 靠近其他節點的垂直線 (X軸相同) 時，自動吸附
+            if (Math.abs(newX - pos.x) < snapDist) newX = pos.x;
+            // 靠近其他節點的水平線 (Y軸相同) 時，自動吸附
+            if (Math.abs(newY - pos.y) < snapDist) newY = pos.y;
+          }
+          return { ...prev, [drag.id]: { x: newX, y: newY } };
+        });
       }, [drag, svgPt]);
 
       const onUp = useCallback(() => setDrag(null), []);
@@ -395,7 +424,12 @@
       return (
         <div className="app-layout">
           <div className="panel">
-            <h2>家系圖資料輸入面板</h2>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '14px', paddingBottom: '8px', borderBottom: '2px solid #3b82f6' }}>
+              <h2 style={{ margin: 0, border: 'none', padding: 0 }}>家系圖資料輸入面板</h2>
+              <button onClick={resetCanvas} style={{ padding: '5px 10px', fontSize: '12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>
+                🗑️ 重製畫布
+              </button>
+            </div>
 
 {/* 互動模式選單與快捷鍵 */}
             <div className="section" style={{ background: '#eff6ff', borderColor: '#bfdbfe' }}>
