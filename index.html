@@ -3,179 +3,399 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>電子家系圖產生器 - 跨裝置輸入版</title>
+  <title>互動式電子家系圖產生器 - 表單驅動版</title>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <style>
-    /* CSS 重置與基礎設定 */
-    * { box-sizing: border-box; }
-    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f3f4f6; margin: 0; padding: 16px; }
-    
-    /* 響應式佈局：手機預設上下排，電腦變左右排 */
-    .app-layout { display: flex; flex-direction: column; gap: 20px; max-width: 1200px; margin: 0 auto; }
-    @media (min-width: 768px) { .app-layout { flex-direction: row; } }
-    
-    /* 左側/上方 控制面板 */
-    .panel { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); flex: 1; min-width: 300px; }
-    .form-group { margin-bottom: 15px; }
-    .form-group label { display: block; margin-bottom: 5px; font-weight: bold; color: #374151; }
-    select, button { width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 16px; }
-    button { cursor: pointer; background: #3b82f6; color: white; border: none; font-weight: bold; margin-top: 10px; }
-    button:hover { background: #2563eb; }
-    button.outline { background: white; color: #374151; border: 1px solid #d1d5db; margin-top: 5px; }
-    button.outline.active { background: #e0f2fe; border-color: #3b82f6; color: #1d4ed8; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', 'Microsoft JhengHei', sans-serif; background: #f0f2f5; padding: 12px; }
 
-    /* 右側/下方 畫布區塊 */
-    .canvas-wrapper { background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); flex: 2; overflow-x: auto; /* 手機上若圖太寬可左右滑動 */ }
-    .canvas { display: block; min-width: 600px; /* 確保畫布不會縮太小導致圖形擠壓 */ cursor: crosshair; }
+    .app-layout { display: flex; flex-direction: column; gap: 12px; max-width: 1500px; margin: 0 auto; }
+    @media (min-width: 768px) { .app-layout { flex-direction: row; align-items: flex-start; } }
+
+    .panel {
+      background: white; padding: 18px; border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08); flex: 0 0 330px;
+      max-height: 92vh; overflow-y: auto;
+    }
+    .panel h2 { font-size: 17px; color: #1e293b; margin-bottom: 14px; padding-bottom: 8px; border-bottom: 2px solid #3b82f6; }
+    .panel h4 { font-size: 13px; color: #475569; margin: 10px 0 4px; }
+
+    .section {
+      margin-bottom: 14px; padding: 10px 12px; background: #f8fafc;
+      border-radius: 8px; border: 1px solid #e2e8f0;
+    }
+    .section > label { display: block; font-size: 13px; font-weight: 700; color: #334155; margin-bottom: 5px; }
+    .section .sub { font-size: 12px; color: #64748b; margin-bottom: 4px; }
+
+    input[type="text"] {
+      width: 100%; padding: 7px 10px; border: 1px solid #cbd5e1;
+      border-radius: 6px; font-size: 14px; outline: none; transition: border 0.15s;
+    }
+    input[type="text"]:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,0.15); }
+
+    .hint { font-size: 11px; color: #94a3b8; margin-top: 3px; }
+
+    .child-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 5px 0; border-bottom: 1px solid #e2e8f0;
+    }
+    .child-row:last-child { border-bottom: none; }
+    .child-icon { font-size: 14px; min-width: 22px; text-align: center; }
+    .child-icon.m { color: #2563eb; }
+    .child-icon.f { color: #dc2626; }
+    .child-name { font-size: 13px; font-weight: 600; min-width: 40px; }
+    .child-name.m { color: #2563eb; }
+    .child-name.f { color: #dc2626; }
+
+    .chk-wrap {
+      display: flex; align-items: center; gap: 3px;
+      font-size: 12px; color: #64748b; cursor: pointer; margin-left: auto;
+    }
+    .chk-wrap input { cursor: pointer; accent-color: #3b82f6; }
+
+    .gen3-block { padding: 4px 0 4px 26px; }
+    .gen3-block label { font-size: 11px; color: #64748b; display: block; margin-bottom: 2px; }
+    .gen3-block input { font-size: 13px; padding: 5px 8px; }
+
+    .canvas-wrap {
+      background: white; border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      flex: 1; overflow: auto; position: relative;
+    }
+    svg { display: block; user-select: none; }
+
+    .info-box {
+      font-size: 12px; color: #64748b; line-height: 1.9; padding: 2px 0;
+    }
   </style>
 </head>
 <body>
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState, useMemo } = React;
+    const { useState, useCallback, useRef, useMemo, useEffect } = React;
 
+    /* ===== 常數 ===== */
+    const SZ = 36;               // 節點大小
+    const R  = SZ / 2;           // 半徑 / 半邊長
+    const COUPLE_GAP = 64;       // 夫妻中心距
+    const SIBLING_GAP = 100;     // 手足中心距
+    const GEN_Y = [80, 260, 440]; // 三代 Y 座標
+
+    /* ===== 字串解析器 ===== */
+    function parseGenders(str) {
+      if (!str) return [];
+      const out = [];
+      for (const c of str.trim()) {
+        if (c === '男' || c === 'M' || c === 'm') out.push('M');
+        else if (c === '女' || c === 'F' || c === 'f') out.push('F');
+      }
+      return out;
+    }
+
+    /* ===== 主元件 ===== */
     const App = () => {
-      // 狀態管理
-      const [nodes, setNodes] = useState([]);
-      const [indexPersonId, setIndexPersonId] = useState(null);
-      const [cohabMembers, setCohabMembers] = useState([]);
-      const [isCohabMode, setIsCohabMode] = useState(false);
+      /* --- state --- */
+      const [gen2Str, setGen2Str]       = useState('');
+      const [gen2Cfg, setGen2Cfg]       = useState([]);   // [{gender, married, g3Str}]
+      const [positions, setPositions]   = useState({});    // nodeId → {x,y}
+      const [indexId, setIndexId]       = useState(null);
+      const [drag, setDrag]             = useState(null);  // {id, ox, oy}
+      const svgRef = useRef(null);
 
-      // 表單狀態
-      const [formData, setFormData] = useState({ gender: 'M', generation: '1', isDeceased: 'false' });
-
-      const nodeSize = 40;
-
-      // 處理新增人物
-      const handleAddPerson = () => {
-        const newId = 'i' + Date.now(); // 產生唯一 ID
-        const gen = parseInt(formData.generation);
-        
-        // 簡單的座標計算邏輯：確保同代的人往右排，不同代的人往下排
-        const sameGenNodes = nodes.filter(n => n.generation === gen);
-        const newX = 100 + (sameGenNodes.length * 100); // 每個同代人相距 100px
-        const newY = 100 + (gen * 150); // 每代 Y 軸相距 150px
-
-        const newNode = {
-          id: newId,
-          gender: formData.gender,
-          generation: gen,
-          isDeceased: formData.isDeceased === 'true',
-          x: newX,
-          y: newY
-        };
-
-        setNodes([...nodes, newNode]);
-        
-        // 如果是第一個新增的人，預設設為案主
-        if (nodes.length === 0) setIndexPersonId(newId);
+      /* --- 第二代字串變更 --- */
+      const onGen2Change = (val) => {
+        setGen2Str(val);
+        const gs = parseGenders(val);
+        setGen2Cfg(prev => gs.map((g, i) =>
+          (prev[i] && prev[i].gender === g) ? prev[i] : { gender: g, married: false, g3Str: '' }
+        ));
       };
 
-      // 處理點擊節點
-      const handleNodeClick = (id) => {
-        if (isCohabMode) {
-          setCohabMembers(prev => prev.includes(id) ? prev.filter(m => m !== id) : [...prev, id]);
-        } else {
-          setIndexPersonId(id);
+      const toggleMarried = (i) =>
+        setGen2Cfg(p => p.map((d, j) => j === i ? { ...d, married: !d.married, g3Str: !d.married ? d.g3Str : '' } : d));
+
+      const setG3 = (i, v) =>
+        setGen2Cfg(p => p.map((d, j) => j === i ? { ...d, g3Str: v } : d));
+
+      /* ===== 計算節點與連線 ===== */
+      const { nodes, lines } = useMemo(() => {
+        const N = [], L = [];
+
+        // --- 計算每個 gen2 家庭單元寬度 ---
+        const units = gen2Cfg.map((c, i) => {
+          const g3 = c.married ? parseGenders(c.g3Str) : [];
+          let w;
+          if (!c.married) {
+            w = SIBLING_GAP;
+          } else {
+            const coupleW = COUPLE_GAP + SZ;
+            const kidsW = g3.length > 0 ? (g3.length - 1) * SIBLING_GAP + SZ : 0;
+            w = Math.max(coupleW, kidsW) + 50;
+          }
+          return { ...c, idx: i, g3, w };
+        });
+
+        const totalW = units.reduce((s, u) => s + u.w, 0) || 200;
+        const originX = Math.max(120, 420 - totalW / 2);
+
+        // --- Gen1 父母 ---
+        const fX = originX + totalW / 2 - COUPLE_GAP / 2;
+        const mX = originX + totalW / 2 + COUPLE_GAP / 2;
+        const g1Y = GEN_Y[0];
+
+        N.push({ id: 'fa', gender: 'M', gen: 0, dx: fX, dy: g1Y, label: '父' });
+        N.push({ id: 'mo', gender: 'F', gen: 0, dx: mX, dy: g1Y, label: '母' });
+        L.push({ id: 'ml-g1', type: 'marry', a: 'fa', b: 'mo' });
+
+        // --- Gen2 子女 ---
+        let cx = originX;
+        const g2ids = [];
+
+        units.forEach((u, i) => {
+          const cid = `c${i}`;
+          const midU = cx + u.w / 2;
+
+          if (u.married) {
+            const lx = midU - COUPLE_GAP / 2;
+            const rx = midU + COUPLE_GAP / 2;
+            const sid = `s${i}`;
+            const spG = u.gender === 'M' ? 'F' : 'M';
+
+            N.push({ id: cid, gender: u.gender, gen: 1, dx: lx, dy: GEN_Y[1], label: `${u.gender === 'M' ? '子' : '女'}${i + 1}` });
+            N.push({ id: sid, gender: spG,       gen: 1, dx: rx, dy: GEN_Y[1], label: '配偶' });
+            L.push({ id: `ml-c${i}`, type: 'marry', a: cid, b: sid });
+            g2ids.push(cid);
+
+            // Gen3
+            if (u.g3.length > 0) {
+              const g3W = (u.g3.length - 1) * SIBLING_GAP;
+              const g3Start = midU - g3W / 2;
+              const g3ids = [];
+              u.g3.forEach((g, j) => {
+                const gid = `g${i}_${j}`;
+                N.push({ id: gid, gender: g, gen: 2, dx: g3Start + j * SIBLING_GAP, dy: GEN_Y[2],
+                  label: `${g === 'M' ? '孫' : '孫女'}${j + 1}` });
+                g3ids.push(gid);
+              });
+              L.push({ id: `pc-c${i}`, type: 'pc', pa: cid, pb: sid, kids: g3ids });
+            }
+          } else {
+            N.push({ id: cid, gender: u.gender, gen: 1, dx: midU, dy: GEN_Y[1],
+              label: `${u.gender === 'M' ? '子' : '女'}${i + 1}` });
+            g2ids.push(cid);
+          }
+          cx += u.w;
+        });
+
+        if (g2ids.length > 0) {
+          L.push({ id: 'pc-g1', type: 'pc', pa: 'fa', pb: 'mo', kids: g2ids });
         }
-      };
 
-      // 計算同住者虛線框
-      const cohabitationBox = useMemo(() => {
-        if (cohabMembers.length === 0) return null;
-        const members = nodes.filter(n => cohabMembers.includes(n.id));
-        if (members.length === 0) return null;
+        return { nodes: N, lines: L };
+      }, [gen2Cfg]);
 
-        const padding = 35;
-        const minX = Math.min(...members.map(n => n.x)) - padding;
-        const maxX = Math.max(...members.map(n => n.x)) + padding;
-        const minY = Math.min(...members.map(n => n.y)) - padding;
-        const maxY = Math.max(...members.map(n => n.y)) + padding;
+      /* --- 結構變更時重設座標 --- */
+      const structKey = useMemo(() =>
+        nodes.map(n => n.id).join(','), [nodes]);
 
-        return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
-      }, [cohabMembers, nodes]);
+      useEffect(() => {
+        const m = {};
+        nodes.forEach(n => { m[n.id] = { x: n.dx, y: n.dy }; });
+        setPositions(m);
+      }, [structKey]);
 
+      /* --- 取得座標 (含拖曳) --- */
+      const pos = useCallback((id) => {
+        if (positions[id]) return positions[id];
+        const n = nodes.find(v => v.id === id);
+        return n ? { x: n.dx, y: n.dy } : { x: 0, y: 0 };
+      }, [positions, nodes]);
+
+      /* ===== 拖曳 ===== */
+      const svgPt = useCallback((e) => {
+        const svg = svgRef.current;
+        const p = svg.createSVGPoint();
+        p.x = e.clientX; p.y = e.clientY;
+        return p.matrixTransform(svg.getScreenCTM().inverse());
+      }, []);
+
+      const onDown = useCallback((e, id) => {
+        e.stopPropagation();
+        const sp = svgPt(e);
+        const p = pos(id);
+        setDrag({ id, ox: sp.x - p.x, oy: sp.y - p.y });
+      }, [svgPt, pos]);
+
+      const onMove = useCallback((e) => {
+        if (!drag) return;
+        const sp = svgPt(e);
+        setPositions(prev => ({ ...prev, [drag.id]: { x: sp.x - drag.ox, y: sp.y - drag.oy } }));
+      }, [drag, svgPt]);
+
+      const onUp = useCallback(() => setDrag(null), []);
+
+      /* ===== 點擊選案主 ===== */
+      const onClick = useCallback((e, id) => {
+        e.stopPropagation();
+        setIndexId(prev => prev === id ? null : id);
+      }, []);
+
+      /* ===== SVG 尺寸 ===== */
+      const svgW = useMemo(() => {
+        const xs = nodes.map(n => (positions[n.id]?.x ?? n.dx));
+        return Math.max(800, (xs.length ? Math.max(...xs) : 0) + 160);
+      }, [nodes, positions]);
+
+      const svgH = useMemo(() => {
+        const ys = nodes.map(n => (positions[n.id]?.y ?? n.dy));
+        return Math.max(520, (ys.length ? Math.max(...ys) : 0) + 80);
+      }, [nodes, positions]);
+
+      /* ===== 渲染連線 ===== */
+      const drawLines = () => lines.map(ln => {
+        if (ln.type === 'marry') {
+          const a = pos(ln.a), b = pos(ln.b);
+          const nA = nodes.find(n => n.id === ln.a);
+          const nB = nodes.find(n => n.id === ln.b);
+          // 從圖形邊緣連到邊緣
+          const x1 = a.x + (nA?.gender === 'M' ? R : R);
+          const x2 = b.x - (nB?.gender === 'M' ? R : R);
+          return <line key={ln.id} x1={x1} y1={a.y} x2={x2} y2={b.y} stroke="#444" strokeWidth="2" />;
+        }
+
+        if (ln.type === 'pc') {
+          const pA = pos(ln.pa), pB = pos(ln.pb);
+          const midX = (pA.x + pB.x) / 2;
+          const parentY = Math.max(pA.y, pB.y);
+          const kidPos = ln.kids.map(k => pos(k));
+          if (kidPos.length === 0) return null;
+
+          const childY = kidPos[0].y;
+          const barY = parentY + (childY - parentY - R) * 0.4 + R;
+
+          const els = [];
+          // 從父母婚姻線中間垂直往下
+          els.push(<line key={`${ln.id}-v`} x1={midX} y1={parentY} x2={midX} y2={barY} stroke="#444" strokeWidth="2" />);
+
+          // 水平橫桿
+          const minKX = Math.min(midX, ...kidPos.map(p => p.x));
+          const maxKX = Math.max(midX, ...kidPos.map(p => p.x));
+          els.push(<line key={`${ln.id}-h`} x1={minKX} y1={barY} x2={maxKX} y2={barY} stroke="#444" strokeWidth="2" />);
+
+          // 每個子代垂直連下
+          kidPos.forEach((kp, j) => {
+            els.push(<line key={`${ln.id}-k${j}`} x1={kp.x} y1={barY} x2={kp.x} y2={kp.y - R} stroke="#444" strokeWidth="2" />);
+          });
+          return <g key={ln.id}>{els}</g>;
+        }
+        return null;
+      });
+
+      /* ===== 渲染節點 ===== */
+      const drawNodes = () => nodes.map(nd => {
+        const p = pos(nd.id);
+        const isIP = nd.id === indexId;
+        const fill = isIP ? '#1e293b' : 'white';
+        const txtC = isIP ? 'white' : '#333';
+        const cur = drag?.id === nd.id ? 'grabbing' : 'grab';
+
+        return (
+          <g key={nd.id} transform={`translate(${p.x},${p.y})`} style={{ cursor: cur }}
+             onMouseDown={e => onDown(e, nd.id)} onClick={e => onClick(e, nd.id)}>
+            {nd.gender === 'M'
+              ? <rect x={-R} y={-R} width={SZ} height={SZ} fill={fill} stroke="#333" strokeWidth="2.5" rx="2" />
+              : <circle cx="0" cy="0" r={R} fill={fill} stroke="#333" strokeWidth="2.5" />}
+            {isIP && <text x="0" y="4" textAnchor="middle" fontSize="11" fontWeight="bold" fill={txtC}>案主</text>}
+            <text x="0" y={R + 14} textAnchor="middle" fontSize="11" fill="#666">{nd.label}</text>
+          </g>
+        );
+      });
+
+      /* ===== 表單面板 ===== */
       return (
         <div className="app-layout">
-          {/* 左側面板：輸入與控制 */}
           <div className="panel">
-            <h3 style={{marginTop: 0}}>新增家庭成員</h3>
-            
-            <div className="form-group">
-              <label>性別</label>
-              <select value={formData.gender} onChange={e => setFormData({...formData, gender: e.target.value})}>
-                <option value="M">男性 (正方形)</option>
-                <option value="F">女性 (圓形)</option>
-              </select>
+            <h2>家系圖資料輸入面板</h2>
+
+            {/* Gen1 */}
+            <div className="section">
+              <label>第一代（父母）</label>
+              <div className="sub">系統預設一對父母 ■ 父 ● 母，顯示於畫布頂端。</div>
             </div>
 
-            <div className="form-group">
-              <label>世代 (以案主為基準)</label>
-              <select value={formData.generation} onChange={e => setFormData({...formData, generation: e.target.value})}>
-                <option value="0">上一代 (父母/伯叔姑)</option>
-                <option value="1">同一代 (案主/手足/配偶)</option>
-                <option value="2">下一代 (子女/姪甥)</option>
-              </select>
+            {/* Gen2 Input */}
+            <div className="section">
+              <label>第二代子女順序</label>
+              <input type="text" value={gen2Str} onChange={e => onGen2Change(e.target.value)}
+                     placeholder="例：女女男男女 或 FFMMF" />
+              <div className="hint">輸入「男」或「女」(中文)，或 M / F (英文)，即時產生子代節點。</div>
             </div>
 
-            <div className="form-group">
-              <label>生存狀態</label>
-              <select value={formData.isDeceased} onChange={e => setFormData({...formData, isDeceased: e.target.value})}>
-                <option value="false">存活</option>
-                <option value="true">已歿 (打叉)</option>
-              </select>
+            {/* Gen2 Config */}
+            {gen2Cfg.length > 0 && (
+              <div className="section">
+                <label>第二代成員 — 婚姻與子女設定</label>
+                {gen2Cfg.map((c, i) => (
+                  <div key={i}>
+                    <div className="child-row">
+                      <span className={`child-icon ${c.gender === 'M' ? 'm' : 'f'}`}>
+                        {c.gender === 'M' ? '■' : '●'}
+                      </span>
+                      <span className={`child-name ${c.gender === 'M' ? 'm' : 'f'}`}>
+                        {c.gender === 'M' ? '子' : '女'}{i + 1}
+                      </span>
+                      <label className="chk-wrap">
+                        <input type="checkbox" checked={c.married} onChange={() => toggleMarried(i)} />
+                        已婚
+                      </label>
+                    </div>
+                    {c.married && (
+                      <div className="gen3-block">
+                        <label>↳ 第三代子女順序（此對夫妻）</label>
+                        <input type="text" value={c.g3Str} onChange={e => setG3(i, e.target.value)}
+                               placeholder="例：男女 或 MF" />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* 使用說明 */}
+            <div className="section">
+              <label>操作說明</label>
+              <div className="info-box">
+                ■ = 男性（正方形）　● = 女性（圓形）<br/>
+                點擊節點 → 標示 / 取消「案主」<br/>
+                拖曳節點 → 微調位置，連線即時跟隨<br/>
+                勾選「已婚」→ 自動產生配偶與第三代輸入欄
+              </div>
             </div>
-
-            <button onClick={handleAddPerson}>➕ 新增至畫布</button>
-
-            <hr style={{margin: '20px 0', border: '0.5px solid #e5e7eb'}} />
-            
-            <h3 style={{marginTop: 0}}>畫布互動模式</h3>
-            <button className={`outline ${!isCohabMode ? 'active' : ''}`} onClick={() => setIsCohabMode(false)}>
-              👉 指定案主 (點擊圖形)
-            </button>
-            <button className={`outline ${isCohabMode ? 'active' : ''}`} onClick={() => setIsCohabMode(true)}>
-              🏠 選取同住家屬 (點擊圖形)
-            </button>
           </div>
 
-          {/* 右側畫布：視覺渲染 */}
-          <div className="canvas-wrapper">
-            <svg width="100%" height="500" className="canvas" style={{ minWidth: '600px' }}>
-              {/* 繪製同住家屬外框 */}
-              {cohabitationBox && (
-                <rect x={cohabitationBox.x} y={cohabitationBox.y} width={cohabitationBox.width} height={cohabitationBox.height} fill="none" stroke="#ef4444" strokeWidth="2" strokeDasharray="8,6" rx="15" />
-              )}
+          {/* ===== SVG 畫布 ===== */}
+          <div className="canvas-wrap">
+            <svg ref={svgRef} width={svgW} height={svgH}
+                 onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp}
+                 style={{ background: '#fefefe', minWidth: '600px' }}>
+              {/* 背景格線 */}
+              <defs>
+                <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                  <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#f0f0f0" strokeWidth="0.5" />
+                </pattern>
+              </defs>
+              <rect width="100%" height="100%" fill="url(#grid)" />
 
-              {/* 繪製人物節點 */}
-              {nodes.map(node => {
-                const isIndex = node.id === indexPersonId;
-                const fillMode = isIndex ? 'black' : 'white';
-                const halfSize = nodeSize / 2;
+              {/* 世代標示 */}
+              <text x="16" y={GEN_Y[0] + 5} fontSize="12" fill="#b0b8c4" fontWeight="600">G1</text>
+              {gen2Cfg.length > 0 && <text x="16" y={GEN_Y[1] + 5} fontSize="12" fill="#b0b8c4" fontWeight="600">G2</text>}
+              {gen2Cfg.some(d => d.married && d.g3Str) && <text x="16" y={GEN_Y[2] + 5} fontSize="12" fill="#b0b8c4" fontWeight="600">G3</text>}
 
-                return (
-                  <g key={node.id} transform={`translate(${node.x}, ${node.y})`} onClick={() => handleNodeClick(node.id)}>
-                    {node.gender === 'M' ? (
-                      <rect x={-halfSize} y={-halfSize} width={nodeSize} height={nodeSize} fill={fillMode} stroke="black" strokeWidth="2" />
-                    ) : (
-                      <circle cx="0" cy="0" r={halfSize} fill={fillMode} stroke="black" strokeWidth="2" />
-                    )}
-
-                    {node.isDeceased && (
-                      <g stroke="black" strokeWidth="2">
-                        <line x1={-halfSize} y1={-halfSize} x2={halfSize} y2={halfSize} />
-                        <line x1={halfSize} y1={-halfSize} x2={-halfSize} y2={halfSize} />
-                      </g>
-                    )}
-                    
-                    {/* 顯示一下隱藏的世代資訊，方便除錯 */}
-                    <text x="0" y={halfSize + 15} textAnchor="middle" fontSize="12" fill="#666">Gen {node.generation}</text>
-                  </g>
-                );
-              })}
+              {drawLines()}
+              {drawNodes()}
             </svg>
           </div>
         </div>
