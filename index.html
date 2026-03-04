@@ -103,6 +103,9 @@
       const [positions, setPositions]   = useState({});    // nodeId → {x,y}
       const [indexId, setIndexId]       = useState(null);
       const [drag, setDrag]             = useState(null);  // {id, ox, oy}
+      const [mode, setMode] = useState('drag'); // 紀錄目前的點擊模式
+      const [cohabMembers, setCohabMembers] = useState([]); // 紀錄同住者
+      const [deceasedIds, setDeceasedIds] = useState([]); // 紀錄已歿者
       const svgRef = useRef(null);
 
       /* --- 第二代字串變更 --- */
@@ -237,11 +240,19 @@
 
       const onUp = useCallback(() => setDrag(null), []);
 
-      /* ===== 點擊選案主 ===== */
+/* ===== 依據模式處理點擊 ===== */
       const onClick = useCallback((e, id) => {
         e.stopPropagation();
-        setIndexId(prev => prev === id ? null : id);
-      }, []);
+        if (mode === 'drag') return; // 拖曳模式不觸發點擊
+        
+        if (mode === 'index') {
+          setIndexId(prev => prev === id ? null : id);
+        } else if (mode === 'cohab') {
+          setCohabMembers(prev => prev.includes(id) ? prev.filter(m => m !== id) : [...prev, id]);
+        } else if (mode === 'deceased') {
+          setDeceasedIds(prev => prev.includes(id) ? prev.filter(m => m !== id) : [...prev, id]);
+        }
+      }, [mode]);
 
       /* ===== SVG 尺寸 ===== */
       const svgW = useMemo(() => {
@@ -253,7 +264,24 @@
         const ys = nodes.map(n => (positions[n.id]?.y ?? n.dy));
         return Math.max(520, (ys.length ? Math.max(...ys) : 0) + 80);
       }, [nodes, positions]);
+      
+      /* ===== 計算同住虛線框 ===== */
+      const cohabitationBox = useMemo(() => {
+        if (cohabMembers.length === 0) return null;
+        const members = nodes.filter(n => cohabMembers.includes(n.id));
+        if (members.length === 0) return null;
 
+        const padding = 25; // 框線與圖形的間距
+        const xs = members.map(n => pos(n.id).x);
+        const ys = members.map(n => pos(n.id).y);
+        
+        const minX = Math.min(...xs) - R - padding;
+        const maxX = Math.max(...xs) + R + padding;
+        const minY = Math.min(...ys) - R - padding;
+        const maxY = Math.max(...ys) + R + padding;
+
+        return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+      }, [cohabMembers, nodes, positions, pos]);
       /* ===== 渲染連線 ===== */
       const drawLines = () => lines.map(ln => {
         if (ln.type === 'marry') {
@@ -308,10 +336,15 @@
             {nd.gender === 'M'
               ? <rect x={-R} y={-R} width={SZ} height={SZ} fill={fill} stroke="#333" strokeWidth="2.5" rx="2" />
               : <circle cx="0" cy="0" r={R} fill={fill} stroke="#333" strokeWidth="2.5" />}
+            {/* 保留案主標示，移除預設的父母子女文字 */}
             {isIP && <text x="0" y="4" textAnchor="middle" fontSize="11" fontWeight="bold" fill={txtC}>案主</text>}
-            <text x="0" y={R + 14} textAnchor="middle" fontSize="11" fill="#666">{nd.label}</text>
-          </g>
-        );
+            {/* 死亡狀態：打叉 (如果被設為案主反黑，叉叉就變白色) */}
+            {deceasedIds.includes(nd.id) && (
+              <g stroke={isIP ? 'white' : '#333'} strokeWidth="2.5">
+                <line x1={-R} y1={-R} x2={R} y2={R} />
+                <line x1={R} y1={-R} x2={-R} y2={R} />
+             </g>
+            )}
       });
 
       /* ===== 表單面板 ===== */
@@ -319,6 +352,17 @@
         <div className="app-layout">
           <div className="panel">
             <h2>家系圖資料輸入面板</h2>
+
+            {/* 互動模式選單 */}
+            <div className="section" style={{ background: '#eff6ff', borderColor: '#bfdbfe' }}>
+              <label>🛠️ 畫布互動模式 (請先選擇模式再點圖形)</label>
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '8px', fontSize: '13px' }}>
+                <label><input type="radio" name="mode" checked={mode === 'drag'} onChange={() => setMode('drag')} /> 🤚 拖曳微調</label>
+                <label><input type="radio" name="mode" checked={mode === 'index'} onChange={() => setMode('index')} /> 🎯 設為案主</label>
+                <label><input type="radio" name="mode" checked={mode === 'cohab'} onChange={() => setMode('cohab')} /> 🏠 同住框線</label>
+                <label><input type="radio" name="mode" checked={mode === 'deceased'} onChange={() => setMode('deceased')} /> ✝️ 存歿打叉</label>
+              </div>
+            </div>
 
             {/* Gen1 */}
             <div className="section">
@@ -388,6 +432,15 @@
                 </pattern>
               </defs>
               <rect width="100%" height="100%" fill="url(#grid)" />
+
+              {/* 繪製同住家屬外框 */}
+              {cohabitationBox && (
+                <rect 
+                  x={cohabitationBox.x} y={cohabitationBox.y} 
+                  width={cohabitationBox.width} height={cohabitationBox.height} 
+                  fill="none" stroke="#ef4444" strokeWidth="2" strokeDasharray="8,6" rx="15" 
+                />
+              )}
 
               {/* 世代標示 */}
               <text x="16" y={GEN_Y[0] + 5} fontSize="12" fill="#b0b8c4" fontWeight="600">G1</text>
