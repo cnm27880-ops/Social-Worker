@@ -536,7 +536,7 @@ const onMove = useCallback((e) => {
                 ■ = 男性（正方形）　● = 女性（圓形）<br/>
                 點擊節點 → 標示 / 取消「案主」<br/>
                 拖曳節點 → 微調位置，連線即時跟隨<br/>
-                勾選「已婚」→ 自動產生配偶與第三代輸入欄
+                下拉選擇「伴侶關係」→ 自動產生配偶與第三代輸入欄
               </div>
             </div>
           </div>
@@ -566,7 +566,7 @@ const onMove = useCallback((e) => {
               {/* 世代標示 */}
               <text x="16" y={GEN_Y[0] + 5} fontSize="12" fill="#b0b8c4" fontWeight="600">G1</text>
               {gen2Cfg.length > 0 && <text x="16" y={GEN_Y[1] + 5} fontSize="12" fill="#b0b8c4" fontWeight="600">G2</text>}
-              {gen2Cfg.some(d => d.married && d.g3Str) && <text x="16" y={GEN_Y[2] + 5} fontSize="12" fill="#b0b8c4" fontWeight="600">G3</text>}
+              {gen2Cfg.some(d => d.partner !== 'none' && d.g3Str) && <text x="16" y={GEN_Y[2] + 5} fontSize="12" fill="#b0b8c4" fontWeight="600">G3</text>}
 
               {drawLines()}
               {drawNodes()}
