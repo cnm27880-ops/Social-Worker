@@ -122,8 +122,10 @@
       const [mode, setMode] = useState('drag');
       const [cohabMembers, setCohabMembers] = useState([]);
       const [cohabMode, setCohabMode] = useState('auto');
-      const [drawnPaths, setDrawnPaths] = useState([]);
-      const [currentPath, setCurrentPath] = useState(null);
+      const [polygons, setPolygons] = useState([]);
+      const [draftPoly, setDraftPoly] = useState([]);
+      const [selectedPolyId, setSelectedPolyId] = useState(null);
+      const [dragVertex, setDragVertex] = useState(null);
       const [deceasedIds, setDeceasedIds] = useState([]);
       const [g1Status, setG1Status] = useState('married');
 
@@ -151,8 +153,9 @@
       const [textResize, setTextResize] = useState(null);
       const [textDirection, setTextDirection] = useState('horizontal');
       const textDragMoved = useRef(false);
+      const [mousePos, setMousePos] = useState(null);
 
-      // 快捷鍵監聽器
+      // 快捷鍵監聯器
       useEffect(() => {
         const handleKeyDown = (e) => {
           if (e.target.tagName === 'INPUT' && e.target.type === 'text') return;
@@ -161,10 +164,19 @@
           if (key === shortcuts.index.toLowerCase()) setMode('index');
           if (key === shortcuts.cohab.toLowerCase()) setMode('cohab');
           if (key === shortcuts.deceased.toLowerCase()) setMode('deceased');
+          // Enter 完成多邊形繪製
+          if (e.key === 'Enter' && draftPoly.length >= 3) {
+            setPolygons(prev => [...prev, { id: 'pg_' + Date.now(), pts: draftPoly }]);
+            setDraftPoly([]);
+          }
+          // Escape 取消繪製中的多邊形
+          if (e.key === 'Escape' && draftPoly.length > 0) {
+            setDraftPoly([]);
+          }
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-      }, [shortcuts]);
+      }, [shortcuts, draftPoly]);
 
       const updateShortcut = (modeName, key) => {
         setShortcuts(prev => ({ ...prev, [modeName]: key }));
@@ -270,8 +282,10 @@
           setG1Status('married');
           setTexts([]);
           setSelectedTextId(null);
-          setDrawnPaths([]);
-          setCurrentPath(null);
+          setPolygons([]);
+          setDraftPoly([]);
+          setSelectedPolyId(null);
+          setDragVertex(null);
         }
       };
 
@@ -454,14 +468,23 @@
       }, [svgPt, texts]);
 
       const onMove = useCallback((e) => {
-        // 手繪模式：追蹤座標
-        if (currentPath) {
-          const sp = svgPt(e);
-          setCurrentPath(prev => prev ? [...prev, { x: sp.x, y: sp.y }] : prev);
+        const sp = svgPt(e);
+        // 追蹤滑鼠位置 (供多邊形輔助線使用)
+        if (draftPoly.length > 0) {
+          setMousePos({ x: sp.x, y: sp.y });
+        }
+        // 拖曳多邊形端點
+        if (dragVertex) {
+          setPolygons(prev => prev.map(pg => {
+            if (pg.id !== dragVertex.polyId) return pg;
+            const newPts = pg.pts.map((pt, i) =>
+              i === dragVertex.index ? { x: sp.x - dragVertex.ox, y: sp.y - dragVertex.oy } : pt
+            );
+            return { ...pg, pts: newPts };
+          }));
           return;
         }
         if (textResize) {
-          const sp = svgPt(e);
           const delta = sp.y - textResize.startY;
           const newSize = Math.max(10, Math.min(72, Math.round(textResize.startSize + delta * 0.3)));
           setTexts(prev => prev.map(t => t.id === textResize.id ? { ...t, fontSize: newSize } : t));
@@ -469,12 +492,10 @@
         }
         if (textDrag) {
           textDragMoved.current = true;
-          const sp = svgPt(e);
           setTexts(prev => prev.map(t => t.id === textDrag.id ? { ...t, x: sp.x - textDrag.ox, y: sp.y - textDrag.oy } : t));
           return;
         }
         if (!drag) return;
-        const sp = svgPt(e);
         const rawX = sp.x - drag.ox;
         const rawY = sp.y - drag.oy;
 
@@ -490,18 +511,14 @@
           }
           return { ...prev, [drag.id]: { x: newX, y: newY } };
         });
-      }, [drag, textDrag, textResize, currentPath, svgPt]);
+      }, [drag, textDrag, textResize, dragVertex, draftPoly, svgPt]);
 
       const onUp = useCallback(() => {
-        // 手繪模式：儲存軌跡
-        if (currentPath && currentPath.length > 1) {
-          setDrawnPaths(prev => [...prev, { id: 'dp_' + Date.now(), pts: currentPath }]);
-        }
-        setCurrentPath(null);
+        setDragVertex(null);
         setDrag(null);
         setTextDrag(null);
         setTextResize(null);
-      }, [currentPath]);
+      }, []);
 
       /* ===== 依據模式處理點擊 ===== */
       const onClick = useCallback((e, id) => {
@@ -510,12 +527,12 @@
 
         if (mode === 'index') {
           setIndexId(prev => prev === id ? null : id);
-        } else if (mode === 'cohab') {
+        } else if (mode === 'cohab' && cohabMode === 'auto') {
           setCohabMembers(prev => prev.includes(id) ? prev.filter(m => m !== id) : [...prev, id]);
         } else if (mode === 'deceased') {
           setDeceasedIds(prev => prev.includes(id) ? prev.filter(m => m !== id) : [...prev, id]);
         }
-      }, [mode]);
+      }, [mode, cohabMode]);
 
       /* ===== SVG 尺寸 (含文字) ===== */
       const svgW = useMemo(() => {
@@ -773,8 +790,8 @@
                   <input type="radio" name="mode" checked={mode === 'cohab'} onChange={() => setMode('cohab')} /> 🏠 同住
                   [<input type="text" maxLength="1" value={shortcuts.cohab} onChange={e => updateShortcut('cohab', e.target.value)} style={{ width: '18px', padding: '0', textAlign: 'center', fontSize: '11px', background: 'transparent', border: 'none', borderBottom: '1px solid #3b82f6', outline: 'none' }} />]
                   <span className="status-badge" data-status="cohab"
-                    ref={el => wheelRef(el, ['auto', 'draw'], cohabMode, setCohabMode)}
-                    title="滾輪切換：自動 / 手繪">{cohabMode === 'auto' ? '自動' : '手繪'}</span>
+                    ref={el => wheelRef(el, ['auto', 'poly'], cohabMode, setCohabMode)}
+                    title="滾輪切換：自動 / 多邊形">{cohabMode === 'auto' ? '自動' : '多邊形'}</span>
                 </label>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                   <input type="radio" name="mode" checked={mode === 'deceased'} onChange={() => setMode('deceased')} /> ✝️ 打叉
@@ -869,8 +886,8 @@
           <div className="canvas-wrap">
             <svg ref={svgRef} width={svgW} height={svgH}
                  onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp}
-                 onClick={() => setSelectedTextId(null)}
-                 style={{ background: '#fefefe', minWidth: '600px', cursor: mode === 'cohab' && cohabMode === 'draw' ? 'crosshair' : undefined }}>
+                 onClick={() => { setSelectedTextId(null); setSelectedPolyId(null); }}
+                 style={{ background: '#fefefe', minWidth: '600px', cursor: mode === 'cohab' && cohabMode === 'poly' ? 'crosshair' : undefined }}>
               {/* 背景格線 */}
               <defs>
                 <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
@@ -879,19 +896,30 @@
               </defs>
               <rect width="100%" height="100%" fill="url(#grid)" />
 
-              {/* 手繪模式透明覆蓋層 */}
-              {mode === 'cohab' && cohabMode === 'draw' && (
+              {/* 多邊形繪製模式：透明覆蓋層 (點擊新增端點) */}
+              {mode === 'cohab' && cohabMode === 'poly' && (
                 <rect width="100%" height="100%" fill="transparent"
                   style={{ cursor: 'crosshair' }}
-                  onMouseDown={e => {
+                  onClick={e => {
                     e.stopPropagation();
                     const sp = svgPt(e);
-                    setCurrentPath([{ x: sp.x, y: sp.y }]);
+                    const pt = { x: sp.x, y: sp.y };
+                    // 點擊第一個端點附近 → 封閉多邊形
+                    if (draftPoly.length >= 3) {
+                      const first = draftPoly[0];
+                      const dx = pt.x - first.x, dy = pt.y - first.y;
+                      if (Math.sqrt(dx * dx + dy * dy) < 15) {
+                        setPolygons(prev => [...prev, { id: 'pg_' + Date.now(), pts: draftPoly }]);
+                        setDraftPoly([]);
+                        return;
+                      }
+                    }
+                    setDraftPoly(prev => [...prev, pt]);
                   }}
                 />
               )}
 
-              {/* 繪製同住家屬外框 */}
+              {/* 繪製同住家屬外框 (自動) */}
               {cohabitationBox && cohabitationBox.type === 'single' && (
                 <rect
                   x={cohabitationBox.x} y={cohabitationBox.y}
@@ -906,23 +934,61 @@
                 />
               )}
 
-              {/* 繪製手繪虛線 */}
-              {drawnPaths.map(dp => (
-                <polyline key={dp.id}
-                  points={dp.pts.map(p => `${p.x},${p.y}`).join(' ')}
-                  fill="none" stroke="#ef4444" strokeWidth="2.5" strokeDasharray="8,6"
-                  strokeLinejoin="round" strokeLinecap="round"
-                  style={{ cursor: 'pointer' }}
-                  onDoubleClick={e => { e.stopPropagation(); setDrawnPaths(prev => prev.filter(d => d.id !== dp.id)); }}
-                />
+              {/* 繪製已完成的手動多邊形 */}
+              {polygons.map(pg => (
+                <g key={pg.id}>
+                  <polygon
+                    points={pg.pts.map(p => `${p.x},${p.y}`).join(' ')}
+                    fill="rgba(239, 68, 68, 0.05)" stroke="#ef4444" strokeWidth="2.5"
+                    strokeDasharray="8,6" strokeLinejoin="round"
+                    style={{ cursor: mode === 'drag' ? 'pointer' : undefined }}
+                    onClick={e => { if (mode === 'drag') { e.stopPropagation(); setSelectedPolyId(pg.id); } }}
+                    onDoubleClick={e => { e.stopPropagation(); setPolygons(prev => prev.filter(p => p.id !== pg.id)); setSelectedPolyId(null); }}
+                  />
+                  {/* 選取時顯示端點控制代碼 */}
+                  {selectedPolyId === pg.id && pg.pts.map((pt, idx) => (
+                    <circle key={`${pg.id}-v${idx}`}
+                      cx={pt.x} cy={pt.y} r={6}
+                      fill="#3b82f6" stroke="white" strokeWidth="1.5"
+                      style={{ cursor: 'crosshair' }}
+                      onMouseDown={e => {
+                        e.stopPropagation();
+                        const sp = svgPt(e);
+                        setDragVertex({ polyId: pg.id, index: idx, ox: sp.x - pt.x, oy: sp.y - pt.y });
+                      }}
+                    />
+                  ))}
+                </g>
               ))}
-              {currentPath && currentPath.length > 1 && (
-                <polyline
-                  points={currentPath.map(p => `${p.x},${p.y}`).join(' ')}
-                  fill="none" stroke="#ef4444" strokeWidth="2.5" strokeDasharray="8,6"
-                  strokeLinejoin="round" strokeLinecap="round"
-                  pointerEvents="none"
-                />
+
+              {/* 繪製中的多邊形草稿 */}
+              {draftPoly.length > 0 && (
+                <g>
+                  {/* 已確定的邊 */}
+                  {draftPoly.length >= 2 && (
+                    <polyline
+                      points={draftPoly.map(p => `${p.x},${p.y}`).join(' ')}
+                      fill="none" stroke="#ef4444" strokeWidth="2.5" strokeDasharray="8,6"
+                      strokeLinejoin="round" strokeLinecap="round" pointerEvents="none"
+                    />
+                  )}
+                  {/* 從最後端點到滑鼠的輔助線 */}
+                  {mousePos && (
+                    <line
+                      x1={draftPoly[draftPoly.length - 1].x} y1={draftPoly[draftPoly.length - 1].y}
+                      x2={mousePos.x} y2={mousePos.y}
+                      stroke="#ef4444" strokeWidth="1.5" strokeDasharray="4,4" opacity="0.6"
+                      pointerEvents="none"
+                    />
+                  )}
+                  {/* 端點圓圈 */}
+                  {draftPoly.map((pt, i) => (
+                    <circle key={`draft-${i}`} cx={pt.x} cy={pt.y} r={i === 0 && draftPoly.length >= 3 ? 8 : 5}
+                      fill={i === 0 ? '#10b981' : '#ef4444'} stroke="white" strokeWidth="1.5"
+                      pointerEvents="none"
+                    />
+                  ))}
+                </g>
               )}
 
               {/* 世代標示 */}
