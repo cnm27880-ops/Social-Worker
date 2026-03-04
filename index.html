@@ -164,19 +164,29 @@
           if (key === shortcuts.index.toLowerCase()) setMode('index');
           if (key === shortcuts.cohab.toLowerCase()) setMode('cohab');
           if (key === shortcuts.deceased.toLowerCase()) setMode('deceased');
-          // Enter 完成多邊形繪製
-          if (e.key === 'Enter' && draftPoly.length >= 3) {
+          // Enter 完成多邊形繪製 (僅在 cohab+poly 模式)
+          if (e.key === 'Enter' && mode === 'cohab' && cohabMode === 'poly' && draftPoly.length >= 3) {
             setPolygons(prev => [...prev, { id: 'pg_' + Date.now(), pts: draftPoly }]);
             setDraftPoly([]);
+            setMousePos(null);
           }
           // Escape 取消繪製中的多邊形
           if (e.key === 'Escape' && draftPoly.length > 0) {
             setDraftPoly([]);
+            setMousePos(null);
           }
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-      }, [shortcuts, draftPoly]);
+      }, [shortcuts, draftPoly, mode, cohabMode]);
+
+      // 切換離開 poly 模式時自動清空草稿
+      useEffect(() => {
+        if (!(mode === 'cohab' && cohabMode === 'poly') && draftPoly.length > 0) {
+          setDraftPoly([]);
+          setMousePos(null);
+        }
+      }, [mode, cohabMode]);
 
       const updateShortcut = (modeName, key) => {
         setShortcuts(prev => ({ ...prev, [modeName]: key }));
@@ -225,6 +235,19 @@
           allXs.push(t.x - 4, t.x + (t.vertical ? t.fontSize * 1.5 : w));
           allYs.push(t.y - (t.vertical ? 4 : t.fontSize + 4), t.y + (t.vertical ? h : 8));
         });
+        // 多邊形邊界
+        polygons.forEach(pg => {
+          pg.pts.forEach(pt => { allXs.push(pt.x); allYs.push(pt.y); });
+        });
+        // 自動同住框邊界
+        if (cohabitationBox) {
+          if (cohabitationBox.type === 'single') {
+            allXs.push(cohabitationBox.x, cohabitationBox.x + cohabitationBox.w);
+            allYs.push(cohabitationBox.y, cohabitationBox.y + cohabitationBox.h);
+          } else if (cohabitationBox.type === 'poly') {
+            cohabitationBox.points.forEach(pt => { allXs.push(pt.x); allYs.push(pt.y); });
+          }
+        }
         if (allXs.length === 0) return;
 
         const minX = Math.min(...allXs) - PAD;
@@ -911,6 +934,7 @@
                       if (Math.sqrt(dx * dx + dy * dy) < 15) {
                         setPolygons(prev => [...prev, { id: 'pg_' + Date.now(), pts: draftPoly }]);
                         setDraftPoly([]);
+                        setMousePos(null);
                         return;
                       }
                     }
