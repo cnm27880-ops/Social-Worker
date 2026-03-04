@@ -69,6 +69,17 @@
     .info-box {
       font-size: 12px; color: #64748b; line-height: 1.9; padding: 2px 0;
     }
+
+    .status-badge {
+      display: inline-block; padding: 2px 10px; font-size: 12px; font-weight: 600;
+      border-radius: 12px; cursor: ns-resize; user-select: none;
+      border: 1.5px solid; transition: background 0.15s, color 0.15s;
+    }
+    .status-badge[data-status="none"]      { background: #f1f5f9; color: #64748b; border-color: #cbd5e1; }
+    .status-badge[data-status="married"]   { background: #dcfce7; color: #166534; border-color: #86efac; }
+    .status-badge[data-status="cohab"]     { background: #fef3c7; color: #92400e; border-color: #fcd34d; }
+    .status-badge[data-status="separated"] { background: #fee2e2; color: #991b1b; border-color: #fca5a5; }
+    .status-badge[data-status="divorced"]  { background: #fce7f3; color: #9d174d; border-color: #f9a8d4; }
   </style>
 </head>
 <body>
@@ -107,6 +118,7 @@
       const [cohabMembers, setCohabMembers] = useState([]); // 紀錄同住者
       const [deceasedIds, setDeceasedIds] = useState([]); // 紀錄已歿者
       const [shortcuts, setShortcuts] = useState({ drag: 'd', index: 'i', cohab: 'c', deceased: 'x' });
+      const [g1Status, setG1Status] = useState('married'); // 'married' | 'divorced'
 
       // 快捷鍵監聽器
       useEffect(() => {
@@ -134,6 +146,54 @@
       };
       const svgRef = useRef(null);
 
+      /* --- 下載 JPG (精準裁切) --- */
+      const downloadJPG = () => {
+        const PAD = 40;
+        const allIds = nodes.map(n => n.id);
+        if (allIds.length === 0) return;
+
+        const xs = allIds.map(id => pos(id).x);
+        const ys = allIds.map(id => pos(id).y);
+        const minX = Math.min(...xs) - R - PAD;
+        const minY = Math.min(...ys) - R - PAD;
+        const maxX = Math.max(...xs) + R + PAD;
+        const maxY = Math.max(...ys) + R + PAD;
+        const cropW = maxX - minX;
+        const cropH = maxY - minY;
+
+        const svgEl = svgRef.current;
+        const cloned = svgEl.cloneNode(true);
+        cloned.setAttribute('width', cropW);
+        cloned.setAttribute('height', cropH);
+        cloned.setAttribute('viewBox', `${minX} ${minY} ${cropW} ${cropH}`);
+
+        const serializer = new XMLSerializer();
+        const svgStr = serializer.serializeToString(cloned);
+        const svgBlob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(svgBlob);
+
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = cropW;
+          canvas.height = cropH;
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, cropW, cropH);
+          ctx.drawImage(img, 0, 0, cropW, cropH);
+          URL.revokeObjectURL(url);
+
+          canvas.toBlob(blob => {
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'genogram.jpg';
+            a.click();
+            URL.revokeObjectURL(a.href);
+          }, 'image/jpeg', 0.95);
+        };
+        img.src = url;
+      };
+
       // 一鍵重製畫布
       const resetCanvas = () => {
         if (window.confirm('確定要清空畫布並重新開始嗎？(可按 Enter 確認)')) {
@@ -143,6 +203,7 @@
           setCohabMembers([]);
           setDeceasedIds([]);
           setPositions({});
+          setG1Status('married');
         }
       };
 
@@ -163,6 +224,34 @@
 
       const toggleMulti = (i) =>
         setGen2Cfg(p => p.map((d, j) => j === i ? { ...d, isMulti: !d.isMulti } : d));
+
+      /* --- 狀態標籤文字對照 --- */
+      const G2_STATUSES = ['none', 'married', 'cohab', 'separated', 'divorced'];
+      const G2_LABELS = { none: '未婚', married: '已婚', cohab: '同居', separated: '分居', divorced: '離婚' };
+      const G1_STATUSES = ['married', 'divorced'];
+      const G1_LABELS = { married: '已婚', divorced: '離婚' };
+
+      const wheelCycle = (e, list, current, setter) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const dir = e.deltaY > 0 ? 1 : -1;
+        const idx = list.indexOf(current);
+        const next = (idx + dir + list.length) % list.length;
+        setter(list[next]);
+      };
+
+      // 綁定 non-passive wheel 事件的 ref callback，確保 preventDefault 能正常運作
+      const wheelRef = (el, list, current, setter) => {
+        if (!el) return;
+        el.onwheel = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const dir = e.deltaY > 0 ? 1 : -1;
+          const idx = list.indexOf(current);
+          const next = (idx + dir + list.length) % list.length;
+          setter(list[next]);
+        };
+      };
 
       /* ===== 計算節點與連線 ===== */
       const { nodes, lines } = useMemo(() => {
@@ -193,7 +282,7 @@
 
         N.push({ id: 'fa', gender: 'M', gen: 0, dx: fX, dy: g1Y, label: '父' });
         N.push({ id: 'mo', gender: 'F', gen: 0, dx: mX, dy: g1Y, label: '母' });
-        L.push({ id: 'ml-g1', type: 'marry', a: 'fa', b: 'mo', status: 'married' });
+        L.push({ id: 'ml-g1', type: 'marry', a: 'fa', b: 'mo', status: g1Status });
 
         // --- Gen2 子女 ---
         let cx = originX;
@@ -238,7 +327,7 @@
         }
 
         return { nodes: N, lines: L };
-      }, [gen2Cfg]);
+      }, [gen2Cfg, g1Status]);
 
       /* --- 結構變更時重設座標 --- */
       const structKey = useMemo(() =>
@@ -449,9 +538,14 @@ const onMove = useCallback((e) => {
           <div className="panel">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '14px', paddingBottom: '8px', borderBottom: '2px solid #3b82f6' }}>
               <h2 style={{ margin: 0, border: 'none', padding: 0 }}>家系圖資料輸入面板</h2>
-              <button onClick={resetCanvas} style={{ padding: '5px 10px', fontSize: '12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>
-                🗑️ 重製畫布
-              </button>
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <button onClick={downloadJPG} style={{ padding: '5px 10px', fontSize: '12px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>
+                  📥 下載 JPG
+                </button>
+                <button onClick={resetCanvas} style={{ padding: '5px 10px', fontSize: '12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>
+                  🗑️ 重製畫布
+                </button>
+              </div>
             </div>
 
 {/* 互動模式選單與快捷鍵 */}
@@ -480,7 +574,12 @@ const onMove = useCallback((e) => {
             {/* Gen1 */}
             <div className="section">
               <label>第一代（父母）</label>
-              <div className="sub">系統預設一對父母 ■ 父 ● 母，顯示於畫布頂端。</div>
+              <div className="sub" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span>系統預設一對父母 ■ 父 ● 母</span>
+                <span className="status-badge" data-status={g1Status}
+                  ref={el => wheelRef(el, G1_STATUSES, g1Status, setG1Status)}
+                  title="滾輪切換狀態">{G1_LABELS[g1Status]}</span>
+              </div>
             </div>
 
             {/* Gen2 Input */}
@@ -508,13 +607,9 @@ const onMove = useCallback((e) => {
                         <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px' }}>
                           <input type="checkbox" checked={c.isMulti || false} onChange={() => toggleMulti(i)} /> 多胞胎
                         </label>
-                        <select value={c.partner || 'none'} onChange={(e) => changePartner(i, e.target.value)} style={{ padding: '2px', fontSize: '12px', border: '1px solid #cbd5e1', borderRadius: '4px', outline: 'none' }}>
-                          <option value="none">未婚</option>
-                          <option value="married">已婚</option>
-                          <option value="cohab">同居 (虛線)</option>
-                          <option value="separated">分居 (斜線)</option>
-                          <option value="divorced">離婚 (打叉)</option>
-                        </select>
+                        <span className="status-badge" data-status={c.partner || 'none'}
+                          ref={el => wheelRef(el, G2_STATUSES, c.partner || 'none', v => changePartner(i, v))}
+                          title="滾輪切換狀態">{G2_LABELS[c.partner || 'none']}</span>
                       </div>
                     </div>
                     {c.partner !== 'none' && (
@@ -536,7 +631,8 @@ const onMove = useCallback((e) => {
                 ■ = 男性（正方形）　● = 女性（圓形）<br/>
                 點擊節點 → 標示 / 取消「案主」<br/>
                 拖曳節點 → 微調位置，連線即時跟隨<br/>
-                下拉選擇「伴侶關係」→ 自動產生配偶與第三代輸入欄
+                滑鼠滾輪於狀態標籤 → 循環切換婚姻狀態<br/>
+                📥 下載 JPG → 自動裁切白邊並匯出
               </div>
             </div>
           </div>
