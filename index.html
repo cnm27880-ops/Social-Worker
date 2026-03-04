@@ -106,6 +106,32 @@
       const [mode, setMode] = useState('drag'); // 紀錄目前的點擊模式
       const [cohabMembers, setCohabMembers] = useState([]); // 紀錄同住者
       const [deceasedIds, setDeceasedIds] = useState([]); // 紀錄已歿者
+      const [shortcuts, setShortcuts] = useState({ drag: 'd', index: 'i', cohab: 'c', deceased: 'x' });
+
+      // 快捷鍵監聽器
+      useEffect(() => {
+        const handleKeyDown = (e) => {
+          // 如果使用者正在輸入框打字，就不要觸發快捷鍵
+          if (e.target.tagName === 'INPUT' && e.target.type === 'text') return; 
+          const key = e.key.toLowerCase();
+          if (key === shortcuts.drag.toLowerCase()) setMode('drag');
+          if (key === shortcuts.index.toLowerCase()) setMode('index');
+          if (key === shortcuts.cohab.toLowerCase()) setMode('cohab');
+          if (key === shortcuts.deceased.toLowerCase()) setMode('deceased');
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+      }, [shortcuts]);
+
+      // 更新快捷鍵的函數
+      const updateShortcut = (modeName, key) => {
+        setShortcuts(prev => ({ ...prev, [modeName]: key }));
+      };
+
+      // 切換雙胞胎的函數
+      const toggleTwin = (i) => {
+        setGen2Cfg(p => p.map((d, j) => j === i ? { ...d, isTwin: !d.isTwin } : d));
+      };
       const svgRef = useRef(null);
 
       /* --- 第二代字串變更 --- */
@@ -167,7 +193,7 @@
             const sid = `s${i}`;
             const spG = u.gender === 'M' ? 'F' : 'M';
 
-            N.push({ id: cid, gender: u.gender, gen: 1, dx: lx, dy: GEN_Y[1], label: `${u.gender === 'M' ? '子' : '女'}${i + 1}` });
+            N.push({ id: cid, gender: u.gender, gen: 1, dx: lx, dy: GEN_Y[1], label: `${u.gender === 'M' ? '子' : '女'}${i + 1}`, isTwin: u.isTwin });
             N.push({ id: sid, gender: spG,       gen: 1, dx: rx, dy: GEN_Y[1], label: '配偶' });
             L.push({ id: `ml-c${i}`, type: 'marry', a: cid, b: sid });
             g2ids.push(cid);
@@ -187,7 +213,7 @@
             }
           } else {
             N.push({ id: cid, gender: u.gender, gen: 1, dx: midU, dy: GEN_Y[1],
-              label: `${u.gender === 'M' ? '子' : '女'}${i + 1}` });
+              label: `${u.gender === 'M' ? '子' : '女'}${i + 1}`, isTwin: u.isTwin });
             g2ids.push(cid);
           }
           cx += u.w;
@@ -313,9 +339,23 @@
           const maxKX = Math.max(midX, ...kidPos.map(p => p.x));
           els.push(<line key={`${ln.id}-h`} x1={minKX} y1={barY} x2={maxKX} y2={barY} stroke="#444" strokeWidth="2" />);
 
-          // 每個子代垂直連下
+// 每個子代垂直連下 (包含雙胞胎倒 V 判斷)
           kidPos.forEach((kp, j) => {
-            els.push(<line key={`${ln.id}-k${j}`} x1={kp.x} y1={barY} x2={kp.x} y2={kp.y - R} stroke="#444" strokeWidth="2" />);
+            const isTwin = nodes.find(n => n.id === ln.kids[j])?.isTwin;
+            const nextIsTwin = j < kidPos.length - 1 && nodes.find(n => n.id === ln.kids[j+1])?.isTwin;
+
+            if (isTwin && j > 0) {
+              // 如果自己是雙胞胎，找前一個手足，算中點畫倒 V
+              const prevKp = kidPos[j-1];
+              const twinMidX = (prevKp.x + kp.x) / 2;
+              els.push(<line key={`${ln.id}-tv1-${j}`} x1={twinMidX} y1={barY} x2={prevKp.x} y2={prevKp.y - R} stroke="#444" strokeWidth="2" />);
+              els.push(<line key={`${ln.id}-tv2-${j}`} x1={twinMidX} y1={barY} x2={kp.x} y2={kp.y - R} stroke="#444" strokeWidth="2" />);
+            } else if (nextIsTwin) {
+              // 如果下一個手足是雙胞胎，這條一般的垂直線先不畫，交給下個迴圈畫倒 V
+            } else {
+              // 正常垂直線
+              els.push(<line key={`${ln.id}-k${j}`} x1={kp.x} y1={barY} x2={kp.x} y2={kp.y - R} stroke="#444" strokeWidth="2" />);
+            }
           });
           return <g key={ln.id}>{els}</g>;
         }
@@ -357,14 +397,26 @@
           <div className="panel">
             <h2>家系圖資料輸入面板</h2>
 
-            {/* 互動模式選單 */}
+{/* 互動模式選單與快捷鍵 */}
             <div className="section" style={{ background: '#eff6ff', borderColor: '#bfdbfe' }}>
-              <label>🛠️ 畫布互動模式 (請先選擇模式再點圖形)</label>
-              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '8px', fontSize: '13px' }}>
-                <label><input type="radio" name="mode" checked={mode === 'drag'} onChange={() => setMode('drag')} /> 🤚 拖曳微調</label>
-                <label><input type="radio" name="mode" checked={mode === 'index'} onChange={() => setMode('index')} /> 🎯 設為案主</label>
-                <label><input type="radio" name="mode" checked={mode === 'cohab'} onChange={() => setMode('cohab')} /> 🏠 同住框線</label>
-                <label><input type="radio" name="mode" checked={mode === 'deceased'} onChange={() => setMode('deceased')} /> ✝️ 存歿打叉</label>
+              <label>🛠️ 畫布互動模式 (可用快捷鍵切換)</label>
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '8px', fontSize: '13px', alignItems: 'center' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <input type="radio" name="mode" checked={mode === 'drag'} onChange={() => setMode('drag')} /> 🤚 拖曳 
+                  [<input type="text" maxLength="1" value={shortcuts.drag} onChange={e => updateShortcut('drag', e.target.value)} style={{ width: '18px', padding: '0', textAlign: 'center', fontSize: '11px', background: 'transparent', border: 'none', borderBottom: '1px solid #3b82f6', outline: 'none' }} />]
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <input type="radio" name="mode" checked={mode === 'index'} onChange={() => setMode('index')} /> 🎯 案主
+                  [<input type="text" maxLength="1" value={shortcuts.index} onChange={e => updateShortcut('index', e.target.value)} style={{ width: '18px', padding: '0', textAlign: 'center', fontSize: '11px', background: 'transparent', border: 'none', borderBottom: '1px solid #3b82f6', outline: 'none' }} />]
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <input type="radio" name="mode" checked={mode === 'cohab'} onChange={() => setMode('cohab')} /> 🏠 同住
+                  [<input type="text" maxLength="1" value={shortcuts.cohab} onChange={e => updateShortcut('cohab', e.target.value)} style={{ width: '18px', padding: '0', textAlign: 'center', fontSize: '11px', background: 'transparent', border: 'none', borderBottom: '1px solid #3b82f6', outline: 'none' }} />]
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <input type="radio" name="mode" checked={mode === 'deceased'} onChange={() => setMode('deceased')} /> ✝️ 打叉
+                  [<input type="text" maxLength="1" value={shortcuts.deceased} onChange={e => updateShortcut('deceased', e.target.value)} style={{ width: '18px', padding: '0', textAlign: 'center', fontSize: '11px', background: 'transparent', border: 'none', borderBottom: '1px solid #3b82f6', outline: 'none' }} />]
+                </label>
               </div>
             </div>
 
@@ -395,10 +447,16 @@
                       <span className={`child-name ${c.gender === 'M' ? 'm' : 'f'}`}>
                         {c.gender === 'M' ? '子' : '女'}{i + 1}
                       </span>
-                      <label className="chk-wrap">
-                        <input type="checkbox" checked={c.married} onChange={() => toggleMarried(i)} />
-                        已婚
-                      </label>
+                      <div className="chk-wrap" style={{ marginLeft: 'auto', display: 'flex', gap: '10px' }}>
+                        {i > 0 && (
+                          <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                            <input type="checkbox" checked={c.isTwin || false} onChange={() => toggleTwin(i)} /> 雙胞胎
+                          </label>
+                        )}
+                        <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                          <input type="checkbox" checked={c.married} onChange={() => toggleMarried(i)} /> 已婚
+                        </label>
+                      </div>
                     </div>
                     {c.married && (
                       <div className="gen3-block">
