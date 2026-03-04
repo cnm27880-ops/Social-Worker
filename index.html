@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>電子家系圖產生器 - 跨裝置輸入版</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    /* CSS 重置與基礎設定 */
+    * { box-sizing: border-box; }
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f3f4f6; margin: 0; padding: 16px; }
+    
+    /* 響應式佈局：手機預設上下排，電腦變左右排 */
+    .app-layout { display: flex; flex-direction: column; gap: 20px; max-width: 1200px; margin: 0 auto; }
+    @media (min-width: 768px) { .app-layout { flex-direction: row; } }
+    
+    /* 左側/上方 控制面板 */
+    .panel { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); flex: 1; min-width: 300px; }
+    .form-group { margin-bottom: 15px; }
+    .form-group label { display: block; margin-bottom: 5px; font-weight: bold; color: #374151; }
+    select, button { width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 16px; }
+    button { cursor: pointer; background: #3b82f6; color: white; border: none; font-weight: bold; margin-top: 10px; }
+    button:hover { background: #2563eb; }
+    button.outline { background: white; color: #374151; border: 1px solid #d1d5db; margin-top: 5px; }
+    button.outline.active { background: #e0f2fe; border-color: #3b82f6; color: #1d4ed8; }
+
+    /* 右側/下方 畫布區塊 */
+    .canvas-wrapper { background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); flex: 2; overflow-x: auto; /* 手機上若圖太寬可左右滑動 */ }
+    .canvas { display: block; min-width: 600px; /* 確保畫布不會縮太小導致圖形擠壓 */ cursor: crosshair; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useMemo } = React;
+
+    const App = () => {
+      // 狀態管理
+      const [nodes, setNodes] = useState([]);
+      const [indexPersonId, setIndexPersonId] = useState(null);
+      const [cohabMembers, setCohabMembers] = useState([]);
+      const [isCohabMode, setIsCohabMode] = useState(false);
+
+      // 表單狀態
+      const [formData, setFormData] = useState({ gender: 'M', generation: '1', isDeceased: 'false' });
+
+      const nodeSize = 40;
+
+      // 處理新增人物
+      const handleAddPerson = () => {
+        const newId = 'i' + Date.now(); // 產生唯一 ID
+        const gen = parseInt(formData.generation);
+        
+        // 簡單的座標計算邏輯：確保同代的人往右排，不同代的人往下排
+        const sameGenNodes = nodes.filter(n => n.generation === gen);
+        const newX = 100 + (sameGenNodes.length * 100); // 每個同代人相距 100px
+        const newY = 100 + (gen * 150); // 每代 Y 軸相距 150px
+
+        const newNode = {
+          id: newId,
+          gender: formData.gender,
+          generation: gen,
+          isDeceased: formData.isDeceased === 'true',
+          x: newX,
+          y: newY
+        };
+
+        setNodes([...nodes, newNode]);
+        
+        // 如果是第一個新增的人，預設設為案主
+        if (nodes.length === 0) setIndexPersonId(newId);
+      };
+
+      // 處理點擊節點
+      const handleNodeClick = (id) => {
+        if (isCohabMode) {
+          setCohabMembers(prev => prev.includes(id) ? prev.filter(m => m !== id) : [...prev, id]);
+        } else {
+          setIndexPersonId(id);
+        }
+      };
+
+      // 計算同住者虛線框
+      const cohabitationBox = useMemo(() => {
+        if (cohabMembers.length === 0) return null;
+        const members = nodes.filter(n => cohabMembers.includes(n.id));
+        if (members.length === 0) return null;
+
+        const padding = 35;
+        const minX = Math.min(...members.map(n => n.x)) - padding;
+        const maxX = Math.max(...members.map(n => n.x)) + padding;
+        const minY = Math.min(...members.map(n => n.y)) - padding;
+        const maxY = Math.max(...members.map(n => n.y)) + padding;
+
+        return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+      }, [cohabMembers, nodes]);
+
+      return (
+        <div className="app-layout">
+          {/* 左側面板：輸入與控制 */}
+          <div className="panel">
+            <h3 style={{marginTop: 0}}>新增家庭成員</h3>
+            
+            <div className="form-group">
+              <label>性別</label>
+              <select value={formData.gender} onChange={e => setFormData({...formData, gender: e.target.value})}>
+                <option value="M">男性 (正方形)</option>
+                <option value="F">女性 (圓形)</option>
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label>世代 (以案主為基準)</label>
+              <select value={formData.generation} onChange={e => setFormData({...formData, generation: e.target.value})}>
+                <option value="0">上一代 (父母/伯叔姑)</option>
+                <option value="1">同一代 (案主/手足/配偶)</option>
+                <option value="2">下一代 (子女/姪甥)</option>
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label>生存狀態</label>
+              <select value={formData.isDeceased} onChange={e => setFormData({...formData, isDeceased: e.target.value})}>
+                <option value="false">存活</option>
+                <option value="true">已歿 (打叉)</option>
+              </select>
+            </div>
+
+            <button onClick={handleAddPerson}>➕ 新增至畫布</button>
+
+            <hr style={{margin: '20px 0', border: '0.5px solid #e5e7eb'}} />
+            
+            <h3 style={{marginTop: 0}}>畫布互動模式</h3>
+            <button className={`outline ${!isCohabMode ? 'active' : ''}`} onClick={() => setIsCohabMode(false)}>
+              👉 指定案主 (點擊圖形)
+            </button>
+            <button className={`outline ${isCohabMode ? 'active' : ''}`} onClick={() => setIsCohabMode(true)}>
+              🏠 選取同住家屬 (點擊圖形)
+            </button>
+          </div>
+
+          {/* 右側畫布：視覺渲染 */}
+          <div className="canvas-wrapper">
+            <svg width="100%" height="500" className="canvas" style={{ minWidth: '600px' }}>
+              {/* 繪製同住家屬外框 */}
+              {cohabitationBox && (
+                <rect x={cohabitationBox.x} y={cohabitationBox.y} width={cohabitationBox.width} height={cohabitationBox.height} fill="none" stroke="#ef4444" strokeWidth="2" strokeDasharray="8,6" rx="15" />
+              )}
+
+              {/* 繪製人物節點 */}
+              {nodes.map(node => {
+                const isIndex = node.id === indexPersonId;
+                const fillMode = isIndex ? 'black' : 'white';
+                const halfSize = nodeSize / 2;
+
+                return (
+                  <g key={node.id} transform={`translate(${node.x}, ${node.y})`} onClick={() => handleNodeClick(node.id)}>
+                    {node.gender === 'M' ? (
+                      <rect x={-halfSize} y={-halfSize} width={nodeSize} height={nodeSize} fill={fillMode} stroke="black" strokeWidth="2" />
+                    ) : (
+                      <circle cx="0" cy="0" r={halfSize} fill={fillMode} stroke="black" strokeWidth="2" />
+                    )}
+
+                    {node.isDeceased && (
+                      <g stroke="black" strokeWidth="2">
+                        <line x1={-halfSize} y1={-halfSize} x2={halfSize} y2={halfSize} />
+                        <line x1={halfSize} y1={-halfSize} x2={-halfSize} y2={halfSize} />
+                      </g>
+                    )}
+                    
+                    {/* 顯示一下隱藏的世代資訊，方便除錯 */}
+                    <text x="0" y={halfSize + 15} textAnchor="middle" fontSize="12" fill="#666">Gen {node.generation}</text>
+                  </g>
+                );
+              })}
+            </svg>
+          </div>
+        </div>
+      );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
