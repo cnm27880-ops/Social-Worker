@@ -96,7 +96,7 @@
     const R  = SZ / 2;           // 半徑 / 半邊長
     const COUPLE_GAP = 64;       // 夫妻中心距
     const SIBLING_GAP = 100;     // 手足中心距
-    const GEN_Y = [80, 130, 210]; // 三代 Y 座標
+    const GEN_Y = [80, 200, 320]; // 三代 Y 座標（等比間距，避免重疊）
 
     const TEXT_FONT = "'Times New Roman', 'DFKai-SB', 'BiauKai', serif";
 
@@ -252,7 +252,8 @@
             URL.revokeObjectURL(a.href);
           }, 'image/jpeg', 1.0); // 壓縮品質設為 1.0 (最高)
         };
-      }; 
+        img.src = url;
+      };
 
       // 一鍵重製畫布
       const resetCanvas = () => {
@@ -429,6 +430,10 @@
         e.stopPropagation();
         if (textDragMoved.current) return;
         setSelectedTextId(id);
+      }, []);
+
+      const onTextDoubleClick = useCallback((e, id) => {
+        e.stopPropagation();
         const t = texts.find(t => t.id === id);
         const newText = window.prompt('編輯文字內容：', t?.text || '');
         if (newText !== null && newText !== '') {
@@ -566,7 +571,9 @@
           if (kidPos.length === 0) return null;
 
           const childY = kidPos[0].y;
-          const barY = parentY + (childY - parentY - R) * 0.4 + R;
+          const parentBottom = parentY + R;
+          const childTop = childY - R;
+          const barY = (parentBottom + childTop) / 2;
 
           const els = [];
           els.push(<line key={`${ln.id}-v`} x1={midX} y1={parentY} x2={midX} y2={barY} stroke="#444" strokeWidth="2" />);
@@ -665,6 +672,7 @@
               cursor="move"
               onMouseDown={e => onTextDown(e, t.id)}
               onClick={e => onTextClick(e, t.id)}
+              onDoubleClick={e => onTextDoubleClick(e, t.id)}
             >
               {t.text}
             </text>
@@ -795,7 +803,7 @@
                   ➕ 新增至畫布
                 </button>
               </div>
-              <div className="hint">點擊畫布上的文字可編輯內容；選取後可刪除或拖曳右下角縮放。</div>
+              <div className="hint">單擊選取文字方塊（顯示框線與控制按鈕）；雙擊可編輯內容；選取後可刪除或拖曳右下角縮放。</div>
             </div>
 
             {/* 使用說明 */}
