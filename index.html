@@ -151,15 +151,18 @@
         setGen2Str(val);
         const gs = parseGenders(val);
         setGen2Cfg(prev => gs.map((g, i) =>
-          (prev[i] && prev[i].gender === g) ? prev[i] : { gender: g, married: false, g3Str: '' }
+          (prev[i] && prev[i].gender === g) ? prev[i] : { gender: g, partner: 'none', g3Str: '', isMulti: false }
         ));
       };
 
-      const toggleMarried = (i) =>
-        setGen2Cfg(p => p.map((d, j) => j === i ? { ...d, married: !d.married, g3Str: !d.married ? d.g3Str : '' } : d));
+      const changePartner = (i, status) =>
+        setGen2Cfg(p => p.map((d, j) => j === i ? { ...d, partner: status, g3Str: status === 'none' ? '' : d.g3Str } : d));
 
       const setG3 = (i, v) =>
         setGen2Cfg(p => p.map((d, j) => j === i ? { ...d, g3Str: v } : d));
+
+      const toggleMulti = (i) =>
+        setGen2Cfg(p => p.map((d, j) => j === i ? { ...d, isMulti: !d.isMulti } : d));
 
       /* ===== 計算節點與連線 ===== */
       const { nodes, lines } = useMemo(() => {
@@ -167,16 +170,17 @@
 
         // --- 計算每個 gen2 家庭單元寬度 ---
         const units = gen2Cfg.map((c, i) => {
-          const g3 = c.married ? parseGenders(c.g3Str) : [];
+          const isMarried = c.partner !== 'none';
+          const g3 = isMarried ? parseGenders(c.g3Str) : [];
           let w;
-          if (!c.married) {
+          if (!isMarried) {
             w = SIBLING_GAP;
           } else {
             const coupleW = COUPLE_GAP + SZ;
             const kidsW = g3.length > 0 ? (g3.length - 1) * SIBLING_GAP + SZ : 0;
             w = Math.max(coupleW, kidsW) + 50;
           }
-          return { ...c, idx: i, g3, w };
+          return { ...c, idx: i, g3, w, isMarried };
         });
 
         const totalW = units.reduce((s, u) => s + u.w, 0) || 200;
@@ -189,7 +193,7 @@
 
         N.push({ id: 'fa', gender: 'M', gen: 0, dx: fX, dy: g1Y, label: '父' });
         N.push({ id: 'mo', gender: 'F', gen: 0, dx: mX, dy: g1Y, label: '母' });
-        L.push({ id: 'ml-g1', type: 'marry', a: 'fa', b: 'mo' });
+        L.push({ id: 'ml-g1', type: 'marry', a: 'fa', b: 'mo', status: 'married' });
 
         // --- Gen2 子女 ---
         let cx = originX;
@@ -199,15 +203,15 @@
           const cid = `c${i}`;
           const midU = cx + u.w / 2;
 
-          if (u.married) {
+          if (u.isMarried) {
             const lx = midU - COUPLE_GAP / 2;
             const rx = midU + COUPLE_GAP / 2;
             const sid = `s${i}`;
             const spG = u.gender === 'M' ? 'F' : 'M';
 
-            N.push({ id: cid, gender: u.gender, gen: 1, dx: lx, dy: GEN_Y[1], label: `${u.gender === 'M' ? '子' : '女'}${i + 1}`, isTwin: u.isTwin });
+            N.push({ id: cid, gender: u.gender, gen: 1, dx: lx, dy: GEN_Y[1], label: `${u.gender === 'M' ? '子' : '女'}${i + 1}`, isMulti: u.isMulti });
             N.push({ id: sid, gender: spG,       gen: 1, dx: rx, dy: GEN_Y[1], label: '配偶' });
-            L.push({ id: `ml-c${i}`, type: 'marry', a: cid, b: sid });
+            L.push({ id: `ml-c${i}`, type: 'marry', a: cid, b: sid, status: u.partner });
             g2ids.push(cid);
 
             // Gen3
@@ -217,15 +221,13 @@
               const g3ids = [];
               u.g3.forEach((g, j) => {
                 const gid = `g${i}_${j}`;
-                N.push({ id: gid, gender: g, gen: 2, dx: g3Start + j * SIBLING_GAP, dy: GEN_Y[2],
-                  label: `${g === 'M' ? '孫' : '孫女'}${j + 1}` });
+                N.push({ id: gid, gender: g, gen: 2, dx: g3Start + j * SIBLING_GAP, dy: GEN_Y[2], label: `${g === 'M' ? '孫' : '孫女'}${j + 1}` });
                 g3ids.push(gid);
               });
               L.push({ id: `pc-c${i}`, type: 'pc', pa: cid, pb: sid, kids: g3ids });
             }
           } else {
-            N.push({ id: cid, gender: u.gender, gen: 1, dx: midU, dy: GEN_Y[1],
-              label: `${u.gender === 'M' ? '子' : '女'}${i + 1}`, isTwin: u.isTwin });
+            N.push({ id: cid, gender: u.gender, gen: 1, dx: midU, dy: GEN_Y[1], label: `${u.gender === 'M' ? '子' : '女'}${i + 1}`, isMulti: u.isMulti });
             g2ids.push(cid);
           }
           cx += u.w;
@@ -337,16 +339,29 @@ const onMove = useCallback((e) => {
 
         return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
       }, [cohabMembers, nodes, positions, pos]);
-      /* ===== 渲染連線 ===== */
+     /* ===== 渲染連線 ===== */
       const drawLines = () => lines.map(ln => {
         if (ln.type === 'marry') {
           const a = pos(ln.a), b = pos(ln.b);
           const nA = nodes.find(n => n.id === ln.a);
           const nB = nodes.find(n => n.id === ln.b);
-          // 從圖形邊緣連到邊緣
           const x1 = a.x + (nA?.gender === 'M' ? R : R);
           const x2 = b.x - (nB?.gender === 'M' ? R : R);
-          return <line key={ln.id} x1={x1} y1={a.y} x2={x2} y2={b.y} stroke="#444" strokeWidth="2" />;
+          
+          const els = [];
+          const isDashed = ln.status === 'cohab'; // 同居畫虛線
+          els.push(<line key={ln.id} x1={x1} y1={a.y} x2={x2} y2={b.y} stroke="#444" strokeWidth="2" strokeDasharray={isDashed ? "8,6" : "0"} />);
+          
+          const midX = (x1 + x2) / 2;
+          const midY = a.y;
+          
+          if (ln.status === 'separated') { // 分居 (單斜線)
+            els.push(<line key={`${ln.id}-s`} x1={midX - 6} y1={midY + 12} x2={midX + 6} y2={midY - 12} stroke="#444" strokeWidth="2" />);
+          } else if (ln.status === 'divorced') { // 離婚 (打叉叉)
+            els.push(<line key={`${ln.id}-d1`} x1={midX - 8} y1={midY - 8} x2={midX + 8} y2={midY + 8} stroke="#444" strokeWidth="2" />);
+            els.push(<line key={`${ln.id}-d2`} x1={midX - 8} y1={midY + 8} x2={midX + 8} y2={midY - 8} stroke="#444" strokeWidth="2" />);
+          }
+          return <g key={ln.id}>{els}</g>;
         }
 
         if (ln.type === 'pc') {
@@ -368,21 +383,29 @@ const onMove = useCallback((e) => {
           const maxKX = Math.max(midX, ...kidPos.map(p => p.x));
           els.push(<line key={`${ln.id}-h`} x1={minKX} y1={barY} x2={maxKX} y2={barY} stroke="#444" strokeWidth="2" />);
 
-// 每個子代垂直連下 (包含雙胞胎倒 V 判斷)
-          kidPos.forEach((kp, j) => {
-            const isTwin = nodes.find(n => n.id === ln.kids[j])?.isTwin;
-            const nextIsTwin = j < kidPos.length - 1 && nodes.find(n => n.id === ln.kids[j+1])?.isTwin;
-
-            if (isTwin && j > 0) {
-              // 如果自己是雙胞胎，找前一個手足，算中點畫倒 V
-              const prevKp = kidPos[j-1];
-              const twinMidX = (prevKp.x + kp.x) / 2;
-              els.push(<line key={`${ln.id}-tv1-${j}`} x1={twinMidX} y1={barY} x2={prevKp.x} y2={prevKp.y - R} stroke="#444" strokeWidth="2" />);
-              els.push(<line key={`${ln.id}-tv2-${j}`} x1={twinMidX} y1={barY} x2={kp.x} y2={kp.y - R} stroke="#444" strokeWidth="2" />);
-            } else if (nextIsTwin) {
-              // 如果下一個手足是雙胞胎，這條一般的垂直線先不畫，交給下個迴圈畫倒 V
+          // --- 智慧多胞胎分群計算 ---
+          const multiGroups = [];
+          let currentGroup = [];
+          ln.kids.forEach((kidId, idx) => {
+            if (nodes.find(n => n.id === kidId)?.isMulti) {
+              currentGroup.push(idx);
             } else {
-              // 正常垂直線
+              if (currentGroup.length >= 2) multiGroups.push(currentGroup);
+              currentGroup = [];
+            }
+          });
+          if (currentGroup.length >= 2) multiGroups.push(currentGroup);
+
+          // 每個子代垂直連下 (包含多胞胎倒 V 邏輯)
+          kidPos.forEach((kp, j) => {
+            const group = multiGroups.find(g => g.includes(j));
+            if (group) {
+              // 屬於有效多胞胎，算出共同頂點 X
+              const groupXs = group.map(gIdx => kidPos[gIdx].x);
+              const centerX = groupXs.reduce((sum, x) => sum + x, 0) / groupXs.length;
+              els.push(<line key={`${ln.id}-m${j}`} x1={centerX} y1={barY} x2={kp.x} y2={kp.y - R} stroke="#444" strokeWidth="2" />);
+            } else {
+              // 一般垂直線
               els.push(<line key={`${ln.id}-k${j}`} x1={kp.x} y1={barY} x2={kp.x} y2={kp.y - R} stroke="#444" strokeWidth="2" />);
             }
           });
@@ -481,20 +504,22 @@ const onMove = useCallback((e) => {
                       <span className={`child-name ${c.gender === 'M' ? 'm' : 'f'}`}>
                         {c.gender === 'M' ? '子' : '女'}{i + 1}
                       </span>
-                      <div className="chk-wrap" style={{ marginLeft: 'auto', display: 'flex', gap: '10px' }}>
-                        {i > 0 && (
-                          <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px' }}>
-                            <input type="checkbox" checked={c.isTwin || false} onChange={() => toggleTwin(i)} /> 雙胞胎
-                          </label>
-                        )}
+                      <div className="chk-wrap" style={{ marginLeft: 'auto', display: 'flex', gap: '8px', alignItems: 'center' }}>
                         <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px' }}>
-                          <input type="checkbox" checked={c.married} onChange={() => toggleMarried(i)} /> 已婚
+                          <input type="checkbox" checked={c.isMulti || false} onChange={() => toggleMulti(i)} /> 多胞胎
                         </label>
+                        <select value={c.partner || 'none'} onChange={(e) => changePartner(i, e.target.value)} style={{ padding: '2px', fontSize: '12px', border: '1px solid #cbd5e1', borderRadius: '4px', outline: 'none' }}>
+                          <option value="none">未婚</option>
+                          <option value="married">已婚</option>
+                          <option value="cohab">同居 (虛線)</option>
+                          <option value="separated">分居 (斜線)</option>
+                          <option value="divorced">離婚 (打叉)</option>
+                        </select>
                       </div>
                     </div>
-                    {c.married && (
+                    {c.partner !== 'none' && (
                       <div className="gen3-block">
-                        <label>↳ 第三代子女順序（此對夫妻）</label>
+                        <label>↳ 第三代子女順序（此對伴侶）</label>
                         <input type="text" value={c.g3Str} onChange={e => setG3(i, e.target.value)}
                                placeholder="例：男女 或 MF" />
                       </div>
