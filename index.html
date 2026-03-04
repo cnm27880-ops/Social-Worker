@@ -96,7 +96,7 @@
     const R  = SZ / 2;           // 半徑 / 半邊長
     const COUPLE_GAP = 64;       // 夫妻中心距
     const SIBLING_GAP = 100;     // 手足中心距
-    const GEN_Y = [80, 180, 280]; // 三代 Y 座標
+    const GEN_Y = [80, 130, 210]; // 三代 Y 座標
 
     const TEXT_FONT = "'Times New Roman', 'DFKai-SB', 'BiauKai', serif";
 
@@ -232,13 +232,16 @@
 
         const img = new Image();
         img.onload = () => {
+          const scale = 3; // 設定 3 倍高畫質放大
           const canvas = document.createElement('canvas');
-          canvas.width = cropW;
-          canvas.height = cropH;
+          canvas.width = cropW * scale;
+          canvas.height = cropH * scale;
           const ctx = canvas.getContext('2d');
+          
+          ctx.scale(scale, scale); // 將繪製比例放大
           ctx.fillStyle = '#ffffff';
           ctx.fillRect(0, 0, cropW, cropH);
-          ctx.drawImage(img, 0, 0, cropW, cropH);
+          ctx.drawImage(img, 0, 0, cropW, cropH); // 影像繪製時會自動套用 scale
           URL.revokeObjectURL(url);
 
           canvas.toBlob(blob => {
@@ -247,11 +250,9 @@
             a.download = 'genogram.jpg';
             a.click();
             URL.revokeObjectURL(a.href);
-          }, 'image/jpeg', 0.95);
+          }, 'image/jpeg', 1.0); // 壓縮品質設為 1.0 (最高)
         };
-        img.src = url;
-      };
-
+        
       // 一鍵重製畫布
       const resetCanvas = () => {
         if (window.confirm('確定要清空畫布並重新開始嗎？(可按 Enter 確認)')) {
