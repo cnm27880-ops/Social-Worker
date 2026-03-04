@@ -322,7 +322,7 @@
         return null;
       });
 
-      /* ===== 渲染節點 ===== */
+/* ===== 渲染節點 ===== */
       const drawNodes = () => nodes.map(nd => {
         const p = pos(nd.id);
         const isIP = nd.id === indexId;
@@ -336,8 +336,10 @@
             {nd.gender === 'M'
               ? <rect x={-R} y={-R} width={SZ} height={SZ} fill={fill} stroke="#333" strokeWidth="2.5" rx="2" />
               : <circle cx="0" cy="0" r={R} fill={fill} stroke="#333" strokeWidth="2.5" />}
+            
             {/* 保留案主標示，移除預設的父母子女文字 */}
             {isIP && <text x="0" y="4" textAnchor="middle" fontSize="11" fontWeight="bold" fill={txtC}>案主</text>}
+            
             {/* 死亡狀態：打叉 (如果被設為案主反黑，叉叉就變白色) */}
             {deceasedIds.includes(nd.id) && (
               <g stroke={isIP ? 'white' : '#333'} strokeWidth="2.5">
@@ -345,6 +347,8 @@
                 <line x1={R} y1={-R} x2={-R} y2={R} />
              </g>
             )}
+          </g>
+        );
       });
 
       /* ===== 表單面板 ===== */
