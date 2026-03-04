@@ -520,54 +520,48 @@
         return Math.max(520, (ys.length ? Math.max(...ys) : 0) + 80);
       }, [nodes, positions, texts]);
 
-      /* ===== 計算同住泡泡外框 (Amoeba) — 最小生成樹 MST ===== */
+      /* ===== 計算同住外框 (Convex Hull) ===== */
       const cohabitationBox = useMemo(() => {
         if (cohabMembers.length === 0) return null;
         const members = nodes.filter(n => cohabMembers.includes(n.id));
         if (members.length === 0) return null;
 
-        const points = members.map(n => {
-          const p = pos(n.id);
-          return { x: p.x, y: p.y };
-        });
-
-        const edges = [];
-        if (points.length > 1) {
-          // Prim's algorithm for MST
-          const n = points.length;
-          const inMST = new Array(n).fill(false);
-          const minDist = new Array(n).fill(Infinity);
-          const minFrom = new Array(n).fill(-1);
-          minDist[0] = 0;
-
-          for (let iter = 0; iter < n; iter++) {
-            // pick the closest non-MST vertex
-            let u = -1;
-            for (let i = 0; i < n; i++) {
-              if (!inMST[i] && (u === -1 || minDist[i] < minDist[u])) u = i;
-            }
-            inMST[u] = true;
-            if (minFrom[u] !== -1) {
-              edges.push({
-                x1: points[minFrom[u]].x, y1: points[minFrom[u]].y,
-                x2: points[u].x, y2: points[u].y
-              });
-            }
-            // update distances
-            for (let v = 0; v < n; v++) {
-              if (inMST[v]) continue;
-              const dx = points[u].x - points[v].x;
-              const dy = points[u].y - points[v].y;
-              const d = Math.sqrt(dx * dx + dy * dy);
-              if (d < minDist[v]) {
-                minDist[v] = d;
-                minFrom[v] = u;
-              }
-            }
-          }
+        if (members.length === 1) {
+          const p = pos(members[0].id);
+          const pad = 30;
+          return { type: 'single', x: p.x - R - pad, y: p.y - R - pad, w: SZ + pad * 2, h: SZ + pad * 2 };
         }
 
-        return { points, edges };
+        // Generate 4 corner points per node (30px padding)
+        const pad = 30;
+        const corners = [];
+        members.forEach(n => {
+          const p = pos(n.id);
+          corners.push({ x: p.x - pad, y: p.y - pad });
+          corners.push({ x: p.x + pad, y: p.y - pad });
+          corners.push({ x: p.x - pad, y: p.y + pad });
+          corners.push({ x: p.x + pad, y: p.y + pad });
+        });
+
+        // Monotone Chain convex hull
+        const pts = corners.slice().sort((a, b) => a.x - b.x || a.y - b.y);
+        const cross = (O, A, B) => (A.x - O.x) * (B.y - O.y) - (A.y - O.y) * (B.x - O.x);
+        const lower = [];
+        for (const p of pts) {
+          while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop();
+          lower.push(p);
+        }
+        const upper = [];
+        for (let i = pts.length - 1; i >= 0; i--) {
+          const p = pts[i];
+          while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop();
+          upper.push(p);
+        }
+        lower.pop();
+        upper.pop();
+        const hull = lower.concat(upper);
+
+        return { type: 'poly', points: hull };
       }, [cohabMembers, nodes, positions, pos]);
 
       /* ===== 渲染連線 ===== */
@@ -858,37 +852,27 @@
                  onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp}
                  onClick={() => setSelectedTextId(null)}
                  style={{ background: '#fefefe', minWidth: '600px' }}>
-              {/* 背景格線 + 同住泡泡遮罩 */}
+              {/* 背景格線 */}
               <defs>
                 <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
                   <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#f0f0f0" strokeWidth="0.5" />
                 </pattern>
-                {cohabitationBox && (
-                  <mask id="cohab-mask">
-                    <rect width="100%" height="100%" fill="white" />
-                    {cohabitationBox.edges.map((e, i) => (
-                      <line key={`cm-e${i}`} x1={e.x1} y1={e.y1} x2={e.x2} y2={e.y2}
-                            stroke="black" strokeWidth={60} strokeLinecap="round" />
-                    ))}
-                    {cohabitationBox.points.map((p, i) => (
-                      <circle key={`cm-p${i}`} cx={p.x} cy={p.y} r={30} fill="black" />
-                    ))}
-                  </mask>
-                )}
               </defs>
               <rect width="100%" height="100%" fill="url(#grid)" />
 
-              {/* 繪製同住家屬泡泡外框 (Amoeba) */}
-              {cohabitationBox && (
-                <g mask="url(#cohab-mask)" opacity="0.8">
-                  {cohabitationBox.edges.map((e, i) => (
-                    <line key={`cv-e${i}`} x1={e.x1} y1={e.y1} x2={e.x2} y2={e.y2}
-                          stroke="#ef4444" strokeWidth={64} strokeLinecap="round" />
-                  ))}
-                  {cohabitationBox.points.map((p, i) => (
-                    <circle key={`cv-p${i}`} cx={p.x} cy={p.y} r={32} fill="#ef4444" />
-                  ))}
-                </g>
+              {/* 繪製同住家屬外框 */}
+              {cohabitationBox && cohabitationBox.type === 'single' && (
+                <rect
+                  x={cohabitationBox.x} y={cohabitationBox.y}
+                  width={cohabitationBox.w} height={cohabitationBox.h}
+                  fill="none" stroke="#ef4444" strokeWidth="2.5" strokeDasharray="8,6" rx="15"
+                />
+              )}
+              {cohabitationBox && cohabitationBox.type === 'poly' && (
+                <polygon
+                  points={cohabitationBox.points.map(p => `${p.x},${p.y}`).join(' ')}
+                  fill="none" stroke="#ef4444" strokeWidth="2.5" strokeDasharray="8,6" strokeLinejoin="round"
+                />
               )}
 
               {/* 世代標示 */}
