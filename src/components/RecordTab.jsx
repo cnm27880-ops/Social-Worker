@@ -3,7 +3,7 @@ import BadgeGroup from './BadgeGroup';
 import { getRelativeTitle, formatKidsText } from '../utils/helpers';
 
 const RecordTab = ({
-  gen2Cfg, indexId, g1Status, cohabMembers, deceasedIds
+  gen2Cfg, indexId, g1Status, cohabMembers, deceasedIds, customLinks
 }) => {
   /* --- 自訂標籤狀態 --- */
   const DEFAULT_TAGS = {
@@ -83,8 +83,34 @@ const RecordTab = ({
       txt += `${fTxt}；\n`;
     });
 
+    /* --- 擴充連線 (customLinks) → 只處理案主的關係，忽略第二代 --- */
+    if (indexId && customLinks && customLinks.length > 0) {
+      const indexGender = indexId === 'fa' ? 'M' : indexId === 'mo' ? 'F' : (() => {
+        if (indexId.startsWith('c')) { const idx = parseInt(indexId.replace('c','')); return gen2Cfg[idx]?.gender; }
+        return null;
+      })();
+      customLinks.forEach(lnk => {
+        // 只處理案主相關的連線
+        if (lnk.sourceId !== indexId && lnk.targetId !== indexId) return;
+        // 忽略連向第二代 (c0, c1...) 的 customLinks
+        const otherId = lnk.sourceId === indexId ? lnk.targetId : lnk.sourceId;
+        if (/^c\d+$/.test(otherId)) return;
+        const spouseLabel = indexGender === 'M' ? '前妻' : '前夫';
+        const remarryLabel = indexGender === 'M' ? '案妻' : '案夫';
+        if (lnk.status === 'divorced') {
+          let line = `與${spouseLabel}`;
+          if (lnk.g3Str) line += `${formatKidsText(lnk.g3Str)}`;
+          txt += `${line}；\n`;
+        } else if (lnk.status === 'married') {
+          let line = `再婚，與${remarryLabel}`;
+          if (lnk.g3Str) line += `${formatKidsText(lnk.g3Str)}`;
+          txt += `${line}；\n`;
+        }
+      });
+    }
+
     return txt;
-  }, [subjInfo, gen2Cfg, g1Status, cohabMembers, deceasedIds, famExtras, indexId]);
+  }, [subjInfo, gen2Cfg, g1Status, cohabMembers, deceasedIds, famExtras, indexId, customLinks]);
 
   const handleFamExtra = (idx, field, val) => {
     setFamExtras(prev => ({ ...prev, [idx]: { ...(prev[idx] || {}), [field]: val } }));

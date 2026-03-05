@@ -15,6 +15,10 @@ const App = () => {
   const [deceasedIds, setDeceasedIds] = useState([]);
   const [g1Status, setG1Status] = useState('married');
 
+  /* --- 自由樂高節點 & 自訂連線 --- */
+  const [freeNodes, setFreeNodes] = useState([]);
+  const [customLinks, setCustomLinks] = useState([]);
+
   return (
     <div>
       {/* 頁籤列 */}
@@ -32,6 +36,8 @@ const App = () => {
           cohabMembers={cohabMembers} setCohabMembers={setCohabMembers}
           deceasedIds={deceasedIds} setDeceasedIds={setDeceasedIds}
           g1Status={g1Status} setG1Status={setG1Status}
+          freeNodes={freeNodes} setFreeNodes={setFreeNodes}
+          customLinks={customLinks} setCustomLinks={setCustomLinks}
         />
       )}
 
@@ -43,6 +49,7 @@ const App = () => {
           g1Status={g1Status}
           cohabMembers={cohabMembers}
           deceasedIds={deceasedIds}
+          customLinks={customLinks}
         />
       )}
     </div>
