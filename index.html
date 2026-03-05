@@ -121,6 +121,11 @@
       const [drag, setDrag]             = useState(null);
       const [mode, setMode] = useState('drag');
       const [cohabMembers, setCohabMembers] = useState([]);
+      const [cohabMode, setCohabMode] = useState('auto');
+      const [polygons, setPolygons] = useState([]);
+      const [draftPoly, setDraftPoly] = useState([]);
+      const [selectedPolyId, setSelectedPolyId] = useState(null);
+      const [dragVertex, setDragVertex] = useState(null);
       const [deceasedIds, setDeceasedIds] = useState([]);
       const [g1Status, setG1Status] = useState('married');
 
@@ -148,8 +153,9 @@
       const [textResize, setTextResize] = useState(null);
       const [textDirection, setTextDirection] = useState('horizontal');
       const textDragMoved = useRef(false);
+      const [mousePos, setMousePos] = useState(null);
 
-      // 快捷鍵監聽器
+      // 快捷鍵監聯器
       useEffect(() => {
         const handleKeyDown = (e) => {
           if (e.target.tagName === 'INPUT' && e.target.type === 'text') return;
@@ -158,10 +164,29 @@
           if (key === shortcuts.index.toLowerCase()) setMode('index');
           if (key === shortcuts.cohab.toLowerCase()) setMode('cohab');
           if (key === shortcuts.deceased.toLowerCase()) setMode('deceased');
+          // Enter 完成多邊形繪製 (僅在 cohab+poly 模式)
+          if (e.key === 'Enter' && mode === 'cohab' && cohabMode === 'poly' && draftPoly.length >= 3) {
+            setPolygons(prev => [...prev, { id: 'pg_' + Date.now(), pts: draftPoly }]);
+            setDraftPoly([]);
+            setMousePos(null);
+          }
+          // Escape 取消繪製中的多邊形
+          if (e.key === 'Escape' && draftPoly.length > 0) {
+            setDraftPoly([]);
+            setMousePos(null);
+          }
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-      }, [shortcuts]);
+      }, [shortcuts, draftPoly, mode, cohabMode]);
+
+      // 切換離開 poly 模式時自動清空草稿
+      useEffect(() => {
+        if (!(mode === 'cohab' && cohabMode === 'poly') && draftPoly.length > 0) {
+          setDraftPoly([]);
+          setMousePos(null);
+        }
+      }, [mode, cohabMode]);
 
       const updateShortcut = (modeName, key) => {
         setShortcuts(prev => ({ ...prev, [modeName]: key }));
@@ -210,6 +235,19 @@
           allXs.push(t.x - 4, t.x + (t.vertical ? t.fontSize * 1.5 : w));
           allYs.push(t.y - (t.vertical ? 4 : t.fontSize + 4), t.y + (t.vertical ? h : 8));
         });
+        // 多邊形邊界
+        polygons.forEach(pg => {
+          pg.pts.forEach(pt => { allXs.push(pt.x); allYs.push(pt.y); });
+        });
+        // 自動同住框邊界
+        if (cohabitationBox) {
+          if (cohabitationBox.type === 'single') {
+            allXs.push(cohabitationBox.x, cohabitationBox.x + cohabitationBox.w);
+            allYs.push(cohabitationBox.y, cohabitationBox.y + cohabitationBox.h);
+          } else if (cohabitationBox.type === 'poly') {
+            cohabitationBox.points.forEach(pt => { allXs.push(pt.x); allYs.push(pt.y); });
+          }
+        }
         if (allXs.length === 0) return;
 
         const minX = Math.min(...allXs) - PAD;
@@ -267,6 +305,10 @@
           setG1Status('married');
           setTexts([]);
           setSelectedTextId(null);
+          setPolygons([]);
+          setDraftPoly([]);
+          setSelectedPolyId(null);
+          setDragVertex(null);
         }
       };
 
@@ -449,8 +491,23 @@
       }, [svgPt, texts]);
 
       const onMove = useCallback((e) => {
+        const sp = svgPt(e);
+        // 追蹤滑鼠位置 (供多邊形輔助線使用)
+        if (draftPoly.length > 0) {
+          setMousePos({ x: sp.x, y: sp.y });
+        }
+        // 拖曳多邊形端點
+        if (dragVertex) {
+          setPolygons(prev => prev.map(pg => {
+            if (pg.id !== dragVertex.polyId) return pg;
+            const newPts = pg.pts.map((pt, i) =>
+              i === dragVertex.index ? { x: sp.x - dragVertex.ox, y: sp.y - dragVertex.oy } : pt
+            );
+            return { ...pg, pts: newPts };
+          }));
+          return;
+        }
         if (textResize) {
-          const sp = svgPt(e);
           const delta = sp.y - textResize.startY;
           const newSize = Math.max(10, Math.min(72, Math.round(textResize.startSize + delta * 0.3)));
           setTexts(prev => prev.map(t => t.id === textResize.id ? { ...t, fontSize: newSize } : t));
@@ -458,12 +515,10 @@
         }
         if (textDrag) {
           textDragMoved.current = true;
-          const sp = svgPt(e);
           setTexts(prev => prev.map(t => t.id === textDrag.id ? { ...t, x: sp.x - textDrag.ox, y: sp.y - textDrag.oy } : t));
           return;
         }
         if (!drag) return;
-        const sp = svgPt(e);
         const rawX = sp.x - drag.ox;
         const rawY = sp.y - drag.oy;
 
@@ -479,9 +534,10 @@
           }
           return { ...prev, [drag.id]: { x: newX, y: newY } };
         });
-      }, [drag, textDrag, textResize, svgPt]);
+      }, [drag, textDrag, textResize, dragVertex, draftPoly, svgPt]);
 
       const onUp = useCallback(() => {
+        setDragVertex(null);
         setDrag(null);
         setTextDrag(null);
         setTextResize(null);
@@ -494,12 +550,12 @@
 
         if (mode === 'index') {
           setIndexId(prev => prev === id ? null : id);
-        } else if (mode === 'cohab') {
+        } else if (mode === 'cohab' && cohabMode === 'auto') {
           setCohabMembers(prev => prev.includes(id) ? prev.filter(m => m !== id) : [...prev, id]);
         } else if (mode === 'deceased') {
           setDeceasedIds(prev => prev.includes(id) ? prev.filter(m => m !== id) : [...prev, id]);
         }
-      }, [mode]);
+      }, [mode, cohabMode]);
 
       /* ===== SVG 尺寸 (含文字) ===== */
       const svgW = useMemo(() => {
@@ -520,54 +576,48 @@
         return Math.max(520, (ys.length ? Math.max(...ys) : 0) + 80);
       }, [nodes, positions, texts]);
 
-      /* ===== 計算同住泡泡外框 (Amoeba) — 最小生成樹 MST ===== */
+      /* ===== 計算同住外框 (Convex Hull) ===== */
       const cohabitationBox = useMemo(() => {
         if (cohabMembers.length === 0) return null;
         const members = nodes.filter(n => cohabMembers.includes(n.id));
         if (members.length === 0) return null;
 
-        const points = members.map(n => {
-          const p = pos(n.id);
-          return { x: p.x, y: p.y };
-        });
-
-        const edges = [];
-        if (points.length > 1) {
-          // Prim's algorithm for MST
-          const n = points.length;
-          const inMST = new Array(n).fill(false);
-          const minDist = new Array(n).fill(Infinity);
-          const minFrom = new Array(n).fill(-1);
-          minDist[0] = 0;
-
-          for (let iter = 0; iter < n; iter++) {
-            // pick the closest non-MST vertex
-            let u = -1;
-            for (let i = 0; i < n; i++) {
-              if (!inMST[i] && (u === -1 || minDist[i] < minDist[u])) u = i;
-            }
-            inMST[u] = true;
-            if (minFrom[u] !== -1) {
-              edges.push({
-                x1: points[minFrom[u]].x, y1: points[minFrom[u]].y,
-                x2: points[u].x, y2: points[u].y
-              });
-            }
-            // update distances
-            for (let v = 0; v < n; v++) {
-              if (inMST[v]) continue;
-              const dx = points[u].x - points[v].x;
-              const dy = points[u].y - points[v].y;
-              const d = Math.sqrt(dx * dx + dy * dy);
-              if (d < minDist[v]) {
-                minDist[v] = d;
-                minFrom[v] = u;
-              }
-            }
-          }
+        if (members.length === 1) {
+          const p = pos(members[0].id);
+          const pad = 30;
+          return { type: 'single', x: p.x - R - pad, y: p.y - R - pad, w: SZ + pad * 2, h: SZ + pad * 2 };
         }
 
-        return { points, edges };
+        // Generate 4 corner points per node (30px padding)
+        const pad = 30;
+        const corners = [];
+        members.forEach(n => {
+          const p = pos(n.id);
+          corners.push({ x: p.x - pad, y: p.y - pad });
+          corners.push({ x: p.x + pad, y: p.y - pad });
+          corners.push({ x: p.x - pad, y: p.y + pad });
+          corners.push({ x: p.x + pad, y: p.y + pad });
+        });
+
+        // Monotone Chain convex hull
+        const pts = corners.slice().sort((a, b) => a.x - b.x || a.y - b.y);
+        const cross = (O, A, B) => (A.x - O.x) * (B.y - O.y) - (A.y - O.y) * (B.x - O.x);
+        const lower = [];
+        for (const p of pts) {
+          while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop();
+          lower.push(p);
+        }
+        const upper = [];
+        for (let i = pts.length - 1; i >= 0; i--) {
+          const p = pts[i];
+          while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop();
+          upper.push(p);
+        }
+        lower.pop();
+        upper.pop();
+        const hull = lower.concat(upper);
+
+        return { type: 'poly', points: hull };
       }, [cohabMembers, nodes, positions, pos]);
 
       /* ===== 渲染連線 ===== */
@@ -762,6 +812,9 @@
                 <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                   <input type="radio" name="mode" checked={mode === 'cohab'} onChange={() => setMode('cohab')} /> 🏠 同住
                   [<input type="text" maxLength="1" value={shortcuts.cohab} onChange={e => updateShortcut('cohab', e.target.value)} style={{ width: '18px', padding: '0', textAlign: 'center', fontSize: '11px', background: 'transparent', border: 'none', borderBottom: '1px solid #3b82f6', outline: 'none' }} />]
+                  <span className="status-badge" data-status="cohab"
+                    ref={el => wheelRef(el, ['auto', 'poly'], cohabMode, setCohabMode)}
+                    title="滾輪切換：自動 / 多邊形">{cohabMode === 'auto' ? '自動' : '多邊形'}</span>
                 </label>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                   <input type="radio" name="mode" checked={mode === 'deceased'} onChange={() => setMode('deceased')} /> ✝️ 打叉
@@ -856,37 +909,108 @@
           <div className="canvas-wrap">
             <svg ref={svgRef} width={svgW} height={svgH}
                  onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp}
-                 onClick={() => setSelectedTextId(null)}
-                 style={{ background: '#fefefe', minWidth: '600px' }}>
-              {/* 背景格線 + 同住泡泡遮罩 */}
+                 onClick={() => { setSelectedTextId(null); setSelectedPolyId(null); }}
+                 style={{ background: '#fefefe', minWidth: '600px', cursor: mode === 'cohab' && cohabMode === 'poly' ? 'crosshair' : undefined }}>
+              {/* 背景格線 */}
               <defs>
                 <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
                   <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#f0f0f0" strokeWidth="0.5" />
                 </pattern>
-                {cohabitationBox && (
-                  <mask id="cohab-mask">
-                    <rect width="100%" height="100%" fill="white" />
-                    {cohabitationBox.edges.map((e, i) => (
-                      <line key={`cm-e${i}`} x1={e.x1} y1={e.y1} x2={e.x2} y2={e.y2}
-                            stroke="black" strokeWidth={60} strokeLinecap="round" />
-                    ))}
-                    {cohabitationBox.points.map((p, i) => (
-                      <circle key={`cm-p${i}`} cx={p.x} cy={p.y} r={30} fill="black" />
-                    ))}
-                  </mask>
-                )}
               </defs>
               <rect width="100%" height="100%" fill="url(#grid)" />
 
-              {/* 繪製同住家屬泡泡外框 (Amoeba) */}
-              {cohabitationBox && (
-                <g mask="url(#cohab-mask)" opacity="0.8">
-                  {cohabitationBox.edges.map((e, i) => (
-                    <line key={`cv-e${i}`} x1={e.x1} y1={e.y1} x2={e.x2} y2={e.y2}
-                          stroke="#ef4444" strokeWidth={64} strokeLinecap="round" />
+              {/* 多邊形繪製模式：透明覆蓋層 (點擊新增端點) */}
+              {mode === 'cohab' && cohabMode === 'poly' && (
+                <rect width="100%" height="100%" fill="transparent"
+                  style={{ cursor: 'crosshair' }}
+                  onClick={e => {
+                    e.stopPropagation();
+                    const sp = svgPt(e);
+                    const pt = { x: sp.x, y: sp.y };
+                    // 點擊第一個端點附近 → 封閉多邊形
+                    if (draftPoly.length >= 3) {
+                      const first = draftPoly[0];
+                      const dx = pt.x - first.x, dy = pt.y - first.y;
+                      if (Math.sqrt(dx * dx + dy * dy) < 15) {
+                        setPolygons(prev => [...prev, { id: 'pg_' + Date.now(), pts: draftPoly }]);
+                        setDraftPoly([]);
+                        setMousePos(null);
+                        return;
+                      }
+                    }
+                    setDraftPoly(prev => [...prev, pt]);
+                  }}
+                />
+              )}
+
+              {/* 繪製同住家屬外框 (自動) */}
+              {cohabitationBox && cohabitationBox.type === 'single' && (
+                <rect
+                  x={cohabitationBox.x} y={cohabitationBox.y}
+                  width={cohabitationBox.w} height={cohabitationBox.h}
+                  fill="none" stroke="#ef4444" strokeWidth="2.5" strokeDasharray="8,6" rx="15"
+                />
+              )}
+              {cohabitationBox && cohabitationBox.type === 'poly' && (
+                <polygon
+                  points={cohabitationBox.points.map(p => `${p.x},${p.y}`).join(' ')}
+                  fill="none" stroke="#ef4444" strokeWidth="2.5" strokeDasharray="8,6" strokeLinejoin="round"
+                />
+              )}
+
+              {/* 繪製已完成的手動多邊形 */}
+              {polygons.map(pg => (
+                <g key={pg.id}>
+                  <polygon
+                    points={pg.pts.map(p => `${p.x},${p.y}`).join(' ')}
+                    fill="rgba(239, 68, 68, 0.05)" stroke="#ef4444" strokeWidth="2.5"
+                    strokeDasharray="8,6" strokeLinejoin="round"
+                    style={{ cursor: mode === 'drag' ? 'pointer' : undefined }}
+                    onClick={e => { if (mode === 'drag') { e.stopPropagation(); setSelectedPolyId(pg.id); } }}
+                    onDoubleClick={e => { e.stopPropagation(); setPolygons(prev => prev.filter(p => p.id !== pg.id)); setSelectedPolyId(null); }}
+                  />
+                  {/* 選取時顯示端點控制代碼 */}
+                  {selectedPolyId === pg.id && pg.pts.map((pt, idx) => (
+                    <circle key={`${pg.id}-v${idx}`}
+                      cx={pt.x} cy={pt.y} r={6}
+                      fill="#3b82f6" stroke="white" strokeWidth="1.5"
+                      style={{ cursor: 'crosshair' }}
+                      onMouseDown={e => {
+                        e.stopPropagation();
+                        const sp = svgPt(e);
+                        setDragVertex({ polyId: pg.id, index: idx, ox: sp.x - pt.x, oy: sp.y - pt.y });
+                      }}
+                    />
                   ))}
-                  {cohabitationBox.points.map((p, i) => (
-                    <circle key={`cv-p${i}`} cx={p.x} cy={p.y} r={32} fill="#ef4444" />
+                </g>
+              ))}
+
+              {/* 繪製中的多邊形草稿 */}
+              {draftPoly.length > 0 && (
+                <g>
+                  {/* 已確定的邊 */}
+                  {draftPoly.length >= 2 && (
+                    <polyline
+                      points={draftPoly.map(p => `${p.x},${p.y}`).join(' ')}
+                      fill="none" stroke="#ef4444" strokeWidth="2.5" strokeDasharray="8,6"
+                      strokeLinejoin="round" strokeLinecap="round" pointerEvents="none"
+                    />
+                  )}
+                  {/* 從最後端點到滑鼠的輔助線 */}
+                  {mousePos && (
+                    <line
+                      x1={draftPoly[draftPoly.length - 1].x} y1={draftPoly[draftPoly.length - 1].y}
+                      x2={mousePos.x} y2={mousePos.y}
+                      stroke="#ef4444" strokeWidth="1.5" strokeDasharray="4,4" opacity="0.6"
+                      pointerEvents="none"
+                    />
+                  )}
+                  {/* 端點圓圈 */}
+                  {draftPoly.map((pt, i) => (
+                    <circle key={`draft-${i}`} cx={pt.x} cy={pt.y} r={i === 0 && draftPoly.length >= 3 ? 8 : 5}
+                      fill={i === 0 ? '#10b981' : '#ef4444'} stroke="white" strokeWidth="1.5"
+                      pointerEvents="none"
+                    />
                   ))}
                 </g>
               )}
