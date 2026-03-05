@@ -44,7 +44,7 @@
     .record-preview textarea { flex: 1; width: 100%; min-height: 500px; padding: 16px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 16px; font-family: 'Times New Roman', 'DFKai-SB', 'BiauKai', serif; line-height: 1.8; resize: vertical; margin-bottom: 12px; background: #f8fafc; }
     
     .badge-wrap { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
-    .badge-btn { padding: 4px 10px; font-size: 12px; border: 1px solid #cbd5e1; border-radius: 15px; background: white; color: #475569; cursor: pointer; user-select: none; transition: all 0.15s; }
+    .badge-btn { padding: 4px 10px; font-size: 12px; border: 1px solid #cbd5e1; border-radius: 15px; background: white; color: #475569; cursor: pointer; user-select: none; transition: all 0.15s; display: flex; align-items: center; }
     .badge-btn:hover { border-color: #94a3b8; }
     .badge-btn.active { background: #10b981; color: white; border-color: #059669; font-weight: bold; }
 
@@ -75,6 +75,8 @@
     .status-badge[data-status="divorced"]  { background: #fce7f3; color: #9d174d; border-color: #f9a8d4; }
     .status-badge[data-status="horizontal"] { background: #e0f2fe; color: #0369a1; border-color: #7dd3fc; }
     .status-badge[data-status="vertical"]   { background: #f0e7ff; color: #6b21a8; border-color: #c4b5fd; }
+    
+    .info-box { font-size: 12px; color: #64748b; line-height: 1.9; padding: 2px 0; }
   </style>
 </head>
 <body>
@@ -126,7 +128,7 @@
       return `案${nums[myRank] || myRank}${type}`;
     };
 
-    // 子代字串轉化文字 (女男女女 -> 1子3女(女男女女))
+    // 子代字串轉化文字 (自動將 1/2 轉回中文男/女)
     const formatKidsText = (str) => {
       if (!str) return '';
       if (str === '無') return '無子嗣';
@@ -137,7 +139,10 @@
       if (m > 0 && f > 0) res += `${m}子${f}女`;
       else if (m > 0) res += `${m}子`;
       else res += `${f}女`;
-      return `${res}(${str})`;
+      
+      // 將解析出的 M/F 陣列，完美翻譯回中文「男/女」
+      const chineseStr = gs.map(g => g === 'M' ? '男' : '女').join('');
+      return `${res}(${chineseStr})`;
     };
 
     /* --- 狀態標籤文字對照 --- */
@@ -148,16 +153,35 @@
     const TEXT_DIRS = ['horizontal', 'vertical'];
     const TEXT_DIR_LABELS = { horizontal: '橫式排版', vertical: '直式排版' };
     
-    /* ===== 共用元件 ===== */
-    const BadgeGroup = ({ options, value, onChange }) => (
-      <div className="badge-wrap">
-        {options.map(opt => (
-          <div key={opt} className={`badge-btn ${value === opt ? 'active' : ''}`} onClick={() => onChange(opt)}>
-            {opt}
-          </div>
-        ))}
-      </div>
-    );
+    /* ===== 共用元件：可編輯的 BadgeGroup ===== */
+    const BadgeGroup = ({ options, value, onChange, isEditing, onAdd, onRemove }) => {
+      const [newTag, setNewTag] = useState('');
+      return (
+        <div className="badge-wrap">
+          {options.map(opt => (
+            <div key={opt} className={`badge-btn ${value === opt ? 'active' : ''}`} onClick={() => !isEditing && onChange(opt)}>
+              {opt}
+              {isEditing && (
+                <span style={{marginLeft: '6px', color: '#ef4444', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px', lineHeight: '1'}} 
+                      onClick={(e) => { e.stopPropagation(); onRemove(opt); }}>×</span>
+              )}
+            </div>
+          ))}
+          {isEditing && (
+            <div style={{display: 'flex', gap: '4px', alignItems: 'center', marginLeft: '4px'}}>
+              <input type="text" value={newTag} onChange={e => setNewTag(e.target.value)} 
+                     style={{width: '80px', padding: '2px 6px', fontSize: '12px', border: '1px solid #cbd5e1', borderRadius: '4px', outline: 'none'}} 
+                     placeholder="新增標籤" 
+                     onKeyDown={e => { if(e.key === 'Enter' && newTag.trim()) { onAdd(newTag.trim()); setNewTag(''); } }} />
+              <button onClick={() => { if(newTag.trim()) { onAdd(newTag.trim()); setNewTag(''); } }} 
+                      style={{padding: '3px 8px', fontSize: '12px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer'}}>
+                加
+              </button>
+            </div>
+          )}
+        </div>
+      );
+    };
 
     /* ===== 主元件 ===== */
     const App = () => {
@@ -188,12 +212,36 @@
       const textDragMoved = useRef(false);
       const [mousePos, setMousePos] = useState(null);
 
+      /* --- 快捷鍵狀態 --- */
       const DEFAULT_SHORTCUTS = { drag: 'q', index: 'w', cohab: 'e', deceased: 'r' };
       const [shortcuts, setShortcuts] = useState(() => {
         try { const saved = localStorage.getItem('genogram-shortcuts'); if (saved) return { ...DEFAULT_SHORTCUTS, ...JSON.parse(saved) }; } catch {}
         return DEFAULT_SHORTCUTS;
       });
       useEffect(() => { try { localStorage.setItem('genogram-shortcuts', JSON.stringify(shortcuts)); } catch {} }, [shortcuts]);
+      const updateShortcut = (modeName, key) => setShortcuts(prev => ({ ...prev, [modeName]: key }));
+
+      /* --- 自訂標籤狀態 --- */
+      const DEFAULT_TAGS = {
+        identity: ['一般民眾', '自費民眾', '公費就養榮民', '就養榮民', '自費榮民', '榮眷', '遺眷'],
+        edu: ['不識字', '自學識字', '國小', '初中', '高中職', '大學以上'],
+        lang: ['國語', '台語', '國台語', '客家語'],
+        religion: ['無宗教', '佛教', '道教', '基督教', '天主教'],
+        disability: ['無身心障礙手冊', '有身障手冊']
+      };
+      const [tagOptions, setTagOptions] = useState(() => {
+        try { const saved = localStorage.getItem('genogram-tags'); if (saved) return { ...DEFAULT_TAGS, ...JSON.parse(saved) }; } catch {}
+        return DEFAULT_TAGS;
+      });
+      useEffect(() => { try { localStorage.setItem('genogram-tags', JSON.stringify(tagOptions)); } catch {} }, [tagOptions]);
+      const [isEditingTags, setIsEditingTags] = useState(false);
+
+      const handleAddTag = (category, newTag) => {
+        if (!tagOptions[category].includes(newTag)) setTagOptions(p => ({ ...p, [category]: [...p[category], newTag] }));
+      };
+      const handleRemoveTag = (category, tagToRemove) => {
+        setTagOptions(p => ({ ...p, [category]: p[category].filter(t => t !== tagToRemove) }));
+      };
 
       /* --- 個案紀錄產生器專屬狀態 --- */
       const [subjInfo, setSubjInfo] = useState({
@@ -209,9 +257,8 @@
         if (subjInfo.lang) txt += `，${subjInfo.lang}溝通`;
         if (subjInfo.religion) txt += `，${subjInfo.religion}信仰`;
         if (subjInfo.disability) txt += `，${subjInfo.disability}`;
-        txt += `，${g1Status === 'married' ? '已婚' : '喪偶'}`; // 簡化第一代狀態判斷
+        txt += `，${g1Status === 'married' ? '已婚' : '喪偶'}`;
         
-        // 智慧同住判斷 (若案主在同住紅框內，找出框內其他人)
         let cohabText = '獨居';
         if (indexId && cohabMembers.includes(indexId)) {
           const others = cohabMembers.filter(id => id !== indexId).map(id => {
@@ -231,7 +278,6 @@
         if (subjInfo.note) txt += `${subjInfo.note}；`;
         else txt += `；\n`;
 
-        // 遍歷第二代家屬
         gen2Cfg.forEach((c, i) => {
           const title = getRelativeTitle(c.gender, i, gen2Cfg);
           const isDeceased = deceasedIds.includes(`c${i}`);
@@ -266,7 +312,7 @@
         });
       };
 
-      /* ===== 畫布互動邏輯 (保留完全體功能) ===== */
+      /* ===== 畫布互動邏輯 ===== */
       const svgRef = useRef(null);
       const wheelRef = (el, list, current, setter) => {
         if (!el) return;
@@ -296,6 +342,19 @@
         setGen2Cfg(prev => gs.map((g, i) => (prev[i] && prev[i].gender === g) ? prev[i] : { gender: g, partner: 'none', g3Str: '', isMulti: false }));
       };
       
+      const changePartner = (i, status) => setGen2Cfg(p => p.map((d, j) => j === i ? { ...d, partner: status, g3Str: status === 'none' ? '' : d.g3Str } : d));
+      const setG3 = (i, v) => setGen2Cfg(p => p.map((d, j) => j === i ? { ...d, g3Str: v } : d));
+      const toggleMulti = (i) => setGen2Cfg(p => p.map((d, j) => j === i ? { ...d, isMulti: !d.isMulti } : d));
+
+      const addText = () => {
+        const id = 'txt_' + Date.now();
+        setTexts(prev => [...prev, { id, x: 300, y: 200, text: '文字', fontSize: 16, vertical: textDirection === 'vertical' }]);
+      };
+      const deleteText = (id) => {
+        setTexts(prev => prev.filter(t => t.id !== id));
+        setSelectedTextId(null);
+      };
+
       const { nodes, lines } = useMemo(() => {
         const N = [], L = [];
         const units = gen2Cfg.map((c, i) => {
@@ -346,6 +405,26 @@
       const pos = useCallback((id) => { if (positions[id]) return positions[id]; const n = nodes.find(v => v.id === id); return n ? { x: n.dx, y: n.dy } : { x: 0, y: 0 }; }, [positions, nodes]);
       const svgPt = useCallback((e) => { const p = svgRef.current.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; return p.matrixTransform(svgRef.current.getScreenCTM().inverse()); }, []);
 
+      const onDown = useCallback((e, id) => {
+        e.stopPropagation(); const sp = svgPt(e); const p = pos(id); setDrag({ id, ox: sp.x - p.x, oy: sp.y - p.y });
+      }, [svgPt, pos]);
+
+      const onTextDown = useCallback((e, id) => {
+        e.stopPropagation(); textDragMoved.current = false; const sp = svgPt(e); const t = texts.find(t => t.id === id);
+        if (t) setTextDrag({ id, ox: sp.x - t.x, oy: sp.y - t.y });
+      }, [svgPt, texts]);
+
+      const onTextClick = useCallback((e, id) => { e.stopPropagation(); if (textDragMoved.current) return; setSelectedTextId(id); }, []);
+      const onTextDoubleClick = useCallback((e, id) => {
+        e.stopPropagation(); const t = texts.find(t => t.id === id); const newText = window.prompt('編輯文字內容：', t?.text || '');
+        if (newText !== null && newText !== '') setTexts(prev => prev.map(t => t.id === id ? { ...t, text: newText } : t));
+      }, [texts]);
+
+      const onResizeDown = useCallback((e, id) => {
+        e.stopPropagation(); const sp = svgPt(e); const t = texts.find(t => t.id === id);
+        if (t) setTextResize({ id, startY: sp.y, startSize: t.fontSize });
+      }, [svgPt, texts]);
+
       const onMove = useCallback((e) => {
         const sp = svgPt(e);
         if (draftPoly.length > 0) setMousePos({ x: sp.x, y: sp.y });
@@ -357,53 +436,7 @@
       }, [drag, textDrag, textResize, dragVertex, draftPoly, svgPt]);
 
       const onUp = () => { setDragVertex(null); setDrag(null); setTextDrag(null); setTextResize(null); };
-      const changePartner = (i, status) => setGen2Cfg(p => p.map((d, j) => j === i ? { ...d, partner: status, g3Str: status === 'none' ? '' : d.g3Str } : d));
-      const setG3 = (i, v) => setGen2Cfg(p => p.map((d, j) => j === i ? { ...d, g3Str: v } : d));
-      const toggleMulti = (i) => setGen2Cfg(p => p.map((d, j) => j === i ? { ...d, isMulti: !d.isMulti } : d));
 
-      const addText = () => {
-        const id = 'txt_' + Date.now();
-        setTexts(prev => [...prev, { id, x: 300, y: 200, text: '文字', fontSize: 16, vertical: textDirection === 'vertical' }]);
-      };
-      const deleteText = (id) => {
-        setTexts(prev => prev.filter(t => t.id !== id));
-        setSelectedTextId(null);
-      };
-
-      const onDown = useCallback((e, id) => {
-        e.stopPropagation();
-        const sp = svgPt(e);
-        const p = pos(id);
-        setDrag({ id, ox: sp.x - p.x, oy: sp.y - p.y });
-      }, [svgPt, pos]);
-
-      const onTextDown = useCallback((e, id) => {
-        e.stopPropagation();
-        textDragMoved.current = false;
-        const sp = svgPt(e);
-        const t = texts.find(t => t.id === id);
-        if (t) setTextDrag({ id, ox: sp.x - t.x, oy: sp.y - t.y });
-      }, [svgPt, texts]);
-
-      const onTextClick = useCallback((e, id) => {
-        e.stopPropagation();
-        if (textDragMoved.current) return;
-        setSelectedTextId(id);
-      }, []);
-
-      const onTextDoubleClick = useCallback((e, id) => {
-        e.stopPropagation();
-        const t = texts.find(t => t.id === id);
-        const newText = window.prompt('編輯文字內容：', t?.text || '');
-        if (newText !== null && newText !== '') setTexts(prev => prev.map(t => t.id === id ? { ...t, text: newText } : t));
-      }, [texts]);
-
-      const onResizeDown = useCallback((e, id) => {
-        e.stopPropagation();
-        const sp = svgPt(e);
-        const t = texts.find(t => t.id === id);
-        if (t) setTextResize({ id, startY: sp.y, startSize: t.fontSize });
-      }, [svgPt, texts]);
       const onClick = (e, id) => {
         e.stopPropagation();
         if (mode === 'index') setIndexId(p => p === id ? null : id);
@@ -457,7 +490,7 @@
           {/* 頁籤一：家系圖 */}
           {activeTab === 'genogram' && (
             <div className="app-layout">
-              {/* 左側面板 (保留原有) */}
+              {/* 左側面板 (完美還原版) */}
               <div className="panel">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '14px', paddingBottom: '8px', borderBottom: '2px solid #3b82f6' }}>
                   <h2 style={{ margin: 0, border: 'none', padding: 0 }}>資料輸入面板</h2>
@@ -468,15 +501,25 @@
                 </div>
 
                 <div className="section">
-                  <label>🛠️ 畫布互動模式</label>
+                  <label>🛠️ 畫布互動模式 (可用快捷鍵切換)</label>
                   <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', fontSize: '13px', alignItems: 'center' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><input type="radio" checked={mode === 'drag'} onChange={() => setMode('drag')} /> 🤚 拖曳</label>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><input type="radio" checked={mode === 'index'} onChange={() => setMode('index')} /> 🎯 案主</label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <input type="radio" checked={mode === 'drag'} onChange={() => setMode('drag')} /> 🤚 拖曳
+                      [<input type="text" maxLength="1" value={shortcuts.drag} onChange={e => updateShortcut('drag', e.target.value)} style={{ width: '18px', padding: '0', textAlign: 'center', fontSize: '11px', background: 'transparent', border: 'none', borderBottom: '1px solid #3b82f6', outline: 'none' }} />]
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <input type="radio" checked={mode === 'index'} onChange={() => setMode('index')} /> 🎯 案主
+                      [<input type="text" maxLength="1" value={shortcuts.index} onChange={e => updateShortcut('index', e.target.value)} style={{ width: '18px', padding: '0', textAlign: 'center', fontSize: '11px', background: 'transparent', border: 'none', borderBottom: '1px solid #3b82f6', outline: 'none' }} />]
+                    </label>
                     <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                       <input type="radio" checked={mode === 'cohab'} onChange={() => setMode('cohab')} /> 🏠 同住
-                      <span className="status-badge" data-status="cohab" ref={el => wheelRef(el, ['auto', 'poly'], cohabMode, setCohabMode)} title="滾輪切換：自動 / 點繪">{cohabMode === 'auto' ? '自動' : '多邊形'}</span>
+                      [<input type="text" maxLength="1" value={shortcuts.cohab} onChange={e => updateShortcut('cohab', e.target.value)} style={{ width: '18px', padding: '0', textAlign: 'center', fontSize: '11px', background: 'transparent', border: 'none', borderBottom: '1px solid #3b82f6', outline: 'none' }} />]
+                      <span className="status-badge" data-status="cohab" ref={el => wheelRef(el, ['auto', 'poly'], cohabMode, setCohabMode)} title="滾輪切換：自動 / 點繪">{cohabMode === 'auto' ? '自動' : '點繪'}</span>
                     </label>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><input type="radio" checked={mode === 'deceased'} onChange={() => setMode('deceased')} /> ✝️ 打叉</label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <input type="radio" checked={mode === 'deceased'} onChange={() => setMode('deceased')} /> ✝️ 打叉
+                      [<input type="text" maxLength="1" value={shortcuts.deceased} onChange={e => updateShortcut('deceased', e.target.value)} style={{ width: '18px', padding: '0', textAlign: 'center', fontSize: '11px', background: 'transparent', border: 'none', borderBottom: '1px solid #3b82f6', outline: 'none' }} />]
+                    </label>
                   </div>
                 </div>
 
@@ -489,8 +532,9 @@
                 </div>
 
                 <div className="section">
-                  <label>第二代子女順序 (輸入男/女、M/F或1/2)</label>
-                  <input type="text" value={gen2Str} onChange={e => onGen2Change(e.target.value)} placeholder="例：11221 或 女女男男女" />
+                  <label>第二代子女順序</label>
+                  <input type="text" value={gen2Str} onChange={e => onGen2Change(e.target.value)} placeholder="例：女女男男女 或 FFMMF 或 11221" />
+                  <div className="hint" style={{marginTop: '6px'}}>輸入「男/女」(中文)、「M/F」(英文) 或「1/2」(數字)，即時產生子代節點。</div>
                 </div>
 
                 {gen2Cfg.length > 0 && (
@@ -522,12 +566,25 @@
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
                     <span style={{ fontSize: '12px', color: '#64748b' }}>方向：</span>
                     <span className="status-badge" data-status={textDirection} ref={el => wheelRef(el, TEXT_DIRS, textDirection, setTextDirection)}>{TEXT_DIR_LABELS[textDirection]}</span>
-                    <button onClick={addText} style={{ padding: '4px 12px', fontSize: '12px', background: '#10b981', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', marginLeft: 'auto' }}>➕ 新增</button>
+                    <button onClick={addText} style={{ padding: '4px 12px', fontSize: '12px', background: '#10b981', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', marginLeft: 'auto' }}>➕ 新增至畫布</button>
+                  </div>
+                  <div className="hint" style={{marginTop: '6px'}}>單擊選取文字方塊（顯示框線與控制按鈕）；雙擊可編輯內容；選取後可刪除或拖曳右下角縮放。</div>
+                </div>
+
+                <div className="section">
+                  <label>操作說明</label>
+                  <div className="info-box">
+                    ■ = 男性（正方形）　● = 女性（圓形）<br/>
+                    點擊節點 → 標示 / 取消「案主」<br/>
+                    拖曳節點 → 微調位置，連線即時跟隨<br/>
+                    滑鼠滾輪於狀態標籤 → 循環切換狀態<br/>
+                    📝 文字方塊 → 可拖曳、編輯、縮放、刪除<br/>
+                    📥 下載 JPG → 自動裁切白邊並匯出
                   </div>
                 </div>
               </div>
 
-              {/* SVG 畫布 (保留原有渲染邏輯) */}
+              {/* SVG 畫布 */}
               <div className="canvas-wrap">
                 <svg ref={svgRef} width={Math.max(800, (nodes.map(n => positions[n.id]?.x??n.dx).concat(texts.map(t=>t.x+100)).reduce((a,b)=>Math.max(a,b),0))+160)} height={Math.max(520, (nodes.map(n => positions[n.id]?.y??n.dy).concat(texts.map(t=>t.y+100)).reduce((a,b)=>Math.max(a,b),0))+80)} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp} onClick={() => { setSelectedTextId(null); setSelectedPolyId(null); }} style={{ background: '#fefefe', minWidth: '600px', cursor: mode === 'cohab' && cohabMode === 'poly' ? 'crosshair' : undefined }}>
                   <defs><pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="#f0f0f0" strokeWidth="0.5" /></pattern></defs>
@@ -620,33 +677,35 @@
             <div className="record-layout">
               <div className="record-form panel">
                 <h2 style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  案主基本資料
-                  {indexId ? <span style={{fontSize: '12px', background:'#1e293b', color:'white', padding:'2px 8px', borderRadius:'10px'}}>已於家系圖指定案主</span> : <span style={{fontSize: '12px', color:'#ef4444'}}>尚未指定案主</span>}
+                  <div>案主基本資料 {indexId ? <span style={{fontSize: '12px', background:'#1e293b', color:'white', padding:'2px 8px', borderRadius:'10px', marginLeft: '6px', verticalAlign: 'middle'}}>已於家系圖指定案主</span> : <span style={{fontSize: '12px', color:'#ef4444', marginLeft: '6px', verticalAlign: 'middle'}}>尚未指定案主</span>}</div>
+                  <button onClick={() => setIsEditingTags(!isEditingTags)} style={{ padding: '4px 8px', fontSize: '12px', background: isEditingTags ? '#ef4444' : '#64748b', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}>
+                    {isEditingTags ? '✅ 完成編輯' : '✏️ 編輯標籤'}
+                  </button>
                 </h2>
                 
                 <div className="section">
                   <label>身分別</label>
-                  <BadgeGroup options={['一般民眾', '自費民眾', '公費就養榮民', '就養榮民', '自費榮民', '榮眷', '遺眷']} value={subjInfo.identity} onChange={v => setSubjInfo({...subjInfo, identity: v})} />
+                  <BadgeGroup options={tagOptions.identity} value={subjInfo.identity} onChange={v => setSubjInfo({...subjInfo, identity: v})} isEditing={isEditingTags} onAdd={t => handleAddTag('identity', t)} onRemove={t => handleRemoveTag('identity', t)} />
                 </div>
                 
                 <div className="section">
                   <label>教育程度</label>
-                  <BadgeGroup options={['不識字', '自學識字', '國小', '初中', '高中職', '大學以上']} value={subjInfo.edu} onChange={v => setSubjInfo({...subjInfo, edu: v})} />
+                  <BadgeGroup options={tagOptions.edu} value={subjInfo.edu} onChange={v => setSubjInfo({...subjInfo, edu: v})} isEditing={isEditingTags} onAdd={t => handleAddTag('edu', t)} onRemove={t => handleRemoveTag('edu', t)} />
                 </div>
 
                 <div className="section">
                   <label>溝通語言</label>
-                  <BadgeGroup options={['國語', '台語', '國台語', '客家語']} value={subjInfo.lang} onChange={v => setSubjInfo({...subjInfo, lang: v})} />
+                  <BadgeGroup options={tagOptions.lang} value={subjInfo.lang} onChange={v => setSubjInfo({...subjInfo, lang: v})} isEditing={isEditingTags} onAdd={t => handleAddTag('lang', t)} onRemove={t => handleRemoveTag('lang', t)} />
                 </div>
 
                 <div className="section">
                   <label>宗教信仰</label>
-                  <BadgeGroup options={['無宗教', '佛教', '道教', '基督教', '天主教']} value={subjInfo.religion} onChange={v => setSubjInfo({...subjInfo, religion: v})} />
+                  <BadgeGroup options={tagOptions.religion} value={subjInfo.religion} onChange={v => setSubjInfo({...subjInfo, religion: v})} isEditing={isEditingTags} onAdd={t => handleAddTag('religion', t)} onRemove={t => handleRemoveTag('religion', t)} />
                 </div>
 
                 <div className="section">
                   <label>身障證明</label>
-                  <BadgeGroup options={['無身心障礙手冊', '有身障手冊']} value={subjInfo.disability} onChange={v => setSubjInfo({...subjInfo, disability: v})} />
+                  <BadgeGroup options={tagOptions.disability} value={subjInfo.disability} onChange={v => setSubjInfo({...subjInfo, disability: v})} isEditing={isEditingTags} onAdd={t => handleAddTag('disability', t)} onRemove={t => handleRemoveTag('disability', t)} />
                 </div>
 
                 <div className="section">
