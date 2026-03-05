@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' https://unpkg.com; style-src 'unsafe-inline'; connect-src https://unpkg.com; img-src blob:;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' https://unpkg.com; style-src 'unsafe-inline'; img-src blob:;">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>互動式電子家系圖與紀錄產生器</title>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
@@ -34,7 +34,7 @@
     input[type="text"] { width: 100%; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; outline: none; }
     input[type="text"]:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,0.15); }
 
-    .hint { font-size: 12px; color: #64748b; margin-top: 3px; }
+    .hint { font-size: 11px; color: #94a3b8; margin-top: 3px; }
 
     /* 紀錄產生器專用 UI */
     .record-layout { display: flex; flex-direction: column; gap: 16px; max-width: 1500px; margin: 0 auto; }
@@ -115,7 +115,7 @@
       return closed ? d + 'Z' : d;
     }
 
-    // 智慧稱謂計算機
+    // 智慧稱謂計算機 (例如：案長女、案么子)
     const getRelativeTitle = (gender, idx, allGen2) => {
       const sameGender = allGen2.filter(c => c.gender === gender);
       const myRank = allGen2.slice(0, idx).filter(c => c.gender === gender).length + 1;
@@ -140,6 +140,7 @@
       else if (m > 0) res += `${m}子`;
       else res += `${f}女`;
       
+      // 將解析出的 M/F 陣列，完美翻譯回中文「男/女」
       const chineseStr = gs.map(g => g === 'M' ? '男' : '女').join('');
       return `${res}(${chineseStr})`;
     };
@@ -211,6 +212,21 @@
       const textDragMoved = useRef(false);
       const [mousePos, setMousePos] = useState(null);
 
+      /* --- 年齡與文字編輯狀態 --- */
+      const [showAgeMode, setShowAgeMode] = useState(false);
+      const [ages, setAges] = useState({});
+      const [editingAgeId, setEditingAgeId] = useState(null);
+      const [editingTextId, setEditingTextId] = useState(null);
+
+      const finishEditingText = (id, newText) => {
+        setTexts(prev => prev.map(t => t.id === id ? { ...t, text: newText } : t));
+        setEditingTextId(null);
+      };
+      const finishEditingAge = (id, newAge) => {
+        setAges(prev => ({ ...prev, [id]: newAge }));
+        setEditingAgeId(null);
+      };
+      
       /* --- 快捷鍵狀態 --- */
       const DEFAULT_SHORTCUTS = { drag: 'q', index: 'w', cohab: 'e', deceased: 'r' };
       const [shortcuts, setShortcuts] = useState(() => {
@@ -415,9 +431,8 @@
 
       const onTextClick = useCallback((e, id) => { e.stopPropagation(); if (textDragMoved.current) return; setSelectedTextId(id); }, []);
       const onTextDoubleClick = useCallback((e, id) => {
-        e.stopPropagation(); const t = texts.find(t => t.id === id); const newText = window.prompt('編輯文字內容：', t?.text || '');
-        if (newText !== null && newText !== '') setTexts(prev => prev.map(t => t.id === id ? { ...t, text: newText } : t));
-      }, [texts]);
+        e.stopPropagation(); setEditingTextId(id);
+      }, []);
 
       const onResizeDown = useCallback((e, id) => {
         e.stopPropagation(); const sp = svgPt(e); const t = texts.find(t => t.id === id);
@@ -489,13 +504,17 @@
           {/* 頁籤一：家系圖 */}
           {activeTab === 'genogram' && (
             <div className="app-layout">
-              {/* 左側面板 (完美還原版 + 新功能) */}
+              {/* 左側面板 (完美還原版) */}
               <div className="panel">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '14px', paddingBottom: '8px', borderBottom: '2px solid #3b82f6' }}>
                   <h2 style={{ margin: 0, border: 'none', padding: 0 }}>資料輸入面板</h2>
-                  <div style={{ display: 'flex', gap: '6px' }}>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', fontWeight: 'bold', color: showAgeMode ? '#10b981' : '#64748b', cursor: 'pointer', background: showAgeMode ? '#ecfdf5' : '#f1f5f9', padding: '4px 8px', borderRadius: '5px', border: '1px solid', borderColor: showAgeMode ? '#10b981' : '#cbd5e1' }}>
+                      <input type="checkbox" checked={showAgeMode} onChange={e => setShowAgeMode(e.target.checked)} style={{ cursor: 'pointer', accentColor: '#10b981' }} />
+                      年齡模式 {showAgeMode ? 'ON' : 'OFF'}
+                    </label>
                     <button onClick={downloadJPG} style={{ padding: '5px 10px', fontSize: '12px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>下載</button>
-                    <button onClick={() => { if(window.confirm('確定重置？')) { setGen2Str(''); setGen2Cfg([]); setIndexId(null); setCohabMembers([]); setDeceasedIds([]); setPolygons([]); setTexts([]); } }} style={{ padding: '5px 10px', fontSize: '12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>重置</button>
+                    <button onClick={() => { if(window.confirm('確定重置？')) { setGen2Str(''); setGen2Cfg([]); setIndexId(null); setCohabMembers([]); setDeceasedIds([]); setPolygons([]); setTexts([]); setAges({}); } }} style={{ padding: '5px 10px', fontSize: '12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>重置</button>
                   </div>
                 </div>
 
@@ -524,7 +543,7 @@
 
                 <div className="section">
                   <label>第一代（父母）</label>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div className="sub" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <span className="hint" style={{ margin: 0 }}>系統預設一對父母 ■ 父 ● 母</span>
                     <span className="status-badge" data-status={g1Status} ref={el => wheelRef(el, G1_STATUSES, g1Status, setG1Status)}>{G1_LABELS[g1Status]}</span>
                   </div>
@@ -642,34 +661,80 @@
 
                   {nodes.map(nd => {
                     const p = pos(nd.id), isIP = nd.id === indexId, fill = isIP ? '#1e293b' : 'white', txtC = isIP ? 'white' : '#333';
+                    const isEditingAge = editingAgeId === nd.id;
+                    const ageVal = ages[nd.id] || '';
+                    
                     return (
-                      <g key={nd.id} transform={`translate(${p.x},${p.y})`} style={{ cursor: drag?.id === nd.id ? 'grabbing' : 'grab' }} onMouseDown={e => onDown(e, nd.id)} onClick={e => onClick(e, nd.id)}>
+                      <g key={nd.id} transform={`translate(${p.x},${p.y})`} style={{ cursor: drag?.id === nd.id ? 'grabbing' : 'grab' }} 
+                         onMouseDown={e => onDown(e, nd.id)} 
+                         onClick={e => onClick(e, nd.id)}
+                         onDoubleClick={e => { e.stopPropagation(); if(showAgeMode) setEditingAgeId(nd.id); }}>
+                        
                         {nd.gender === 'M' ? <rect x={-R} y={-R} width={SZ} height={SZ} fill={fill} stroke="#333" strokeWidth="2.5" rx="2" /> : <circle cx="0" cy="0" r={R} fill={fill} stroke="#333" strokeWidth="2.5" />}
-                        {isIP && <text x="0" y="4" textAnchor="middle" fontSize="11" fontWeight="bold" fill={txtC} style={{fontFamily: TEXT_FONT}}>案主</text>}
-                        {deceasedIds.includes(nd.id) && <g stroke={isIP ? 'white' : '#333'} strokeWidth="2.5"><line x1={-R} y1={-R} x2={R} y2={R} /><line x1={R} y1={-R} x2={-R} y2={R} /></g>}
+                        
+                        {isEditingAge ? (
+                          <foreignObject x={-R} y={-10} width={SZ} height={20}>
+                            <input 
+                              autoFocus 
+                              defaultValue={ageVal} 
+                              onBlur={(e) => finishEditingAge(nd.id, e.target.value)}
+                              onKeyDown={(e) => { e.stopPropagation(); if(e.key === 'Enter') finishEditingAge(nd.id, e.target.value); }}
+                              style={{ width: '100%', height: '100%', textAlign: 'center', fontSize: '13px', fontFamily: TEXT_FONT, border: 'none', background: 'transparent', outline: 'none', color: txtC, fontWeight: 'bold', padding: 0 }} 
+                            />
+                          </foreignObject>
+                        ) : (
+                          <>
+                            {isIP && (!showAgeMode || !ageVal) && <text x="0" y="4" textAnchor="middle" fontSize="11" fontWeight="bold" fill={txtC} style={{fontFamily: TEXT_FONT, pointerEvents: 'none'}}>案主</text>}
+                            {showAgeMode && ageVal && <text x="0" y="4" textAnchor="middle" fontSize="13" fontWeight="bold" fill={txtC} style={{fontFamily: TEXT_FONT, pointerEvents: 'none'}}>{ageVal}</text>}
+                          </>
+                        )}
+                            {!isIP && showAgeMode && ageVal && <text x="0" y="4" textAnchor="middle" fontSize="13" fontWeight="bold" fill={txtC} style={{fontFamily: TEXT_FONT, pointerEvents: 'none'}}>{ageVal}</text>}
+                          </>
+                        )}
+                        {deceasedIds.includes(nd.id) && <g stroke={isIP ? 'white' : '#333'} strokeWidth="2.5" pointerEvents="none"><line x1={-R} y1={-R} x2={R} y2={R} /><line x1={R} y1={-R} x2={-R} y2={R} /></g>}
                       </g>
                     );
                   })}
 
                   {texts.map(t => {
-                    const isSel = selectedTextId === t.id, estW = t.vertical ? t.fontSize * 1.5 : t.text.length * t.fontSize * 0.7, estH = t.vertical ? t.text.length * t.fontSize * 1.2 : t.fontSize * 1.5;
+                    const lines = (t.text || '').split('\n');
+                    const maxLineLen = Math.max(...lines.map(l => l.length), 1);
+                    const estW = t.vertical ? t.fontSize * 1.5 * lines.length : maxLineLen * t.fontSize * 0.7;
+                    const estH = t.vertical ? maxLineLen * t.fontSize * 1.2 : t.fontSize * 1.3 * lines.length;
+                    const isSel = selectedTextId === t.id;
+                    const isEditing = editingTextId === t.id;
+                    
                     return (
                       <g key={t.id} transform={`translate(${t.x},${t.y})`}>
-                        {isSel && <rect x="-4" y={t.vertical ? -4 : -estH} width={estW + 8} height={estH + 8} fill="none" stroke="#3b82f6" strokeWidth="1.5" strokeDasharray="4,3" rx="3" />}
-                        <text style={{ fontFamily: TEXT_FONT, fontSize: t.fontSize, writingMode: t.vertical ? 'vertical-rl' : undefined }} fill="#333" cursor="move" onMouseDown={e => onTextDown(e, t.id)} onClick={e => onTextClick(e, t.id)} onDoubleClick={e => onTextDoubleClick(e, t.id)}>{t.text}</text>
-                        {isSel && (
+                        {isSel && !isEditing && <rect x="-4" y={t.vertical ? -4 : -t.fontSize} width={estW + 12} height={estH + 8} fill="none" stroke="#3b82f6" strokeWidth="1.5" strokeDasharray="4,3" rx="3" />}
+                        
+                        {isEditing ? (
+                          <foreignObject x="0" y={-t.fontSize} width={Math.max(estW, 150) + 20} height={Math.max(estH, 60) + 30}>
+                            <textarea
+                              autoFocus
+                              defaultValue={t.text}
+                              onBlur={(e) => finishEditingText(t.id, e.target.value)}
+                              onKeyDown={(e) => { e.stopPropagation(); }}
+                              style={{ width: '100%', height: '100%', fontSize: `${t.fontSize}px`, fontFamily: TEXT_FONT, border: '2px dashed #3b82f6', outline: 'none', background: 'rgba(255,255,255,0.95)', resize: 'both', borderRadius: '4px', padding: '4px' }}
+                            />
+                          </foreignObject>
+                        ) : (
+                          <text style={{ fontFamily: TEXT_FONT, fontSize: t.fontSize, writingMode: t.vertical ? 'vertical-rl' : undefined }} fill="#333" cursor="move" onMouseDown={e => onTextDown(e, t.id)} onClick={e => onTextClick(e, t.id)} onDoubleClick={e => onTextDoubleClick(e, t.id)}>
+                            {lines.map((line, idx) => (
+                              <tspan key={idx} x={t.vertical ? undefined : "0"} dy={idx === 0 ? 0 : "1.2em"}>{line}</tspan>
+                            ))}
+                          </text>
+                        )}
+
+                        {isSel && !isEditing && (
                           <g>
-                            <g transform={`translate(${estW+4},${t.vertical ? -4 : -estH})`} style={{ cursor: 'pointer' }} onClick={e => { e.stopPropagation(); deleteText(t.id); }}><circle r="10" fill="white" stroke="#ef4444" strokeWidth="1.5" /><text y="4" textAnchor="middle" fontSize="11" fill="#ef4444" style={{fontFamily: TEXT_FONT}}>✕</text></g>
-                            <g transform={`translate(${estW+4},${t.vertical ? estH+4 : 8})`} style={{ cursor: 'nwse-resize' }} onMouseDown={e => onResizeDown(e, t.id)}><circle r="8" fill="#3b82f6" /><text y="3.5" textAnchor="middle" fontSize="9" fill="white" style={{fontFamily: TEXT_FONT}}>↘</text></g>
+                            <g transform={`translate(${estW+8},${t.vertical ? -4 : -t.fontSize})`} style={{ cursor: 'pointer' }} onClick={e => { e.stopPropagation(); deleteText(t.id); }}><circle r="10" fill="white" stroke="#ef4444" strokeWidth="1.5" /><text y="4" textAnchor="middle" fontSize="11" fill="#ef4444" style={{fontFamily: TEXT_FONT}}>✕</text></g>
+                            <g transform={`translate(${estW+8},${t.vertical ? estH+4 : estH - t.fontSize + 4})`} style={{ cursor: 'nwse-resize' }} onMouseDown={e => onResizeDown(e, t.id)}><circle r="8" fill="#3b82f6" /><text y="3.5" textAnchor="middle" fontSize="9" fill="white" style={{fontFamily: TEXT_FONT}}>↘</text></g>
                           </g>
                         )}
                       </g>
                     );
                   })}
-                </svg>
-              </div>
-            </div>
-          )}
 
           {/* 頁籤二：個案紀錄產生器 */}
           {activeTab === 'record' && (
