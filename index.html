@@ -511,7 +511,7 @@
                   <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', fontWeight: 'bold', color: showAgeMode ? '#10b981' : '#64748b', cursor: 'pointer', background: showAgeMode ? '#ecfdf5' : '#f1f5f9', padding: '4px 8px', borderRadius: '5px', border: '1px solid', borderColor: showAgeMode ? '#10b981' : '#cbd5e1' }}>
                       <input type="checkbox" checked={showAgeMode} onChange={e => setShowAgeMode(e.target.checked)} style={{ cursor: 'pointer', accentColor: '#10b981' }} />
-                      年齡模式 {showAgeMode ? 'ON' : 'OFF'}
+                      年齡 {showAgeMode ? 'ON' : 'OFF'}
                     </label>
                     <button onClick={downloadJPG} style={{ padding: '5px 10px', fontSize: '12px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>下載</button>
                     <button onClick={() => { if(window.confirm('確定重置？')) { setGen2Str(''); setGen2Cfg([]); setIndexId(null); setCohabMembers([]); setDeceasedIds([]); setPolygons([]); setTexts([]); setAges({}); } }} style={{ padding: '5px 10px', fontSize: '12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>重置</button>
