@@ -480,15 +480,26 @@ const GenogramTab = ({
 
           {/* === 所有節點 (原生 + 自由) 共用渲染 === */}
           {[
-            ...nodes.map(nd => ({ id: nd.id, gender: nd.gender, ...pos(nd.id), stroke: '#333', dash: undefined })),
-            ...freeNodes.map(fn => ({ id: fn.id, gender: fn.gender, x: fn.x, y: fn.y, stroke: '#8b5cf6', dash: '6,3' }))
+            ...nodes.map(nd => ({ id: nd.id, gender: nd.gender, ...pos(nd.id), stroke: '#333', dash: undefined, isFree: false })),
+            ...freeNodes.map(fn => ({ id: fn.id, gender: fn.gender, x: fn.x, y: fn.y, stroke: '#333', dash: undefined, isFree: true }))
           ].map(nd => {
             const isIP = nd.id === indexId, fill = isIP ? '#1e293b' : 'white', txtC = isIP ? 'white' : '#333';
             const isEditAge = editingAgeId === nd.id, ageVal = ages[nd.id] || '';
             return (
               <g key={nd.id} transform={`translate(${nd.x},${nd.y})`} style={{ cursor: drag?.id === nd.id ? 'grabbing' : 'grab' }}
                  onMouseDown={e => onDown(e, nd.id)} onClick={e => onClick(e, nd.id)}
-                 onDoubleClick={e => { e.stopPropagation(); if(showAgeMode) setEditingAgeId(nd.id); }}>
+                 onDoubleClick={e => { 
+                   e.stopPropagation(); 
+                   if(showAgeMode) {
+                     setEditingAgeId(nd.id); 
+                   } else if(nd.isFree) {
+                     // 雙擊刪除自由個體 (必須在「年齡模式 OFF」時操作)
+                     if(window.confirm('確定要刪除這個擴充個體嗎？(相關連線也會一併刪除)')) {
+                       setCustomLinks(prev => prev.filter(l => l.sourceId !== nd.id && l.targetId !== nd.id));
+                       setFreeNodes(prev => prev.filter(fn => fn.id !== nd.id));
+                     }
+                   }
+                 }}>
                 {nd.gender === 'M'
                   ? <rect x={-R} y={-R} width={SZ} height={SZ} fill={fill} stroke={nd.stroke} strokeWidth="2.5" rx="2" strokeDasharray={nd.dash} />
                   : <circle cx="0" cy="0" r={R} fill={fill} stroke={nd.stroke} strokeWidth="2.5" strokeDasharray={nd.dash} />}
@@ -513,28 +524,32 @@ const GenogramTab = ({
           {/* === 自訂連線 (customLinks) === */}
           {customLinks.map(lnk => {
             const sp = pos(lnk.sourceId), tp = pos(lnk.targetId);
-            const midX = (sp.x + tp.x) / 2, midY = (sp.y + tp.y) / 2;
+            // 神奇幾何學：計算讓線條剛好停在邊緣 (半徑 R) 的位置
+            const isSpLeft = sp.x < tp.x;
+            const x1 = isSpLeft ? sp.x + R : sp.x - R;
+            const x2 = isSpLeft ? tp.x - R : tp.x + R;
+            const midX = (x1 + x2) / 2, midY = (sp.y + tp.y) / 2;
             const g3Kids = lnk.g3Str ? parseGenders(lnk.g3Str) : [];
             const kidY = Math.max(sp.y, tp.y) + 80;
             const kidStartX = midX - ((g3Kids.length - 1) * SIBLING_GAP) / 2;
             const barY = (midY + kidY) / 2;
             return (
               <g key={lnk.id}>
-                <line x1={sp.x} y1={sp.y} x2={tp.x} y2={tp.y} stroke="#8b5cf6" strokeWidth="2" />
+                <line x1={x1} y1={sp.y} x2={x2} y2={tp.y} stroke="#444" strokeWidth="2" />
                 {lnk.status === 'divorced' && <>
-                  <line x1={midX-8} y1={midY-8} x2={midX+8} y2={midY+8} stroke="#8b5cf6" strokeWidth="2" />
-                  <line x1={midX-8} y1={midY+8} x2={midX+8} y2={midY-8} stroke="#8b5cf6" strokeWidth="2" />
+                  <line x1={midX-8} y1={midY-8} x2={midX+8} y2={midY+8} stroke="#444" strokeWidth="2" />
+                  <line x1={midX-8} y1={midY+8} x2={midX+8} y2={midY-8} stroke="#444" strokeWidth="2" />
                 </>}
-                <line x1={sp.x} y1={sp.y} x2={tp.x} y2={tp.y} stroke="transparent" strokeWidth="12" style={{ cursor: 'pointer' }} onDoubleClick={e => { e.stopPropagation(); deleteCustomLink(lnk.id); }} />
+                <line x1={x1} y1={sp.y} x2={x2} y2={tp.y} stroke="transparent" strokeWidth="12" style={{ cursor: 'pointer' }} onDoubleClick={e => { e.stopPropagation(); deleteCustomLink(lnk.id); }} />
                 {g3Kids.length > 0 && <>
-                  <line x1={midX} y1={midY} x2={midX} y2={barY} stroke="#8b5cf6" strokeWidth="1.5" />
-                  {g3Kids.length > 1 && <line x1={kidStartX} y1={barY} x2={kidStartX + (g3Kids.length - 1) * SIBLING_GAP} y2={barY} stroke="#8b5cf6" strokeWidth="1.5" />}
+                  <line x1={midX} y1={midY} x2={midX} y2={barY} stroke="#444" strokeWidth="2" />
+                  {g3Kids.length > 1 && <line x1={kidStartX} y1={barY} x2={kidStartX + (g3Kids.length - 1) * SIBLING_GAP} y2={barY} stroke="#444" strokeWidth="2" />}
                   {g3Kids.map((g, j) => {
                     const kx = kidStartX + j * SIBLING_GAP;
                     return (
                       <g key={`${lnk.id}_k${j}`}>
-                        <line x1={kx} y1={barY} x2={kx} y2={kidY - R} stroke="#8b5cf6" strokeWidth="1.5" />
-                        {g === 'M' ? <rect x={kx - R} y={kidY - R} width={SZ} height={SZ} fill="white" stroke="#8b5cf6" strokeWidth="2" rx="2" strokeDasharray="6,3" /> : <circle cx={kx} cy={kidY} r={R} fill="white" stroke="#8b5cf6" strokeWidth="2" strokeDasharray="6,3" />}
+                        <line x1={kx} y1={barY} x2={kx} y2={kidY - R} stroke="#444" strokeWidth="2" />
+                        {g === 'M' ? <rect x={kx - R} y={kidY - R} width={SZ} height={SZ} fill="white" stroke="#333" strokeWidth="2.5" rx="2" /> : <circle cx={kx} cy={kidY} r={R} fill="white" stroke="#333" strokeWidth="2.5" />}
                       </g>
                     );
                   })}
