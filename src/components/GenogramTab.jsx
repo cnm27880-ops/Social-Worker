@@ -6,12 +6,17 @@ import {
   parseGenders, getSmoothPath, getRelativeTitle
 } from '../utils/helpers';
 
+const CUSTOM_LINK_STATUSES = ['married', 'divorced'];
+const CUSTOM_LINK_LABELS = { married: '已婚', divorced: '離婚' };
+
 const GenogramTab = ({
   gen2Str, setGen2Str, gen2Cfg, setGen2Cfg,
   indexId, setIndexId,
   cohabMembers, setCohabMembers,
   deceasedIds, setDeceasedIds,
-  g1Status, setG1Status
+  g1Status, setG1Status,
+  freeNodes, setFreeNodes,
+  customLinks, setCustomLinks
 }) => {
   /* --- 家系圖本地狀態 --- */
   const [positions, setPositions] = useState({});
@@ -98,6 +103,18 @@ const GenogramTab = ({
     setSelectedTextId(null);
   };
 
+  /* --- 自由節點操作 --- */
+  const addFreeNode = (gender) => {
+    const id = 'f_' + Date.now();
+    setFreeNodes(prev => [...prev, { id, gender, x: 500, y: 320 }]);
+  };
+  const updateCustomLink = (linkId, field, val) => {
+    setCustomLinks(prev => prev.map(l => l.id === linkId ? { ...l, [field]: val } : l));
+  };
+  const deleteCustomLink = (linkId) => {
+    setCustomLinks(prev => prev.filter(l => l.id !== linkId));
+  };
+
   const { nodes, lines } = useMemo(() => {
     const N = [], L = [];
     const units = gen2Cfg.map((c, i) => {
@@ -145,12 +162,21 @@ const GenogramTab = ({
   const structKey = useMemo(() => nodes.map(n => n.id).join(','), [nodes]);
   useEffect(() => { const m = {}; nodes.forEach(n => { m[n.id] = { x: n.dx, y: n.dy }; }); setPositions(m); }, [structKey]);
 
-  const pos = useCallback((id) => { if (positions[id]) return positions[id]; const n = nodes.find(v => v.id === id); return n ? { x: n.dx, y: n.dy } : { x: 0, y: 0 }; }, [positions, nodes]);
+  const pos = useCallback((id) => {
+    if (positions[id]) return positions[id];
+    const n = nodes.find(v => v.id === id);
+    if (n) return { x: n.dx, y: n.dy };
+    const fn = freeNodes.find(v => v.id === id);
+    if (fn) return { x: fn.x, y: fn.y };
+    return { x: 0, y: 0 };
+  }, [positions, nodes, freeNodes]);
   const svgPt = useCallback((e) => { const p = svgRef.current.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; return p.matrixTransform(svgRef.current.getScreenCTM().inverse()); }, []);
 
   const onDown = useCallback((e, id) => {
-    e.stopPropagation(); const sp = svgPt(e); const p = pos(id); setDrag({ id, ox: sp.x - p.x, oy: sp.y - p.y });
-  }, [svgPt, pos]);
+    e.stopPropagation(); const sp = svgPt(e); const p = pos(id);
+    const isFree = freeNodes.some(fn => fn.id === id);
+    setDrag({ id, ox: sp.x - p.x, oy: sp.y - p.y, isFree });
+  }, [svgPt, pos, freeNodes]);
 
   const onTextDown = useCallback((e, id) => {
     e.stopPropagation(); textDragMoved.current = false; const sp = svgPt(e); const t = texts.find(t => t.id === id);
@@ -174,10 +200,46 @@ const GenogramTab = ({
     if (textResize) { setTexts(p => p.map(t => t.id === textResize.id ? { ...t, fontSize: Math.max(10, Math.min(72, Math.round(textResize.startSize + (sp.y - textResize.startY) * 0.3))) } : t)); return; }
     if (textDrag) { textDragMoved.current = true; setTexts(p => p.map(t => t.id === textDrag.id ? { ...t, x: sp.x - textDrag.ox, y: sp.y - textDrag.oy } : t)); return; }
     if (!drag) return;
-    setPositions(prev => { let nX = sp.x - drag.ox, nY = sp.y - drag.oy; for (const [id, p] of Object.entries(prev)) { if (id === drag.id) continue; if (Math.abs(nX - p.x) < 12) nX = p.x; if (Math.abs(nY - p.y) < 12) nY = p.y; } return { ...prev, [drag.id]: { x: nX, y: nY } }; });
-  }, [drag, textDrag, textResize, dragVertex, draftPoly, svgPt]);
+    if (drag.isFree) {
+      setFreeNodes(prev => prev.map(fn => fn.id === drag.id ? { ...fn, x: sp.x - drag.ox, y: sp.y - drag.oy } : fn));
+    } else {
+      setPositions(prev => { let nX = sp.x - drag.ox, nY = sp.y - drag.oy; for (const [id, p] of Object.entries(prev)) { if (id === drag.id) continue; if (Math.abs(nX - p.x) < 12) nX = p.x; if (Math.abs(nY - p.y) < 12) nY = p.y; } return { ...prev, [drag.id]: { x: nX, y: nY } }; });
+    }
+  }, [drag, textDrag, textResize, dragVertex, draftPoly, svgPt, setFreeNodes]);
 
-  const onUp = () => { setDragVertex(null); setDrag(null); setTextDrag(null); setTextResize(null); };
+  const onUp = () => {
+    if (drag && drag.isFree) {
+      const draggedNode = freeNodes.find(fn => fn.id === drag.id);
+      if (draggedNode) {
+        const dp = { x: draggedNode.x, y: draggedNode.y };
+        // Check collision with all existing nodes
+        let closestId = null, closestDist = Infinity;
+        nodes.forEach(nd => {
+          const np = pos(nd.id);
+          const dist = Math.sqrt(Math.pow(dp.x - np.x, 2) + Math.pow(dp.y - np.y, 2));
+          if (dist < 60 && dist < closestDist) { closestDist = dist; closestId = nd.id; }
+        });
+        // Also check other freeNodes
+        freeNodes.forEach(fn => {
+          if (fn.id === drag.id) return;
+          const dist = Math.sqrt(Math.pow(dp.x - fn.x, 2) + Math.pow(dp.y - fn.y, 2));
+          if (dist < 60 && dist < closestDist) { closestDist = dist; closestId = fn.id; }
+        });
+        if (closestId) {
+          const alreadyLinked = customLinks.some(l => (l.sourceId === drag.id && l.targetId === closestId) || (l.sourceId === closestId && l.targetId === drag.id));
+          if (!alreadyLinked) {
+            setCustomLinks(prev => [...prev, { id: 'l_' + Date.now(), sourceId: closestId, targetId: drag.id, status: 'married', g3Str: '' }]);
+            // Push freeNode away to prevent overlap
+            const tp = pos(closestId);
+            const angle = Math.atan2(dp.y - tp.y, dp.x - tp.x);
+            const pushDist = 70;
+            setFreeNodes(prev => prev.map(fn => fn.id === drag.id ? { ...fn, x: tp.x + Math.cos(angle) * pushDist, y: tp.y + Math.sin(angle) * pushDist } : fn));
+          }
+        }
+      }
+    }
+    setDragVertex(null); setDrag(null); setTextDrag(null); setTextResize(null);
+  };
 
   const onClick = (e, id) => {
     e.stopPropagation();
@@ -204,6 +266,7 @@ const GenogramTab = ({
   const downloadJPG = () => {
     const PAD = 40, allXs = [], allYs = [];
     nodes.forEach(n => { const p = pos(n.id); allXs.push(p.x - R, p.x + R); allYs.push(p.y - R, p.y + R); });
+    freeNodes.forEach(fn => { allXs.push(fn.x - R, fn.x + R); allYs.push(fn.y - R, fn.y + R); });
     texts.forEach(t => { const w = t.vertical ? t.fontSize * 1.5 : t.text.length * t.fontSize * 0.7, h = t.vertical ? t.text.length * t.fontSize * 1.2 : t.fontSize * 1.5; allXs.push(t.x - 4, t.x + (t.vertical ? t.fontSize * 1.5 : w)); allYs.push(t.y - (t.vertical ? 4 : t.fontSize + 4), t.y + (t.vertical ? h : 8)); });
     polygons.forEach(pg => pg.pts.forEach(pt => { allXs.push(pt.x); allYs.push(pt.y); }));
     if (cohabitationBox && cohabitationBox.type === 'single') { allXs.push(cohabitationBox.x, cohabitationBox.x + cohabitationBox.w); allYs.push(cohabitationBox.y, cohabitationBox.y + cohabitationBox.h); }
@@ -233,7 +296,7 @@ const GenogramTab = ({
               年齡 {showAgeMode ? 'ON' : 'OFF'}
             </label>
             <button onClick={downloadJPG} style={{ padding: '5px 10px', fontSize: '12px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>下載</button>
-            <button onClick={() => { if(window.confirm('確定重置？')) { setGen2Str(''); setGen2Cfg([]); setIndexId(null); setCohabMembers([]); setDeceasedIds([]); setPolygons([]); setTexts([]); setAges({}); } }} style={{ padding: '5px 10px', fontSize: '12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>重置</button>
+            <button onClick={() => { if(window.confirm('確定重置？')) { setGen2Str(''); setGen2Cfg([]); setIndexId(null); setCohabMembers([]); setDeceasedIds([]); setPolygons([]); setTexts([]); setAges({}); setFreeNodes([]); setCustomLinks([]); } }} style={{ padding: '5px 10px', fontSize: '12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>重置</button>
           </div>
         </div>
 
@@ -309,21 +372,52 @@ const GenogramTab = ({
         </div>
 
         <div className="section">
+          <label>🧩 自由擴充區</label>
+          <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+            <button onClick={() => addFreeNode('M')} style={{ flex: 1, padding: '6px', fontSize: '13px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>➕ 新增男性</button>
+            <button onClick={() => addFreeNode('F')} style={{ flex: 1, padding: '6px', fontSize: '13px', background: '#ec4899', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>➕ 新增女性</button>
+          </div>
+          <div className="hint" style={{ marginTop: '6px' }}>拖曳擴充個體去碰撞目標節點即可自動產生連線。</div>
+        </div>
+
+        {customLinks.length > 0 && (
+          <div className="section">
+            <label>🔗 擴充連線設定</label>
+            {customLinks.map(lnk => {
+              const srcNode = nodes.find(n => n.id === lnk.sourceId) || freeNodes.find(n => n.id === lnk.sourceId);
+              const tgtNode = nodes.find(n => n.id === lnk.targetId) || freeNodes.find(n => n.id === lnk.targetId);
+              const srcLabel = srcNode?.label || (srcNode?.gender === 'M' ? '■' : '●');
+              const tgtLabel = tgtNode?.label || (tgtNode?.gender === 'M' ? '■' : '●');
+              return (
+                <div key={lnk.id} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '8px', marginTop: '6px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}>
+                    <span>{srcLabel} ↔ {tgtLabel}</span>
+                    <span className="status-badge" data-status={lnk.status} ref={el => wheelRef(el, CUSTOM_LINK_STATUSES, lnk.status, v => updateCustomLink(lnk.id, 'status', v))}>{CUSTOM_LINK_LABELS[lnk.status]}</span>
+                    <button onClick={() => deleteCustomLink(lnk.id)} style={{ marginLeft: 'auto', padding: '2px 8px', fontSize: '11px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>刪除</button>
+                  </div>
+                  <div style={{ marginTop: '4px' }}>
+                    <input type="text" value={lnk.g3Str} onChange={e => updateCustomLink(lnk.id, 'g3Str', e.target.value)} placeholder="下一代 (例: 男女 或 MF 或 12)" style={{ width: '100%', fontSize: '12px' }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <div className="section">
           <label>操作說明</label>
           <div className="info-box">
-            ■ = 男性（正方形）　● = 女性（圓形）<br/>
-            點擊節點 → 標示 / 取消「案主」<br/>
-            拖曳節點 → 微調位置，連線即時跟隨<br/>
-            滑鼠滾輪於狀態標籤 → 循環切換狀態<br/>
-            📝 文字方塊 → 可拖曳、編輯、縮放、刪除<br/>
-            📥 下載 JPG → 自動裁切白邊並匯出
+            ■ / ●：點擊節點切換案主；雙擊可輸入年齡。<br/>
+            狀態切換：滑鼠停在狀態標籤上【上下滾動滾輪】即可切換。<br/>
+            文字方塊：單擊選取/縮放；雙擊直接打字 (可 Enter 換行)。<br/>
+            自由連線：拖曳【🧩擴充個體】去碰撞目標即可產生連線；雙擊關係線可刪除。
           </div>
         </div>
       </div>
 
       {/* SVG 畫布 */}
       <div className="canvas-wrap">
-        <svg ref={svgRef} width={Math.max(800, (nodes.map(n => positions[n.id]?.x??n.dx).concat(texts.map(t=>t.x+100)).reduce((a,b)=>Math.max(a,b),0))+160)} height={Math.max(520, (nodes.map(n => positions[n.id]?.y??n.dy).concat(texts.map(t=>t.y+100)).reduce((a,b)=>Math.max(a,b),0))+80)} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp} onClick={() => { setSelectedTextId(null); setSelectedPolyId(null); }} style={{ background: '#fefefe', minWidth: '600px', cursor: mode === 'cohab' && cohabMode === 'poly' ? 'crosshair' : undefined }}>
+        <svg ref={svgRef} width={Math.max(800, (nodes.map(n => positions[n.id]?.x??n.dx).concat(texts.map(t=>t.x+100)).concat(freeNodes.map(fn=>fn.x+100)).reduce((a,b)=>Math.max(a,b),0))+160)} height={Math.max(520, (nodes.map(n => positions[n.id]?.y??n.dy).concat(texts.map(t=>t.y+100)).concat(freeNodes.map(fn=>fn.y+100)).reduce((a,b)=>Math.max(a,b),0))+80)} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp} onClick={() => { setSelectedTextId(null); setSelectedPolyId(null); }} style={{ background: '#fefefe', minWidth: '600px', cursor: mode === 'cohab' && cohabMode === 'poly' ? 'crosshair' : undefined }}>
           <defs><pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="#f0f0f0" strokeWidth="0.5" /></pattern></defs>
           <rect width="100%" height="100%" fill="url(#grid)" />
 
@@ -408,6 +502,74 @@ const GenogramTab = ({
                   </>
                 )}
                 {deceasedIds.includes(nd.id) && <g stroke={isIP ? 'white' : '#333'} strokeWidth="2.5" pointerEvents="none"><line x1={-R} y1={-R} x2={R} y2={R} /><line x1={R} y1={-R} x2={-R} y2={R} /></g>}
+              </g>
+            );
+          })}
+
+          {/* === 自由節點 (freeNodes) === */}
+          {freeNodes.map(fn => {
+            const isIP = fn.id === indexId, fill = isIP ? '#1e293b' : 'white', txtC = isIP ? 'white' : '#333';
+            const isEditingAge = editingAgeId === fn.id;
+            const ageVal = ages[fn.id] || '';
+            return (
+              <g key={fn.id} transform={`translate(${fn.x},${fn.y})`} style={{ cursor: drag?.id === fn.id ? 'grabbing' : 'grab' }}
+                 onMouseDown={e => onDown(e, fn.id)}
+                 onClick={e => onClick(e, fn.id)}
+                 onDoubleClick={e => { e.stopPropagation(); if(showAgeMode) setEditingAgeId(fn.id); }}>
+                {fn.gender === 'M' ? <rect x={-R} y={-R} width={SZ} height={SZ} fill={fill} stroke="#8b5cf6" strokeWidth="2.5" rx="2" strokeDasharray="6,3" /> : <circle cx="0" cy="0" r={R} fill={fill} stroke="#8b5cf6" strokeWidth="2.5" strokeDasharray="6,3" />}
+                {isEditingAge ? (
+                  <foreignObject x={-R} y={-10} width={SZ} height={20}>
+                    <input autoFocus defaultValue={ageVal} onBlur={e => finishEditingAge(fn.id, e.target.value)} onKeyDown={e => { e.stopPropagation(); if(e.key === 'Enter') finishEditingAge(fn.id, e.target.value); }} style={{ width: '100%', height: '100%', textAlign: 'center', fontSize: '13px', fontFamily: TEXT_FONT, border: 'none', background: 'transparent', outline: 'none', color: txtC, fontWeight: 'bold', padding: 0 }} />
+                  </foreignObject>
+                ) : (
+                  <>
+                    {isIP && (!showAgeMode || !ageVal) && <text x="0" y="4" textAnchor="middle" fontSize="11" fontWeight="bold" fill={txtC} style={{fontFamily: TEXT_FONT, pointerEvents: 'none'}}>案主</text>}
+                    {showAgeMode && ageVal && <text x="0" y="4" textAnchor="middle" fontSize="13" fontWeight="bold" fill={txtC} style={{fontFamily: TEXT_FONT, pointerEvents: 'none'}}>{ageVal}</text>}
+                  </>
+                )}
+                {deceasedIds.includes(fn.id) && <g stroke={isIP ? 'white' : '#333'} strokeWidth="2.5" pointerEvents="none"><line x1={-R} y1={-R} x2={R} y2={R} /><line x1={R} y1={-R} x2={-R} y2={R} /></g>}
+              </g>
+            );
+          })}
+
+          {/* === 自訂連線 (customLinks) === */}
+          {customLinks.map(lnk => {
+            const sp = pos(lnk.sourceId), tp = pos(lnk.targetId);
+            if (!sp || !tp) return null;
+            const midX = (sp.x + tp.x) / 2, midY = (sp.y + tp.y) / 2;
+            const g3Kids = lnk.g3Str ? parseGenders(lnk.g3Str) : [];
+            return (
+              <g key={lnk.id}>
+                <line x1={sp.x} y1={sp.y} x2={tp.x} y2={tp.y} stroke="#8b5cf6" strokeWidth="2" />
+                {lnk.status === 'divorced' && (
+                  <g>
+                    <line x1={midX-8} y1={midY-8} x2={midX+8} y2={midY+8} stroke="#8b5cf6" strokeWidth="2" />
+                    <line x1={midX-8} y1={midY+8} x2={midX+8} y2={midY-8} stroke="#8b5cf6" strokeWidth="2" />
+                  </g>
+                )}
+                {/* Invisible wider line for easier double-click */}
+                <line x1={sp.x} y1={sp.y} x2={tp.x} y2={tp.y} stroke="transparent" strokeWidth="12" style={{ cursor: 'pointer' }} onDoubleClick={e => { e.stopPropagation(); deleteCustomLink(lnk.id); }} />
+                {/* g3 children from customLink */}
+                {g3Kids.length > 0 && (() => {
+                  const kidY = Math.max(sp.y, tp.y) + 80;
+                  const kidStartX = midX - ((g3Kids.length - 1) * SIBLING_GAP) / 2;
+                  return (
+                    <g>
+                      <line x1={midX} y1={midY} x2={midX} y2={(midY + kidY) / 2} stroke="#8b5cf6" strokeWidth="1.5" />
+                      {g3Kids.length > 1 && <line x1={kidStartX} y1={(midY + kidY) / 2} x2={kidStartX + (g3Kids.length - 1) * SIBLING_GAP} y2={(midY + kidY) / 2} stroke="#8b5cf6" strokeWidth="1.5" />}
+                      {g3Kids.map((g, j) => {
+                        const kx = kidStartX + j * SIBLING_GAP;
+                        const barY = (midY + kidY) / 2;
+                        return (
+                          <g key={`${lnk.id}_k${j}`}>
+                            <line x1={kx} y1={barY} x2={kx} y2={kidY - R} stroke="#8b5cf6" strokeWidth="1.5" />
+                            {g === 'M' ? <rect x={kx - R} y={kidY - R} width={SZ} height={SZ} fill="white" stroke="#8b5cf6" strokeWidth="2" rx="2" strokeDasharray="6,3" /> : <circle cx={kx} cy={kidY} r={R} fill="white" stroke="#8b5cf6" strokeWidth="2" strokeDasharray="6,3" />}
+                          </g>
+                        );
+                      })}
+                    </g>
+                  );
+                })()}
               </g>
             );
           })}
