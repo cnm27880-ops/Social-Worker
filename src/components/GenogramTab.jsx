@@ -283,6 +283,12 @@ const GenogramTab = ({
     }; img.src = url;
   };
 
+  /* ===== SVG 尺寸計算 ===== */
+  const allX = nodes.map(n => positions[n.id]?.x ?? n.dx).concat(texts.map(t => t.x + 100), freeNodes.map(fn => fn.x + 100));
+  const allY = nodes.map(n => positions[n.id]?.y ?? n.dy).concat(texts.map(t => t.y + 100), freeNodes.map(fn => fn.y + 100));
+  const svgW = Math.max(800, (allX.length ? Math.max(...allX) : 0) + 160);
+  const svgH = Math.max(520, (allY.length ? Math.max(...allY) : 0) + 80);
+
   /* ===== 介面渲染 ===== */
   return (
     <div className="app-layout">
@@ -417,7 +423,7 @@ const GenogramTab = ({
 
       {/* SVG 畫布 */}
       <div className="canvas-wrap">
-        <svg ref={svgRef} width={Math.max(800, (nodes.map(n => positions[n.id]?.x??n.dx).concat(texts.map(t=>t.x+100)).concat(freeNodes.map(fn=>fn.x+100)).reduce((a,b)=>Math.max(a,b),0))+160)} height={Math.max(520, (nodes.map(n => positions[n.id]?.y??n.dy).concat(texts.map(t=>t.y+100)).concat(freeNodes.map(fn=>fn.y+100)).reduce((a,b)=>Math.max(a,b),0))+80)} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp} onClick={() => { setSelectedTextId(null); setSelectedPolyId(null); }} style={{ background: '#fefefe', minWidth: '600px', cursor: mode === 'cohab' && cohabMode === 'poly' ? 'crosshair' : undefined }}>
+        <svg ref={svgRef} width={svgW} height={svgH} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp} onClick={() => { setSelectedTextId(null); setSelectedPolyId(null); }} style={{ background: '#fefefe', minWidth: '600px', cursor: mode === 'cohab' && cohabMode === 'poly' ? 'crosshair' : undefined }}>
           <defs><pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="#f0f0f0" strokeWidth="0.5" /></pattern></defs>
           <rect width="100%" height="100%" fill="url(#grid)" />
 
@@ -472,28 +478,26 @@ const GenogramTab = ({
             } return null;
           })}
 
-          {nodes.map(nd => {
-            const p = pos(nd.id), isIP = nd.id === indexId, fill = isIP ? '#1e293b' : 'white', txtC = isIP ? 'white' : '#333';
-            const isEditingAge = editingAgeId === nd.id;
-            const ageVal = ages[nd.id] || '';
-
+          {/* === 所有節點 (原生 + 自由) 共用渲染 === */}
+          {[
+            ...nodes.map(nd => ({ id: nd.id, gender: nd.gender, ...pos(nd.id), stroke: '#333', dash: undefined })),
+            ...freeNodes.map(fn => ({ id: fn.id, gender: fn.gender, x: fn.x, y: fn.y, stroke: '#8b5cf6', dash: '6,3' }))
+          ].map(nd => {
+            const isIP = nd.id === indexId, fill = isIP ? '#1e293b' : 'white', txtC = isIP ? 'white' : '#333';
+            const isEditAge = editingAgeId === nd.id, ageVal = ages[nd.id] || '';
             return (
-              <g key={nd.id} transform={`translate(${p.x},${p.y})`} style={{ cursor: drag?.id === nd.id ? 'grabbing' : 'grab' }}
-                 onMouseDown={e => onDown(e, nd.id)}
-                 onClick={e => onClick(e, nd.id)}
+              <g key={nd.id} transform={`translate(${nd.x},${nd.y})`} style={{ cursor: drag?.id === nd.id ? 'grabbing' : 'grab' }}
+                 onMouseDown={e => onDown(e, nd.id)} onClick={e => onClick(e, nd.id)}
                  onDoubleClick={e => { e.stopPropagation(); if(showAgeMode) setEditingAgeId(nd.id); }}>
-
-                {nd.gender === 'M' ? <rect x={-R} y={-R} width={SZ} height={SZ} fill={fill} stroke="#333" strokeWidth="2.5" rx="2" /> : <circle cx="0" cy="0" r={R} fill={fill} stroke="#333" strokeWidth="2.5" />}
-
-                {isEditingAge ? (
+                {nd.gender === 'M'
+                  ? <rect x={-R} y={-R} width={SZ} height={SZ} fill={fill} stroke={nd.stroke} strokeWidth="2.5" rx="2" strokeDasharray={nd.dash} />
+                  : <circle cx="0" cy="0" r={R} fill={fill} stroke={nd.stroke} strokeWidth="2.5" strokeDasharray={nd.dash} />}
+                {isEditAge ? (
                   <foreignObject x={-R} y={-10} width={SZ} height={20}>
-                    <input
-                      autoFocus
-                      defaultValue={ageVal}
-                      onBlur={(e) => finishEditingAge(nd.id, e.target.value)}
-                      onKeyDown={(e) => { e.stopPropagation(); if(e.key === 'Enter') finishEditingAge(nd.id, e.target.value); }}
-                      style={{ width: '100%', height: '100%', textAlign: 'center', fontSize: '13px', fontFamily: TEXT_FONT, border: 'none', background: 'transparent', outline: 'none', color: txtC, fontWeight: 'bold', padding: 0 }}
-                    />
+                    <input autoFocus defaultValue={ageVal}
+                      onBlur={e => finishEditingAge(nd.id, e.target.value)}
+                      onKeyDown={e => { e.stopPropagation(); if(e.key === 'Enter') finishEditingAge(nd.id, e.target.value); }}
+                      style={{ width: '100%', height: '100%', textAlign: 'center', fontSize: '13px', fontFamily: TEXT_FONT, border: 'none', background: 'transparent', outline: 'none', color: txtC, fontWeight: 'bold', padding: 0 }} />
                   </foreignObject>
                 ) : (
                   <>
@@ -506,70 +510,35 @@ const GenogramTab = ({
             );
           })}
 
-          {/* === 自由節點 (freeNodes) === */}
-          {freeNodes.map(fn => {
-            const isIP = fn.id === indexId, fill = isIP ? '#1e293b' : 'white', txtC = isIP ? 'white' : '#333';
-            const isEditingAge = editingAgeId === fn.id;
-            const ageVal = ages[fn.id] || '';
-            return (
-              <g key={fn.id} transform={`translate(${fn.x},${fn.y})`} style={{ cursor: drag?.id === fn.id ? 'grabbing' : 'grab' }}
-                 onMouseDown={e => onDown(e, fn.id)}
-                 onClick={e => onClick(e, fn.id)}
-                 onDoubleClick={e => { e.stopPropagation(); if(showAgeMode) setEditingAgeId(fn.id); }}>
-                {fn.gender === 'M' ? <rect x={-R} y={-R} width={SZ} height={SZ} fill={fill} stroke="#8b5cf6" strokeWidth="2.5" rx="2" strokeDasharray="6,3" /> : <circle cx="0" cy="0" r={R} fill={fill} stroke="#8b5cf6" strokeWidth="2.5" strokeDasharray="6,3" />}
-                {isEditingAge ? (
-                  <foreignObject x={-R} y={-10} width={SZ} height={20}>
-                    <input autoFocus defaultValue={ageVal} onBlur={e => finishEditingAge(fn.id, e.target.value)} onKeyDown={e => { e.stopPropagation(); if(e.key === 'Enter') finishEditingAge(fn.id, e.target.value); }} style={{ width: '100%', height: '100%', textAlign: 'center', fontSize: '13px', fontFamily: TEXT_FONT, border: 'none', background: 'transparent', outline: 'none', color: txtC, fontWeight: 'bold', padding: 0 }} />
-                  </foreignObject>
-                ) : (
-                  <>
-                    {isIP && (!showAgeMode || !ageVal) && <text x="0" y="4" textAnchor="middle" fontSize="11" fontWeight="bold" fill={txtC} style={{fontFamily: TEXT_FONT, pointerEvents: 'none'}}>案主</text>}
-                    {showAgeMode && ageVal && <text x="0" y="4" textAnchor="middle" fontSize="13" fontWeight="bold" fill={txtC} style={{fontFamily: TEXT_FONT, pointerEvents: 'none'}}>{ageVal}</text>}
-                  </>
-                )}
-                {deceasedIds.includes(fn.id) && <g stroke={isIP ? 'white' : '#333'} strokeWidth="2.5" pointerEvents="none"><line x1={-R} y1={-R} x2={R} y2={R} /><line x1={R} y1={-R} x2={-R} y2={R} /></g>}
-              </g>
-            );
-          })}
-
           {/* === 自訂連線 (customLinks) === */}
           {customLinks.map(lnk => {
             const sp = pos(lnk.sourceId), tp = pos(lnk.targetId);
-            if (!sp || !tp) return null;
             const midX = (sp.x + tp.x) / 2, midY = (sp.y + tp.y) / 2;
             const g3Kids = lnk.g3Str ? parseGenders(lnk.g3Str) : [];
+            const kidY = Math.max(sp.y, tp.y) + 80;
+            const kidStartX = midX - ((g3Kids.length - 1) * SIBLING_GAP) / 2;
+            const barY = (midY + kidY) / 2;
             return (
               <g key={lnk.id}>
                 <line x1={sp.x} y1={sp.y} x2={tp.x} y2={tp.y} stroke="#8b5cf6" strokeWidth="2" />
-                {lnk.status === 'divorced' && (
-                  <g>
-                    <line x1={midX-8} y1={midY-8} x2={midX+8} y2={midY+8} stroke="#8b5cf6" strokeWidth="2" />
-                    <line x1={midX-8} y1={midY+8} x2={midX+8} y2={midY-8} stroke="#8b5cf6" strokeWidth="2" />
-                  </g>
-                )}
-                {/* Invisible wider line for easier double-click */}
+                {lnk.status === 'divorced' && <>
+                  <line x1={midX-8} y1={midY-8} x2={midX+8} y2={midY+8} stroke="#8b5cf6" strokeWidth="2" />
+                  <line x1={midX-8} y1={midY+8} x2={midX+8} y2={midY-8} stroke="#8b5cf6" strokeWidth="2" />
+                </>}
                 <line x1={sp.x} y1={sp.y} x2={tp.x} y2={tp.y} stroke="transparent" strokeWidth="12" style={{ cursor: 'pointer' }} onDoubleClick={e => { e.stopPropagation(); deleteCustomLink(lnk.id); }} />
-                {/* g3 children from customLink */}
-                {g3Kids.length > 0 && (() => {
-                  const kidY = Math.max(sp.y, tp.y) + 80;
-                  const kidStartX = midX - ((g3Kids.length - 1) * SIBLING_GAP) / 2;
-                  return (
-                    <g>
-                      <line x1={midX} y1={midY} x2={midX} y2={(midY + kidY) / 2} stroke="#8b5cf6" strokeWidth="1.5" />
-                      {g3Kids.length > 1 && <line x1={kidStartX} y1={(midY + kidY) / 2} x2={kidStartX + (g3Kids.length - 1) * SIBLING_GAP} y2={(midY + kidY) / 2} stroke="#8b5cf6" strokeWidth="1.5" />}
-                      {g3Kids.map((g, j) => {
-                        const kx = kidStartX + j * SIBLING_GAP;
-                        const barY = (midY + kidY) / 2;
-                        return (
-                          <g key={`${lnk.id}_k${j}`}>
-                            <line x1={kx} y1={barY} x2={kx} y2={kidY - R} stroke="#8b5cf6" strokeWidth="1.5" />
-                            {g === 'M' ? <rect x={kx - R} y={kidY - R} width={SZ} height={SZ} fill="white" stroke="#8b5cf6" strokeWidth="2" rx="2" strokeDasharray="6,3" /> : <circle cx={kx} cy={kidY} r={R} fill="white" stroke="#8b5cf6" strokeWidth="2" strokeDasharray="6,3" />}
-                          </g>
-                        );
-                      })}
-                    </g>
-                  );
-                })()}
+                {g3Kids.length > 0 && <>
+                  <line x1={midX} y1={midY} x2={midX} y2={barY} stroke="#8b5cf6" strokeWidth="1.5" />
+                  {g3Kids.length > 1 && <line x1={kidStartX} y1={barY} x2={kidStartX + (g3Kids.length - 1) * SIBLING_GAP} y2={barY} stroke="#8b5cf6" strokeWidth="1.5" />}
+                  {g3Kids.map((g, j) => {
+                    const kx = kidStartX + j * SIBLING_GAP;
+                    return (
+                      <g key={`${lnk.id}_k${j}`}>
+                        <line x1={kx} y1={barY} x2={kx} y2={kidY - R} stroke="#8b5cf6" strokeWidth="1.5" />
+                        {g === 'M' ? <rect x={kx - R} y={kidY - R} width={SZ} height={SZ} fill="white" stroke="#8b5cf6" strokeWidth="2" rx="2" strokeDasharray="6,3" /> : <circle cx={kx} cy={kidY} r={R} fill="white" stroke="#8b5cf6" strokeWidth="2" strokeDasharray="6,3" />}
+                      </g>
+                    );
+                  })}
+                </>}
               </g>
             );
           })}
