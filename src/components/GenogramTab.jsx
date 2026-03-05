@@ -156,8 +156,48 @@ const GenogramTab = ({
       cx += u.w;
     });
     if (g2ids.length > 0) L.push({ id: 'pc-g1', type: 'pc', pa: 'fa', pb: 'mo', kids: g2ids });
+
+    // === customLink kidsCfg → 整合為完全體節點 ===
+    customLinks.forEach(lnk => {
+      if (!lnk.kidsCfg || lnk.kidsCfg.length === 0) return;
+      const srcN = N.find(n => n.id === lnk.sourceId); const srcF = freeNodes.find(fn => fn.id === lnk.sourceId);
+      const tgtN = N.find(n => n.id === lnk.targetId); const tgtF = freeNodes.find(fn => fn.id === lnk.targetId);
+      const spx = srcN?.dx ?? srcF?.x ?? 300, spy = srcN?.dy ?? srcF?.y ?? 160;
+      const tpx = tgtN?.dx ?? tgtF?.x ?? 400, tpy = tgtN?.dy ?? tgtF?.y ?? 160;
+      const parentMidX = (spx + tpx) / 2, parentY = Math.max(spy, tpy), kidsY = parentY + 80;
+      const kidUnits = lnk.kidsCfg.map((kc) => {
+        const isMarried = kc.partner !== 'none'; const g3 = isMarried ? parseGenders(kc.g3Str || '') : [];
+        const w = !isMarried ? SIBLING_GAP : Math.max(COUPLE_GAP + SZ, g3.length > 0 ? (g3.length - 1) * SIBLING_GAP + SZ : 0) + 50;
+        return { ...kc, g3, w, isMarried };
+      });
+      const kidsTotalW = kidUnits.reduce((s, u) => s + u.w, 0) || SIBLING_GAP;
+      let ckx = parentMidX - kidsTotalW / 2; const kidIds = [];
+      kidUnits.forEach((ku, ki) => {
+        const kidId = `${lnk.id}_c${ki}`, midU = ckx + ku.w / 2;
+        if (ku.isMarried) {
+          const lx = kidUnits.length === 1 ? parentMidX - COUPLE_GAP / 2 : midU - COUPLE_GAP / 2;
+          const rx = kidUnits.length === 1 ? parentMidX + COUPLE_GAP / 2 : midU + COUPLE_GAP / 2;
+          const sid = `${lnk.id}_s${ki}`, cmx = (lx + rx) / 2;
+          N.push({ id: kidId, gender: ku.gender, gen: 2, dx: lx, dy: kidsY, label: `${ku.gender === 'M' ? '子' : '女'}${ki+1}` });
+          N.push({ id: sid, gender: ku.gender === 'M' ? 'F' : 'M', gen: 2, dx: rx, dy: kidsY, label: '配偶' });
+          L.push({ id: `${lnk.id}_ml_c${ki}`, type: 'marry', a: kidId, b: sid, status: ku.partner });
+          kidIds.push(kidId);
+          if (ku.g3.length > 0) {
+            const g3Start = cmx - ((ku.g3.length - 1) * SIBLING_GAP) / 2, g3ids = [];
+            ku.g3.forEach((g, j) => { const gkid = `${lnk.id}_g${ki}_${j}`; N.push({ id: gkid, gender: g, gen: 3, dx: g3Start + j * SIBLING_GAP, dy: kidsY + 80, label: `${g === 'M' ? '孫' : '孫女'}${j+1}` }); g3ids.push(gkid); });
+            L.push({ id: `${lnk.id}_pc_c${ki}`, type: 'pc', pa: kidId, pb: sid, kids: g3ids });
+          }
+        } else {
+          N.push({ id: kidId, gender: ku.gender, gen: 2, dx: midU, dy: kidsY, label: `${ku.gender === 'M' ? '子' : '女'}${ki+1}` });
+          kidIds.push(kidId);
+        }
+        ckx += ku.w;
+      });
+      if (kidIds.length > 0) L.push({ id: `${lnk.id}_pc`, type: 'pc', pa: lnk.sourceId, pb: lnk.targetId, kids: kidIds });
+    });
+
     return { nodes: N, lines: L };
-  }, [gen2Cfg, g1Status]);
+  }, [gen2Cfg, g1Status, customLinks, freeNodes]);
 
   const structKey = useMemo(() => nodes.map(n => n.id).join(','), [nodes]);
   useEffect(() => { const m = {}; nodes.forEach(n => { m[n.id] = { x: n.dx, y: n.dy }; }); setPositions(m); }, [structKey]);
@@ -201,11 +241,20 @@ const GenogramTab = ({
     if (textDrag) { textDragMoved.current = true; setTexts(p => p.map(t => t.id === textDrag.id ? { ...t, x: sp.x - textDrag.ox, y: sp.y - textDrag.oy } : t)); return; }
     if (!drag) return;
     if (drag.isFree) {
-      setFreeNodes(prev => prev.map(fn => fn.id === drag.id ? { ...fn, x: sp.x - drag.ox, y: sp.y - drag.oy } : fn));
+      let newX = sp.x - drag.ox, newY = sp.y - drag.oy;
+      // 磁吸平行對齊：如果拖曳 Y 與相連節點 Y 差距 < 25px，強制鎖定至同一水平線
+      const connIds = customLinks
+        .filter(l => l.sourceId === drag.id || l.targetId === drag.id)
+        .map(l => l.sourceId === drag.id ? l.targetId : l.sourceId);
+      for (const cid of connIds) {
+        const cp = pos(cid);
+        if (Math.abs(newY - cp.y) < 25) { newY = cp.y; break; }
+      }
+      setFreeNodes(prev => prev.map(fn => fn.id === drag.id ? { ...fn, x: newX, y: newY } : fn));
     } else {
       setPositions(prev => { let nX = sp.x - drag.ox, nY = sp.y - drag.oy; for (const [id, p] of Object.entries(prev)) { if (id === drag.id) continue; if (Math.abs(nX - p.x) < 12) nX = p.x; if (Math.abs(nY - p.y) < 12) nY = p.y; } return { ...prev, [drag.id]: { x: nX, y: nY } }; });
     }
-  }, [drag, textDrag, textResize, dragVertex, draftPoly, svgPt, setFreeNodes]);
+  }, [drag, textDrag, textResize, dragVertex, draftPoly, svgPt, setFreeNodes, customLinks, pos]);
 
   const onUp = () => {
     if (drag && drag.isFree) {
@@ -228,7 +277,7 @@ const GenogramTab = ({
         if (closestId) {
           const alreadyLinked = customLinks.some(l => (l.sourceId === drag.id && l.targetId === closestId) || (l.sourceId === closestId && l.targetId === drag.id));
           if (!alreadyLinked) {
-            setCustomLinks(prev => [...prev, { id: 'l_' + Date.now(), sourceId: closestId, targetId: drag.id, status: 'married', g3Str: '' }]);
+            setCustomLinks(prev => [...prev, { id: 'l_' + Date.now(), sourceId: closestId, targetId: drag.id, status: 'married', kidsStr: '', kidsCfg: [] }]);
             // Push freeNode away to prevent overlap
             const tp = pos(closestId);
             const angle = Math.atan2(dp.y - tp.y, dp.x - tp.x);
@@ -402,8 +451,34 @@ const GenogramTab = ({
                     <button onClick={() => deleteCustomLink(lnk.id)} style={{ marginLeft: 'auto', padding: '2px 8px', fontSize: '11px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>刪除</button>
                   </div>
                   <div style={{ marginTop: '4px' }}>
-                    <input type="text" value={lnk.g3Str} onChange={e => updateCustomLink(lnk.id, 'g3Str', e.target.value)} placeholder="下一代 (例: 男女 或 MF 或 12)" style={{ width: '100%', fontSize: '12px' }} />
+                    <input type="text" value={lnk.kidsStr || ''} onChange={e => {
+                      const val = e.target.value;
+                      const gs = parseGenders(val);
+                      const newKidsCfg = gs.map((g, i) => (lnk.kidsCfg?.[i]?.gender === g) ? lnk.kidsCfg[i] : { gender: g, partner: 'none', g3Str: '' });
+                      setCustomLinks(prev => prev.map(l => l.id === lnk.id ? { ...l, kidsStr: val, kidsCfg: newKidsCfg } : l));
+                    }} placeholder="子代 (例: 男女 或 MF 或 12)" style={{ width: '100%', fontSize: '12px' }} />
                   </div>
+                  {lnk.kidsCfg && lnk.kidsCfg.length > 0 && (
+                    <div style={{ marginTop: '6px', paddingLeft: '8px', borderLeft: '2px solid #e2e8f0' }}>
+                      {lnk.kidsCfg.map((kc, ki) => (
+                        <div key={ki}>
+                          <div className="child-row">
+                            <span className={`child-icon ${kc.gender === 'M' ? 'm' : 'f'}`}>{kc.gender === 'M' ? '■' : '●'}</span>
+                            <span className={`child-name ${kc.gender === 'M' ? 'm' : 'f'}`}>{kc.gender === 'M' ? '子' : '女'}{ki+1}</span>
+                            <div className="chk-wrap">
+                              <span className="status-badge" data-status={kc.partner || 'none'} ref={el => wheelRef(el, G2_STATUSES, kc.partner || 'none', v => setCustomLinks(prev => prev.map(l => l.id === lnk.id ? { ...l, kidsCfg: l.kidsCfg.map((k, idx) => idx === ki ? { ...k, partner: v, g3Str: v === 'none' ? '' : k.g3Str } : k) } : l)))}>{G2_LABELS[kc.partner || 'none']}</span>
+                            </div>
+                          </div>
+                          {kc.partner !== 'none' && (
+                            <div className="gen3-block">
+                              <label>↳ 第三代 (例: 男/女 或 M/F 或 1/2)</label>
+                              <input type="text" value={kc.g3Str || ''} onChange={e => setCustomLinks(prev => prev.map(l => l.id === lnk.id ? { ...l, kidsCfg: l.kidsCfg.map((k, idx) => idx === ki ? { ...k, g3Str: e.target.value } : k) } : l))} />
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -524,15 +599,10 @@ const GenogramTab = ({
           {/* === 自訂連線 (customLinks) === */}
           {customLinks.map(lnk => {
             const sp = pos(lnk.sourceId), tp = pos(lnk.targetId);
-            // 神奇幾何學：計算讓線條剛好停在邊緣 (半徑 R) 的位置
             const isSpLeft = sp.x < tp.x;
             const x1 = isSpLeft ? sp.x + R : sp.x - R;
             const x2 = isSpLeft ? tp.x - R : tp.x + R;
             const midX = (x1 + x2) / 2, midY = (sp.y + tp.y) / 2;
-            const g3Kids = lnk.g3Str ? parseGenders(lnk.g3Str) : [];
-            const kidY = Math.max(sp.y, tp.y) + 80;
-            const kidStartX = midX - ((g3Kids.length - 1) * SIBLING_GAP) / 2;
-            const barY = (midY + kidY) / 2;
             return (
               <g key={lnk.id}>
                 <line x1={x1} y1={sp.y} x2={x2} y2={tp.y} stroke="#444" strokeWidth="2" />
@@ -541,19 +611,6 @@ const GenogramTab = ({
                   <line x1={midX-8} y1={midY+8} x2={midX+8} y2={midY-8} stroke="#444" strokeWidth="2" />
                 </>}
                 <line x1={x1} y1={sp.y} x2={x2} y2={tp.y} stroke="transparent" strokeWidth="12" style={{ cursor: 'pointer' }} onDoubleClick={e => { e.stopPropagation(); deleteCustomLink(lnk.id); }} />
-                {g3Kids.length > 0 && <>
-                  <line x1={midX} y1={midY} x2={midX} y2={barY} stroke="#444" strokeWidth="2" />
-                  {g3Kids.length > 1 && <line x1={kidStartX} y1={barY} x2={kidStartX + (g3Kids.length - 1) * SIBLING_GAP} y2={barY} stroke="#444" strokeWidth="2" />}
-                  {g3Kids.map((g, j) => {
-                    const kx = kidStartX + j * SIBLING_GAP;
-                    return (
-                      <g key={`${lnk.id}_k${j}`}>
-                        <line x1={kx} y1={barY} x2={kx} y2={kidY - R} stroke="#444" strokeWidth="2" />
-                        {g === 'M' ? <rect x={kx - R} y={kidY - R} width={SZ} height={SZ} fill="white" stroke="#333" strokeWidth="2.5" rx="2" /> : <circle cx={kx} cy={kidY} r={R} fill="white" stroke="#333" strokeWidth="2.5" />}
-                      </g>
-                    );
-                  })}
-                </>}
               </g>
             );
           })}
