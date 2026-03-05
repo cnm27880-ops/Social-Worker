@@ -140,6 +140,14 @@
       return `${res}(${str})`;
     };
 
+    /* --- 狀態標籤文字對照 --- */
+    const G2_STATUSES = ['none', 'married', 'cohab', 'separated', 'divorced'];
+    const G2_LABELS = { none: '未婚', married: '已婚', cohab: '同居', separated: '分居', divorced: '離婚' };
+    const G1_STATUSES = ['married', 'divorced'];
+    const G1_LABELS = { married: '已婚', divorced: '離婚' };
+    const TEXT_DIRS = ['horizontal', 'vertical'];
+    const TEXT_DIR_LABELS = { horizontal: '橫式排版', vertical: '直式排版' };
+    
     /* ===== 共用元件 ===== */
     const BadgeGroup = ({ options, value, onChange }) => (
       <div className="badge-wrap">
@@ -420,7 +428,7 @@
                     <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><input type="radio" checked={mode === 'index'} onChange={() => setMode('index')} /> 🎯 案主</label>
                     <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                       <input type="radio" checked={mode === 'cohab'} onChange={() => setMode('cohab')} /> 🏠 同住
-                      <span className="status-badge" data-status="cohab" ref={el => wheelRef(el, ['auto', 'poly'], cohabMode, setCohabMode)} title="滾輪切換：自動 / 多邊形">{cohabMode === 'auto' ? '自動' : '多邊形'}</span>
+                      <span className="status-badge" data-status="cohab" ref={el => wheelRef(el, ['auto', 'poly'], cohabMode, setCohabMode)} title="滾輪切換：自動 / 點繪">{cohabMode === 'auto' ? '自動' : '多邊形'}</span>
                     </label>
                     <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><input type="radio" checked={mode === 'deceased'} onChange={() => setMode('deceased')} /> ✝️ 打叉</label>
                   </div>
@@ -435,7 +443,7 @@
                 </div>
 
                 <div className="section">
-                  <label>第二代子女順序 (可輸入數字 1男 2女)</label>
+                  <label>第二代子女順序 (輸入中文「男/女」、英文「M/F」或數字「1男/2女」，即時產生子代節點)</label>
                   <input type="text" value={gen2Str} onChange={e => onGen2Change(e.target.value)} placeholder="例：11221 或 女女男男女" />
                 </div>
 
@@ -454,7 +462,7 @@
                         </div>
                         {c.partner !== 'none' && (
                           <div className="gen3-block">
-                            <label>↳ 第三代 (例: 12 或 男女)</label>
+                            <label>↳ 第三代 (例: 男/女 或 M/F 或 1/2)</label>
                             <input type="text" value={c.g3Str} onChange={e => setG3(i, e.target.value)} />
                           </div>
                         )}
