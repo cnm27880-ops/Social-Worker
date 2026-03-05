@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' https://unpkg.com; style-src 'unsafe-inline'; img-src blob:;">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>互動式電子家系圖產生器</title>
+  <title>互動式電子家系圖與紀錄產生器</title>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -12,70 +12,62 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Segoe UI', 'Microsoft JhengHei', sans-serif; background: #f0f2f5; padding: 12px; }
 
+    /* 頂部頁籤導覽列 */
+    .tab-nav { display: flex; gap: 10px; margin-bottom: 16px; border-bottom: 2px solid #cbd5e1; padding-bottom: 8px; max-width: 1500px; margin-left: auto; margin-right: auto; }
+    .tab-btn { padding: 10px 20px; font-size: 16px; font-weight: bold; border: none; background: transparent; color: #64748b; cursor: pointer; border-radius: 8px; transition: all 0.2s; }
+    .tab-btn:hover { background: #f1f5f9; color: #3b82f6; }
+    .tab-btn.active { background: #3b82f6; color: white; box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.3); }
+
     .app-layout { display: flex; flex-direction: column; gap: 12px; max-width: 1500px; margin: 0 auto; }
     @media (min-width: 768px) { .app-layout { flex-direction: row; align-items: flex-start; } }
 
     .panel {
       background: white; padding: 18px; border-radius: 10px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.08); flex: 0 0 330px;
-      max-height: 92vh; overflow-y: auto;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08); flex: 0 0 350px;
+      max-height: 90vh; overflow-y: auto;
     }
     .panel h2 { font-size: 17px; color: #1e293b; margin-bottom: 14px; padding-bottom: 8px; border-bottom: 2px solid #3b82f6; }
-    .panel h4 { font-size: 13px; color: #475569; margin: 10px 0 4px; }
 
-    .section {
-      margin-bottom: 14px; padding: 10px 12px; background: #f8fafc;
-      border-radius: 8px; border: 1px solid #e2e8f0;
-    }
-    .section > label { display: block; font-size: 13px; font-weight: 700; color: #334155; margin-bottom: 5px; }
-    .section .sub { font-size: 12px; color: #64748b; margin-bottom: 4px; }
-
-    input[type="text"] {
-      width: 100%; padding: 7px 10px; border: 1px solid #cbd5e1;
-      border-radius: 6px; font-size: 14px; outline: none; transition: border 0.15s;
-    }
+    .section { margin-bottom: 14px; padding: 10px 12px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; }
+    .section > label { display: block; font-size: 13px; font-weight: 700; color: #334155; margin-bottom: 8px; }
+    
+    input[type="text"] { width: 100%; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; outline: none; }
     input[type="text"]:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,0.15); }
 
     .hint { font-size: 11px; color: #94a3b8; margin-top: 3px; }
 
-    .child-row {
-      display: flex; align-items: center; gap: 8px;
-      padding: 5px 0; border-bottom: 1px solid #e2e8f0;
-    }
+    /* 紀錄產生器專用 UI */
+    .record-layout { display: flex; flex-direction: column; gap: 16px; max-width: 1500px; margin: 0 auto; }
+    @media (min-width: 768px) { .record-layout { flex-direction: row; align-items: stretch; } }
+    .record-form { flex: 1; max-height: 90vh; overflow-y: auto; }
+    .record-preview { flex: 1; background: white; padding: 18px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); display: flex; flex-direction: column; }
+    .record-preview textarea { flex: 1; width: 100%; min-height: 500px; padding: 16px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 16px; font-family: 'Times New Roman', 'DFKai-SB', 'BiauKai', serif; line-height: 1.8; resize: vertical; margin-bottom: 12px; background: #f8fafc; }
+    
+    .badge-wrap { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+    .badge-btn { padding: 4px 10px; font-size: 12px; border: 1px solid #cbd5e1; border-radius: 15px; background: white; color: #475569; cursor: pointer; user-select: none; transition: all 0.15s; }
+    .badge-btn:hover { border-color: #94a3b8; }
+    .badge-btn.active { background: #10b981; color: white; border-color: #059669; font-weight: bold; }
+
+    .fam-card { background: white; border: 1px solid #e2e8f0; border-left: 4px solid #3b82f6; padding: 10px; border-radius: 6px; margin-bottom: 10px; }
+    .fam-title { font-size: 14px; font-weight: bold; color: #1e293b; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between;}
+    .fam-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+    /* 家系圖相關 */
+    .child-row { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid #e2e8f0; }
     .child-row:last-child { border-bottom: none; }
     .child-icon { font-size: 14px; min-width: 22px; text-align: center; }
     .child-icon.m { color: #2563eb; }
     .child-icon.f { color: #dc2626; }
     .child-name { font-size: 13px; font-weight: 600; min-width: 40px; }
-    .child-name.m { color: #2563eb; }
-    .child-name.f { color: #dc2626; }
-
-    .chk-wrap {
-      display: flex; align-items: center; gap: 3px;
-      font-size: 12px; color: #64748b; cursor: pointer; margin-left: auto;
-    }
-    .chk-wrap input { cursor: pointer; accent-color: #3b82f6; }
-
+    
+    .chk-wrap { display: flex; align-items: center; gap: 3px; font-size: 12px; color: #64748b; cursor: pointer; margin-left: auto; }
     .gen3-block { padding: 4px 0 4px 26px; }
     .gen3-block label { font-size: 11px; color: #64748b; display: block; margin-bottom: 2px; }
-    .gen3-block input { font-size: 13px; padding: 5px 8px; }
-
-    .canvas-wrap {
-      background: white; border-radius: 10px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-      flex: 1; overflow: auto; position: relative;
-    }
+    
+    .canvas-wrap { background: white; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); flex: 1; overflow: auto; position: relative; }
     svg { display: block; user-select: none; }
 
-    .info-box {
-      font-size: 12px; color: #64748b; line-height: 1.9; padding: 2px 0;
-    }
-
-    .status-badge {
-      display: inline-block; padding: 2px 10px; font-size: 12px; font-weight: 600;
-      border-radius: 12px; cursor: ns-resize; user-select: none;
-      border: 1.5px solid; transition: background 0.15s, color 0.15s;
-    }
+    .status-badge { display: inline-block; padding: 2px 10px; font-size: 12px; font-weight: 600; border-radius: 12px; cursor: ns-resize; user-select: none; border: 1.5px solid; }
     .status-badge[data-status="none"]      { background: #f1f5f9; color: #64748b; border-color: #cbd5e1; }
     .status-badge[data-status="married"]   { background: #dcfce7; color: #166534; border-color: #86efac; }
     .status-badge[data-status="cohab"]     { background: #fef3c7; color: #92400e; border-color: #fcd34d; }
@@ -91,16 +83,11 @@
   <script type="text/babel">
     const { useState, useCallback, useRef, useMemo, useEffect } = React;
 
-    /* ===== 常數 ===== */
-    const SZ = 36;               // 節點大小
-    const R  = SZ / 2;           // 半徑 / 半邊長
-    const COUPLE_GAP = 64;       // 夫妻中心距
-    const SIBLING_GAP = 100;     // 手足中心距
-    const GEN_Y = [80, 160, 240]; // 三代 Y 座標（等比間距，避免重疊）
-
+    /* ===== 常數與工具函數 ===== */
+    const SZ = 36, R = SZ / 2, COUPLE_GAP = 64, SIBLING_GAP = 100, GEN_Y = [80, 160, 240];
     const TEXT_FONT = "'Times New Roman', 'DFKai-SB', 'BiauKai', serif";
 
-    /* ===== 字串解析器 ===== */
+    // 支援 1,2 的性別解析器
     function parseGenders(str) {
       if (!str) return [];
       const out = [];
@@ -111,38 +98,70 @@
       return out;
     }
 
-    /* ===== 數學魔法：平滑曲線生成器 (Catmull-Rom Spline) ===== */
+    // 圓潤平滑曲線魔法
     function getSmoothPath(pts, closed = false) {
       if (pts.length < 2) return '';
-      // 如果要封閉，就自動把頭部的點補到尾巴來計算平滑度
       const points = closed ? [...pts, pts[0], pts[1], pts[2] || pts[0]] : pts;
       let d = `M ${points[0].x},${points[0].y} `;
-      
       for (let i = 0; i < (closed ? pts.length : points.length - 1); i++) {
-        const p0 = points[i === 0 ? 0 : i - 1];
-        const p1 = points[i];
-        const p2 = points[i + 1];
-        const p3 = points[i + 2] || p2;
-        
-        const tension = 0.18; // 張力係數，數字越大越圓潤
-        const cp1x = p1.x + (p2.x - p0.x) * tension;
-        const cp1y = p1.y + (p2.y - p0.y) * tension;
-        const cp2x = p2.x - (p3.x - p1.x) * tension;
-        const cp2y = p2.y - (p3.y - p1.y) * tension;
-        
+        const p0 = points[i === 0 ? 0 : i - 1], p1 = points[i], p2 = points[i + 1], p3 = points[i + 2] || p2;
+        const tension = 0.18;
+        const cp1x = p1.x + (p2.x - p0.x) * tension, cp1y = p1.y + (p2.y - p0.y) * tension;
+        const cp2x = p2.x - (p3.x - p1.x) * tension, cp2y = p2.y - (p3.y - p1.y) * tension;
         d += `C ${cp1x},${cp1y} ${cp2x},${cp2y} ${p2.x},${p2.y} `;
       }
       return closed ? d + 'Z' : d;
     }
 
+    // 智慧稱謂計算機 (例如：案長女、案么子)
+    const getRelativeTitle = (gender, idx, allGen2) => {
+      const sameGender = allGen2.filter(c => c.gender === gender);
+      const myRank = allGen2.slice(0, idx).filter(c => c.gender === gender).length + 1;
+      const type = gender === 'M' ? '子' : '女';
+      if (sameGender.length === 1) return `案長${type}`; 
+      if (myRank === sameGender.length && myRank > 2) return `案么${type}`;
+      if (myRank === 1) return `案長${type}`;
+      if (myRank === 2) return `案次${type}`;
+      const nums = ['','','','三','四','五','六','七','八','九','十'];
+      return `案${nums[myRank] || myRank}${type}`;
+    };
+
+    // 子代字串轉化文字 (女男女女 -> 1子3女(女男女女))
+    const formatKidsText = (str) => {
+      if (!str) return '';
+      if (str === '無') return '無子嗣';
+      const gs = parseGenders(str);
+      if (gs.length === 0) return '';
+      const m = gs.filter(g => g === 'M').length, f = gs.filter(g => g === 'F').length;
+      let res = '育有';
+      if (m > 0 && f > 0) res += `${m}子${f}女`;
+      else if (m > 0) res += `${m}子`;
+      else res += `${f}女`;
+      return `${res}(${str})`;
+    };
+
+    /* ===== 共用元件 ===== */
+    const BadgeGroup = ({ options, value, onChange }) => (
+      <div className="badge-wrap">
+        {options.map(opt => (
+          <div key={opt} className={`badge-btn ${value === opt ? 'active' : ''}`} onClick={() => onChange(opt)}>
+            {opt}
+          </div>
+        ))}
+      </div>
+    );
+
     /* ===== 主元件 ===== */
     const App = () => {
-      /* --- state --- */
-      const [gen2Str, setGen2Str]       = useState('');
-      const [gen2Cfg, setGen2Cfg]       = useState([]);
-      const [positions, setPositions]   = useState({});
-      const [indexId, setIndexId]       = useState(null);
-      const [drag, setDrag]             = useState(null);
+      /* --- 頁籤狀態 --- */
+      const [activeTab, setActiveTab] = useState('genogram');
+
+      /* --- 家系圖狀態 --- */
+      const [gen2Str, setGen2Str] = useState('');
+      const [gen2Cfg, setGen2Cfg] = useState([]);
+      const [positions, setPositions] = useState({});
+      const [indexId, setIndexId] = useState(null);
+      const [drag, setDrag] = useState(null);
       const [mode, setMode] = useState('drag');
       const [cohabMembers, setCohabMembers] = useState([]);
       const [cohabMode, setCohabMode] = useState('auto');
@@ -153,24 +172,6 @@
       const [deceasedIds, setDeceasedIds] = useState([]);
       const [g1Status, setG1Status] = useState('married');
 
-      /* --- 快捷鍵 (localStorage) --- */
-      const DEFAULT_SHORTCUTS = { drag: 'q', index: 'w', cohab: 'e', deceased: 'r' };
-      const [shortcuts, setShortcuts] = useState(() => {
-        try {
-          const saved = localStorage.getItem('genogram-shortcuts');
-          if (saved) {
-            const parsed = JSON.parse(saved);
-            return { ...DEFAULT_SHORTCUTS, ...parsed };
-          }
-        } catch {}
-        return DEFAULT_SHORTCUTS;
-      });
-
-      useEffect(() => {
-        try { localStorage.setItem('genogram-shortcuts', JSON.stringify(shortcuts)); } catch {}
-      }, [shortcuts]);
-
-      /* --- 自由文字方塊 --- */
       const [texts, setTexts] = useState([]);
       const [selectedTextId, setSelectedTextId] = useState(null);
       const [textDrag, setTextDrag] = useState(null);
@@ -179,875 +180,481 @@
       const textDragMoved = useRef(false);
       const [mousePos, setMousePos] = useState(null);
 
-      // 快捷鍵監聯器
+      const DEFAULT_SHORTCUTS = { drag: 'q', index: 'w', cohab: 'e', deceased: 'r' };
+      const [shortcuts, setShortcuts] = useState(() => {
+        try { const saved = localStorage.getItem('genogram-shortcuts'); if (saved) return { ...DEFAULT_SHORTCUTS, ...JSON.parse(saved) }; } catch {}
+        return DEFAULT_SHORTCUTS;
+      });
+      useEffect(() => { try { localStorage.setItem('genogram-shortcuts', JSON.stringify(shortcuts)); } catch {} }, [shortcuts]);
+
+      /* --- 個案紀錄產生器專屬狀態 --- */
+      const [subjInfo, setSubjInfo] = useState({
+        identity: '一般民眾', job: '', edu: '', lang: '', religion: '', disability: '無身心障礙手冊', note: ''
+      });
+      const [famExtras, setFamExtras] = useState({}); // 儲存家屬的補充資訊 { index: { location, job, isPrimary, note } }
+
+      /* ===== 紀錄產生器邏輯 ===== */
+      const generatedText = useMemo(() => {
+        let txt = `案主為${subjInfo.identity}`;
+        if (subjInfo.job) txt += `，${subjInfo.job}`;
+        if (subjInfo.edu) txt += `，${subjInfo.edu}`;
+        if (subjInfo.lang) txt += `，${subjInfo.lang}溝通`;
+        if (subjInfo.religion) txt += `，${subjInfo.religion}信仰`;
+        if (subjInfo.disability) txt += `，${subjInfo.disability}`;
+        txt += `，${g1Status === 'married' ? '已婚' : '喪偶'}`; // 簡化第一代狀態判斷
+        
+        // 智慧同住判斷 (若案主在同住紅框內，找出框內其他人)
+        let cohabText = '獨居';
+        if (indexId && cohabMembers.includes(indexId)) {
+          const others = cohabMembers.filter(id => id !== indexId).map(id => {
+            if (id === 'fa') return '案父';
+            if (id === 'mo') return '案母';
+            if (id.startsWith('c')) {
+              const idx = parseInt(id.replace('c',''));
+              return getRelativeTitle(gen2Cfg[idx].gender, idx, gen2Cfg);
+            }
+            if (id.startsWith('s')) return '案子女配偶';
+            if (id.startsWith('g')) return '案孫輩';
+            return '';
+          }).filter(Boolean);
+          if (others.length > 0) cohabText = `與${others.join('、')}同住`;
+        }
+        txt += `，${cohabText}。`;
+        if (subjInfo.note) txt += `${subjInfo.note}；`;
+        else txt += `；\n`;
+
+        // 遍歷第二代家屬
+        gen2Cfg.forEach((c, i) => {
+          const title = getRelativeTitle(c.gender, i, gen2Cfg);
+          const isDeceased = deceasedIds.includes(`c${i}`);
+          if (isDeceased) {
+            txt += `${title}已歿；`;
+            return;
+          }
+          const ext = famExtras[i] || {};
+          let fTxt = `${title}`;
+          if (ext.location) fTxt += `居${ext.location}`;
+          if (ext.job) fTxt += `，為${ext.job}`;
+          
+          const partnerMap = { none: '未婚', married: '已婚', cohab: '同居', separated: '分居', divorced: '離婚' };
+          fTxt += `，${partnerMap[c.partner] || '未婚'}`;
+          
+          if (c.g3Str) fTxt += `，${formatKidsText(c.g3Str)}`;
+          if (ext.isPrimary) fTxt += `，為主要聯絡人及同意書填寫人`;
+          if (ext.note) fTxt += `，${ext.note}`;
+          txt += `${fTxt}；\n`;
+        });
+
+        return txt;
+      }, [subjInfo, gen2Cfg, g1Status, cohabMembers, deceasedIds, famExtras, indexId]);
+
+      const handleFamExtra = (idx, field, val) => {
+        setFamExtras(prev => ({ ...prev, [idx]: { ...(prev[idx] || {}), [field]: val } }));
+      };
+
+      const copyRecord = () => {
+        navigator.clipboard.writeText(generatedText).then(() => {
+          alert('✅ 個案紀錄已成功複製！');
+        });
+      };
+
+      /* ===== 畫布互動邏輯 (保留完全體功能) ===== */
+      const svgRef = useRef(null);
+      const wheelRef = (el, list, current, setter) => {
+        if (!el) return;
+        el.onwheel = (e) => { e.preventDefault(); e.stopPropagation(); const next = (list.indexOf(current) + (e.deltaY > 0 ? 1 : -1) + list.length) % list.length; setter(list[next]); };
+      };
+
       useEffect(() => {
         const handleKeyDown = (e) => {
-          if (e.target.tagName === 'INPUT' && e.target.type === 'text') return;
+          if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
           const key = e.key.toLowerCase();
-          if (key === shortcuts.drag.toLowerCase()) setMode('drag');
-          if (key === shortcuts.index.toLowerCase()) setMode('index');
-          if (key === shortcuts.cohab.toLowerCase()) setMode('cohab');
-          if (key === shortcuts.deceased.toLowerCase()) setMode('deceased');
-          // Enter 完成多邊形繪製 (僅在 cohab+poly 模式)
+          if (key === shortcuts.drag) setMode('drag');
+          if (key === shortcuts.index) setMode('index');
+          if (key === shortcuts.cohab) setMode('cohab');
+          if (key === shortcuts.deceased) setMode('deceased');
           if (e.key === 'Enter' && mode === 'cohab' && cohabMode === 'poly' && draftPoly.length >= 3) {
-            setPolygons(prev => [...prev, { id: 'pg_' + Date.now(), pts: draftPoly }]);
-            setDraftPoly([]);
-            setMousePos(null);
+            setPolygons(prev => [...prev, { id: 'pg_' + Date.now(), pts: draftPoly }]); setDraftPoly([]); setMousePos(null);
           }
-          // Escape 取消繪製中的多邊形
-          if (e.key === 'Escape' && draftPoly.length > 0) {
-            setDraftPoly([]);
-            setMousePos(null);
-          }
+          if (e.key === 'Escape' && draftPoly.length > 0) { setDraftPoly([]); setMousePos(null); }
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
       }, [shortcuts, draftPoly, mode, cohabMode]);
 
-      // 切換離開 poly 模式時自動清空草稿
-      useEffect(() => {
-        if (!(mode === 'cohab' && cohabMode === 'poly') && draftPoly.length > 0) {
-          setDraftPoly([]);
-          setMousePos(null);
-        }
-      }, [mode, cohabMode]);
-
-      const updateShortcut = (modeName, key) => {
-        setShortcuts(prev => ({ ...prev, [modeName]: key }));
-      };
-
-      const toggleTwin = (i) => {
-        setGen2Cfg(p => p.map((d, j) => j === i ? { ...d, isTwin: !d.isTwin } : d));
-      };
-      const svgRef = useRef(null);
-
-      /* --- 狀態標籤文字對照 --- */
-      const G2_STATUSES = ['none', 'married', 'cohab', 'separated', 'divorced'];
-      const G2_LABELS = { none: '未婚', married: '已婚', cohab: '同居', separated: '分居', divorced: '離婚' };
-      const G1_STATUSES = ['married', 'divorced'];
-      const G1_LABELS = { married: '已婚', divorced: '離婚' };
-      const TEXT_DIRS = ['horizontal', 'vertical'];
-      const TEXT_DIR_LABELS = { horizontal: '橫式排版', vertical: '直式排版' };
-
-      const wheelRef = (el, list, current, setter) => {
-        if (!el) return;
-        el.onwheel = (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          const dir = e.deltaY > 0 ? 1 : -1;
-          const idx = list.indexOf(current);
-          const next = (idx + dir + list.length) % list.length;
-          setter(list[next]);
-        };
-      };
-
-      /* --- 下載 JPG (精準裁切，含文字方塊) --- */
-      const downloadJPG = () => {
-        const PAD = 40;
-        const allIds = nodes.map(n => n.id);
-        if (allIds.length === 0 && texts.length === 0) return;
-
-        const allXs = [], allYs = [];
-        allIds.forEach(id => {
-          const p = pos(id);
-          allXs.push(p.x - R, p.x + R);
-          allYs.push(p.y - R, p.y + R);
-        });
-        texts.forEach(t => {
-          const w = t.vertical ? t.fontSize * 1.5 : t.text.length * t.fontSize * 0.7;
-          const h = t.vertical ? t.text.length * t.fontSize * 1.2 : t.fontSize * 1.5;
-          allXs.push(t.x - 4, t.x + (t.vertical ? t.fontSize * 1.5 : w));
-          allYs.push(t.y - (t.vertical ? 4 : t.fontSize + 4), t.y + (t.vertical ? h : 8));
-        });
-        // 多邊形邊界
-        polygons.forEach(pg => {
-          pg.pts.forEach(pt => { allXs.push(pt.x); allYs.push(pt.y); });
-        });
-        // 自動同住框邊界
-        if (cohabitationBox) {
-          if (cohabitationBox.type === 'single') {
-            allXs.push(cohabitationBox.x, cohabitationBox.x + cohabitationBox.w);
-            allYs.push(cohabitationBox.y, cohabitationBox.y + cohabitationBox.h);
-          } else if (cohabitationBox.type === 'poly') {
-            cohabitationBox.points.forEach(pt => { allXs.push(pt.x); allYs.push(pt.y); });
-          }
-        }
-        if (allXs.length === 0) return;
-
-        const minX = Math.min(...allXs) - PAD;
-        const minY = Math.min(...allYs) - PAD;
-        const maxX = Math.max(...allXs) + PAD;
-        const maxY = Math.max(...allYs) + PAD;
-        const cropW = maxX - minX;
-        const cropH = maxY - minY;
-
-        const svgEl = svgRef.current;
-        const cloned = svgEl.cloneNode(true);
-        cloned.setAttribute('width', cropW);
-        cloned.setAttribute('height', cropH);
-        cloned.setAttribute('viewBox', `${minX} ${minY} ${cropW} ${cropH}`);
-
-        const serializer = new XMLSerializer();
-        const svgStr = serializer.serializeToString(cloned);
-        const svgBlob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
-        const url = URL.createObjectURL(svgBlob);
-
-        const img = new Image();
-        img.onload = () => {
-          const scale = 3; // 設定 3 倍高畫質放大
-          const canvas = document.createElement('canvas');
-          canvas.width = cropW * scale;
-          canvas.height = cropH * scale;
-          const ctx = canvas.getContext('2d');
-          
-          ctx.scale(scale, scale); // 將繪製比例放大
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(0, 0, cropW, cropH);
-          ctx.drawImage(img, 0, 0, cropW, cropH); // 影像繪製時會自動套用 scale
-          URL.revokeObjectURL(url);
-
-          canvas.toBlob(blob => {
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = 'genogram.jpg';
-            a.click();
-            URL.revokeObjectURL(a.href);
-          }, 'image/jpeg', 1.0); // 壓縮品質設為 1.0 (最高)
-        };
-        img.src = url;
-      };
-
-      // 一鍵重製畫布
-      const resetCanvas = () => {
-        if (window.confirm('確定要清空畫布並重新開始嗎？(可按 Enter 確認)')) {
-          setGen2Str('');
-          setGen2Cfg([]);
-          setIndexId(null);
-          setCohabMembers([]);
-          setDeceasedIds([]);
-          setPositions({});
-          setG1Status('married');
-          setTexts([]);
-          setSelectedTextId(null);
-          setPolygons([]);
-          setDraftPoly([]);
-          setSelectedPolyId(null);
-          setDragVertex(null);
-        }
-      };
-
-      /* --- 第二代字串變更 --- */
       const onGen2Change = (val) => {
         setGen2Str(val);
         const gs = parseGenders(val);
-        setGen2Cfg(prev => gs.map((g, i) =>
-          (prev[i] && prev[i].gender === g) ? prev[i] : { gender: g, partner: 'none', g3Str: '', isMulti: false }
-        ));
+        setGen2Cfg(prev => gs.map((g, i) => (prev[i] && prev[i].gender === g) ? prev[i] : { gender: g, partner: 'none', g3Str: '', isMulti: false }));
       };
-
-      const changePartner = (i, status) =>
-        setGen2Cfg(p => p.map((d, j) => j === i ? { ...d, partner: status, g3Str: status === 'none' ? '' : d.g3Str } : d));
-
-      const setG3 = (i, v) =>
-        setGen2Cfg(p => p.map((d, j) => j === i ? { ...d, g3Str: v } : d));
-
-      const toggleMulti = (i) =>
-        setGen2Cfg(p => p.map((d, j) => j === i ? { ...d, isMulti: !d.isMulti } : d));
-
-      /* --- 文字方塊操作 --- */
-      const addText = () => {
-        const id = 'txt_' + Date.now();
-        setTexts(prev => [...prev, {
-          id, x: 300, y: 200, text: '文字',
-          fontSize: 16, vertical: textDirection === 'vertical'
-        }]);
-      };
-
-      const deleteText = (id) => {
-        setTexts(prev => prev.filter(t => t.id !== id));
-        setSelectedTextId(null);
-      };
-
-      /* ===== 計算節點與連線 (含單一子代置中修正) ===== */
+      
       const { nodes, lines } = useMemo(() => {
         const N = [], L = [];
-
         const units = gen2Cfg.map((c, i) => {
           const isMarried = c.partner !== 'none';
           const g3 = isMarried ? parseGenders(c.g3Str) : [];
-          let w;
-          if (!isMarried) {
-            w = SIBLING_GAP;
-          } else {
-            const coupleW = COUPLE_GAP + SZ;
-            const kidsW = g3.length > 0 ? (g3.length - 1) * SIBLING_GAP + SZ : 0;
-            w = Math.max(coupleW, kidsW) + 50;
-          }
+          let w = !isMarried ? SIBLING_GAP : Math.max(COUPLE_GAP + SZ, g3.length > 0 ? (g3.length - 1) * SIBLING_GAP + SZ : 0) + 50;
           return { ...c, idx: i, g3, w, isMarried };
         });
-
         const totalW = units.reduce((s, u) => s + u.w, 0) || 200;
         const originX = Math.max(120, 420 - totalW / 2);
-
-        // --- Gen1 父母 ---
-        const fX = originX + totalW / 2 - COUPLE_GAP / 2;
-        const mX = originX + totalW / 2 + COUPLE_GAP / 2;
-        const g1Y = GEN_Y[0];
-        const parentMidX = (fX + mX) / 2;
-
-        N.push({ id: 'fa', gender: 'M', gen: 0, dx: fX, dy: g1Y, label: '父' });
-        N.push({ id: 'mo', gender: 'F', gen: 0, dx: mX, dy: g1Y, label: '母' });
+        const fX = originX + totalW / 2 - COUPLE_GAP / 2, mX = originX + totalW / 2 + COUPLE_GAP / 2, parentMidX = (fX + mX) / 2;
+        N.push({ id: 'fa', gender: 'M', gen: 0, dx: fX, dy: GEN_Y[0], label: '父' }, { id: 'mo', gender: 'F', gen: 0, dx: mX, dy: GEN_Y[0], label: '母' });
         L.push({ id: 'ml-g1', type: 'marry', a: 'fa', b: 'mo', status: g1Status });
 
-        // --- Gen2 子女 ---
-        let cx = originX;
-        const g2ids = [];
-
+        let cx = originX; const g2ids = [];
         units.forEach((u, i) => {
-          const cid = `c${i}`;
-          const midU = cx + u.w / 2;
-
+          const cid = `c${i}`, midU = cx + u.w / 2;
           if (u.isMarried) {
-            let lx, rx;
-            // 單一子代時，強制置中於父母婚姻線正中央
-            if (units.length === 1) {
-              lx = parentMidX;
-              rx = parentMidX + COUPLE_GAP;
-            } else {
-              lx = midU - COUPLE_GAP / 2;
-              rx = midU + COUPLE_GAP / 2;
-            }
-            const coupleMidX = (lx + rx) / 2;
-            const sid = `s${i}`;
-            const spG = u.gender === 'M' ? 'F' : 'M';
-
-            N.push({ id: cid, gender: u.gender, gen: 1, dx: lx, dy: GEN_Y[1], label: `${u.gender === 'M' ? '子' : '女'}${i + 1}`, isMulti: u.isMulti });
-            N.push({ id: sid, gender: spG,       gen: 1, dx: rx, dy: GEN_Y[1], label: '配偶' });
+            const lx = units.length === 1 ? parentMidX : midU - COUPLE_GAP / 2;
+            const rx = units.length === 1 ? parentMidX + COUPLE_GAP : midU + COUPLE_GAP / 2;
+            const sid = `s${i}`, coupleMidX = (lx + rx) / 2;
+            N.push({ id: cid, gender: u.gender, gen: 1, dx: lx, dy: GEN_Y[1], label: `${u.gender === 'M'?'子':'女'}${i+1}`, isMulti: u.isMulti });
+            N.push({ id: sid, gender: u.gender === 'M'?'F':'M', gen: 1, dx: rx, dy: GEN_Y[1], label: '配偶' });
             L.push({ id: `ml-c${i}`, type: 'marry', a: cid, b: sid, status: u.partner });
             g2ids.push(cid);
-
-            // Gen3 — 以夫妻中心點為基準置中
             if (u.g3.length > 0) {
-              const g3W = (u.g3.length - 1) * SIBLING_GAP;
-              const g3Start = coupleMidX - g3W / 2;
-              const g3ids = [];
+              const g3Start = coupleMidX - ((u.g3.length - 1) * SIBLING_GAP) / 2, g3ids = [];
               u.g3.forEach((g, j) => {
                 const gid = `g${i}_${j}`;
-                N.push({ id: gid, gender: g, gen: 2, dx: g3Start + j * SIBLING_GAP, dy: GEN_Y[2], label: `${g === 'M' ? '孫' : '孫女'}${j + 1}` });
+                N.push({ id: gid, gender: g, gen: 2, dx: g3Start + j * SIBLING_GAP, dy: GEN_Y[2], label: `${g==='M'?'孫':'孫女'}${j+1}` });
                 g3ids.push(gid);
               });
               L.push({ id: `pc-c${i}`, type: 'pc', pa: cid, pb: sid, kids: g3ids });
             }
           } else {
-            N.push({ id: cid, gender: u.gender, gen: 1, dx: midU, dy: GEN_Y[1], label: `${u.gender === 'M' ? '子' : '女'}${i + 1}`, isMulti: u.isMulti });
+            N.push({ id: cid, gender: u.gender, gen: 1, dx: midU, dy: GEN_Y[1], label: `${u.gender === 'M'?'子':'女'}${i+1}`, isMulti: u.isMulti });
             g2ids.push(cid);
           }
           cx += u.w;
         });
-
-        if (g2ids.length > 0) {
-          L.push({ id: 'pc-g1', type: 'pc', pa: 'fa', pb: 'mo', kids: g2ids });
-        }
-
+        if (g2ids.length > 0) L.push({ id: 'pc-g1', type: 'pc', pa: 'fa', pb: 'mo', kids: g2ids });
         return { nodes: N, lines: L };
       }, [gen2Cfg, g1Status]);
 
-      /* --- 結構變更時重設座標 --- */
-      const structKey = useMemo(() =>
-        nodes.map(n => n.id).join(','), [nodes]);
+      const structKey = useMemo(() => nodes.map(n => n.id).join(','), [nodes]);
+      useEffect(() => { const m = {}; nodes.forEach(n => { m[n.id] = { x: n.dx, y: n.dy }; }); setPositions(m); }, [structKey]);
 
-      useEffect(() => {
-        const m = {};
-        nodes.forEach(n => { m[n.id] = { x: n.dx, y: n.dy }; });
-        setPositions(m);
-      }, [structKey]);
-
-      /* --- 取得座標 (含拖曳) --- */
-      const pos = useCallback((id) => {
-        if (positions[id]) return positions[id];
-        const n = nodes.find(v => v.id === id);
-        return n ? { x: n.dx, y: n.dy } : { x: 0, y: 0 };
-      }, [positions, nodes]);
-
-      /* ===== 拖曳 (節點 + 文字 + 縮放) ===== */
-      const svgPt = useCallback((e) => {
-        const svg = svgRef.current;
-        const p = svg.createSVGPoint();
-        p.x = e.clientX; p.y = e.clientY;
-        return p.matrixTransform(svg.getScreenCTM().inverse());
-      }, []);
-
-      const onDown = useCallback((e, id) => {
-        e.stopPropagation();
-        const sp = svgPt(e);
-        const p = pos(id);
-        setDrag({ id, ox: sp.x - p.x, oy: sp.y - p.y });
-      }, [svgPt, pos]);
-
-      const onTextDown = useCallback((e, id) => {
-        e.stopPropagation();
-        textDragMoved.current = false;
-        const sp = svgPt(e);
-        const t = texts.find(t => t.id === id);
-        if (t) setTextDrag({ id, ox: sp.x - t.x, oy: sp.y - t.y });
-      }, [svgPt, texts]);
-
-      const onTextClick = useCallback((e, id) => {
-        e.stopPropagation();
-        if (textDragMoved.current) return;
-        setSelectedTextId(id);
-      }, []);
-
-      const onTextDoubleClick = useCallback((e, id) => {
-        e.stopPropagation();
-        const t = texts.find(t => t.id === id);
-        const newText = window.prompt('編輯文字內容：', t?.text || '');
-        if (newText !== null && newText !== '') {
-          setTexts(prev => prev.map(t => t.id === id ? { ...t, text: newText } : t));
-        }
-      }, [texts]);
-
-      const onResizeDown = useCallback((e, id) => {
-        e.stopPropagation();
-        const sp = svgPt(e);
-        const t = texts.find(t => t.id === id);
-        if (t) setTextResize({ id, startY: sp.y, startSize: t.fontSize });
-      }, [svgPt, texts]);
+      const pos = useCallback((id) => { if (positions[id]) return positions[id]; const n = nodes.find(v => v.id === id); return n ? { x: n.dx, y: n.dy } : { x: 0, y: 0 }; }, [positions, nodes]);
+      const svgPt = useCallback((e) => { const p = svgRef.current.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; return p.matrixTransform(svgRef.current.getScreenCTM().inverse()); }, []);
 
       const onMove = useCallback((e) => {
         const sp = svgPt(e);
-        // 追蹤滑鼠位置 (供多邊形輔助線使用)
-        if (draftPoly.length > 0) {
-          setMousePos({ x: sp.x, y: sp.y });
-        }
-        // 拖曳多邊形端點
-        if (dragVertex) {
-          setPolygons(prev => prev.map(pg => {
-            if (pg.id !== dragVertex.polyId) return pg;
-            const newPts = pg.pts.map((pt, i) =>
-              i === dragVertex.index ? { x: sp.x - dragVertex.ox, y: sp.y - dragVertex.oy } : pt
-            );
-            return { ...pg, pts: newPts };
-          }));
-          return;
-        }
-        if (textResize) {
-          const delta = sp.y - textResize.startY;
-          const newSize = Math.max(10, Math.min(72, Math.round(textResize.startSize + delta * 0.3)));
-          setTexts(prev => prev.map(t => t.id === textResize.id ? { ...t, fontSize: newSize } : t));
-          return;
-        }
-        if (textDrag) {
-          textDragMoved.current = true;
-          setTexts(prev => prev.map(t => t.id === textDrag.id ? { ...t, x: sp.x - textDrag.ox, y: sp.y - textDrag.oy } : t));
-          return;
-        }
+        if (draftPoly.length > 0) setMousePos({ x: sp.x, y: sp.y });
+        if (dragVertex) { setPolygons(p => p.map(pg => pg.id !== dragVertex.polyId ? pg : { ...pg, pts: pg.pts.map((pt, i) => i === dragVertex.index ? { x: sp.x - dragVertex.ox, y: sp.y - dragVertex.oy } : pt) })); return; }
+        if (textResize) { setTexts(p => p.map(t => t.id === textResize.id ? { ...t, fontSize: Math.max(10, Math.min(72, Math.round(textResize.startSize + (sp.y - textResize.startY) * 0.3))) } : t)); return; }
+        if (textDrag) { textDragMoved.current = true; setTexts(p => p.map(t => t.id === textDrag.id ? { ...t, x: sp.x - textDrag.ox, y: sp.y - textDrag.oy } : t)); return; }
         if (!drag) return;
-        const rawX = sp.x - drag.ox;
-        const rawY = sp.y - drag.oy;
-
-        setPositions(prev => {
-          let newX = rawX;
-          let newY = rawY;
-          const snapDist = 12;
-
-          for (const [id, pos] of Object.entries(prev)) {
-            if (id === drag.id) continue;
-            if (Math.abs(newX - pos.x) < snapDist) newX = pos.x;
-            if (Math.abs(newY - pos.y) < snapDist) newY = pos.y;
-          }
-          return { ...prev, [drag.id]: { x: newX, y: newY } };
-        });
+        setPositions(prev => { let nX = sp.x - drag.ox, nY = sp.y - drag.oy; for (const [id, p] of Object.entries(prev)) { if (id === drag.id) continue; if (Math.abs(nX - p.x) < 12) nX = p.x; if (Math.abs(nY - p.y) < 12) nY = p.y; } return { ...prev, [drag.id]: { x: nX, y: nY } }; });
       }, [drag, textDrag, textResize, dragVertex, draftPoly, svgPt]);
 
-      const onUp = useCallback(() => {
-        setDragVertex(null);
-        setDrag(null);
-        setTextDrag(null);
-        setTextResize(null);
-      }, []);
+      const onUp = () => { setDragVertex(null); setDrag(null); setTextDrag(null); setTextResize(null); };
 
-      /* ===== 依據模式處理點擊 ===== */
-      const onClick = useCallback((e, id) => {
+      const onClick = (e, id) => {
         e.stopPropagation();
-        if (mode === 'drag') return;
+        if (mode === 'index') setIndexId(p => p === id ? null : id);
+        else if (mode === 'cohab' && cohabMode === 'auto') setCohabMembers(p => p.includes(id) ? p.filter(m => m !== id) : [...p, id]);
+        else if (mode === 'deceased') setDeceasedIds(p => p.includes(id) ? p.filter(m => m !== id) : [...p, id]);
+      };
 
-        if (mode === 'index') {
-          setIndexId(prev => prev === id ? null : id);
-        } else if (mode === 'cohab' && cohabMode === 'auto') {
-          setCohabMembers(prev => prev.includes(id) ? prev.filter(m => m !== id) : [...prev, id]);
-        } else if (mode === 'deceased') {
-          setDeceasedIds(prev => prev.includes(id) ? prev.filter(m => m !== id) : [...prev, id]);
-        }
-      }, [mode, cohabMode]);
-
-      /* ===== SVG 尺寸 (含文字) ===== */
-      const svgW = useMemo(() => {
-        const xs = nodes.map(n => (positions[n.id]?.x ?? n.dx));
-        texts.forEach(t => {
-          const w = t.vertical ? t.fontSize * 1.5 : t.text.length * t.fontSize * 0.7;
-          xs.push(t.x + w + 30);
-        });
-        return Math.max(800, (xs.length ? Math.max(...xs) : 0) + 160);
-      }, [nodes, positions, texts]);
-
-      const svgH = useMemo(() => {
-        const ys = nodes.map(n => (positions[n.id]?.y ?? n.dy));
-        texts.forEach(t => {
-          const h = t.vertical ? t.text.length * t.fontSize * 1.2 : t.fontSize * 1.5;
-          ys.push(t.y + h + 20);
-        });
-        return Math.max(520, (ys.length ? Math.max(...ys) : 0) + 80);
-      }, [nodes, positions, texts]);
-
-      /* ===== 計算同住外框 (Convex Hull) ===== */
       const cohabitationBox = useMemo(() => {
-        if (cohabMembers.length === 0) return null;
         const members = nodes.filter(n => cohabMembers.includes(n.id));
         if (members.length === 0) return null;
-
-        if (members.length === 1) {
-          const p = pos(members[0].id);
-          const pad = 30;
-          return { type: 'single', x: p.x - R - pad, y: p.y - R - pad, w: SZ + pad * 2, h: SZ + pad * 2 };
-        }
-
-        // Generate 4 corner points per node (30px padding)
-        const pad = 30;
+        if (members.length === 1) { const p = pos(members[0].id); return { type: 'single', x: p.x - R - 30, y: p.y - R - 30, w: SZ + 60, h: SZ + 60 }; }
         const corners = [];
-        members.forEach(n => {
-          const p = pos(n.id);
-          corners.push({ x: p.x - pad, y: p.y - pad });
-          corners.push({ x: p.x + pad, y: p.y - pad });
-          corners.push({ x: p.x - pad, y: p.y + pad });
-          corners.push({ x: p.x + pad, y: p.y + pad });
-        });
-
-        // Monotone Chain convex hull
-        const pts = corners.slice().sort((a, b) => a.x - b.x || a.y - b.y);
+        members.forEach(n => { const p = pos(n.id); corners.push({ x: p.x - 30, y: p.y - 30 }, { x: p.x + 30, y: p.y - 30 }, { x: p.x - 30, y: p.y + 30 }, { x: p.x + 30, y: p.y + 30 }); });
+        const pts = corners.sort((a, b) => a.x - b.x || a.y - b.y);
         const cross = (O, A, B) => (A.x - O.x) * (B.y - O.y) - (A.y - O.y) * (B.x - O.x);
-        const lower = [];
-        for (const p of pts) {
-          while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop();
-          lower.push(p);
-        }
-        const upper = [];
-        for (let i = pts.length - 1; i >= 0; i--) {
-          const p = pts[i];
-          while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop();
-          upper.push(p);
-        }
-        lower.pop();
-        upper.pop();
-        const hull = lower.concat(upper);
+        const lower = [], upper = [];
+        for (const p of pts) { while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop(); lower.push(p); }
+        for (let i = pts.length - 1; i >= 0; i--) { const p = pts[i]; while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop(); upper.push(p); }
+        lower.pop(); upper.pop();
+        return { type: 'poly', points: lower.concat(upper) };
+      }, [cohabMembers, nodes, pos]);
 
-        return { type: 'poly', points: hull };
-      }, [cohabMembers, nodes, positions, pos]);
+      const downloadJPG = () => {
+        const PAD = 40, allXs = [], allYs = [];
+        nodes.forEach(n => { const p = pos(n.id); allXs.push(p.x - R, p.x + R); allYs.push(p.y - R, p.y + R); });
+        texts.forEach(t => { const w = t.vertical ? t.fontSize * 1.5 : t.text.length * t.fontSize * 0.7, h = t.vertical ? t.text.length * t.fontSize * 1.2 : t.fontSize * 1.5; allXs.push(t.x - 4, t.x + (t.vertical ? t.fontSize * 1.5 : w)); allYs.push(t.y - (t.vertical ? 4 : t.fontSize + 4), t.y + (t.vertical ? h : 8)); });
+        polygons.forEach(pg => pg.pts.forEach(pt => { allXs.push(pt.x); allYs.push(pt.y); }));
+        if (cohabitationBox && cohabitationBox.type === 'single') { allXs.push(cohabitationBox.x, cohabitationBox.x + cohabitationBox.w); allYs.push(cohabitationBox.y, cohabitationBox.y + cohabitationBox.h); }
+        else if (cohabitationBox && cohabitationBox.type === 'poly') { cohabitationBox.points.forEach(pt => { allXs.push(pt.x); allYs.push(pt.y); }); }
+        if (allXs.length === 0) return;
+        const minX = Math.min(...allXs) - PAD, minY = Math.min(...allYs) - PAD, cropW = Math.max(...allXs) + PAD - minX, cropH = Math.max(...allYs) + PAD - minY;
+        const cloned = svgRef.current.cloneNode(true); cloned.setAttribute('width', cropW); cloned.setAttribute('height', cropH); cloned.setAttribute('viewBox', `${minX} ${minY} ${cropW} ${cropH}`);
+        const url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(cloned)], { type: 'image/svg+xml;charset=utf-8' }));
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas'); canvas.width = cropW * 3; canvas.height = cropH * 3;
+          const ctx = canvas.getContext('2d'); ctx.scale(3, 3); ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, cropW, cropH); ctx.drawImage(img, 0, 0, cropW, cropH);
+          URL.revokeObjectURL(url); canvas.toBlob(blob => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'genogram.jpg'; a.click(); URL.revokeObjectURL(a.href); }, 'image/jpeg', 1.0);
+        }; img.src = url;
+      };
 
-      /* ===== 渲染連線 ===== */
-      const drawLines = () => lines.map(ln => {
-        if (ln.type === 'marry') {
-          const a = pos(ln.a), b = pos(ln.b);
-          const nA = nodes.find(n => n.id === ln.a);
-          const nB = nodes.find(n => n.id === ln.b);
-          const x1 = a.x + (nA?.gender === 'M' ? R : R);
-          const x2 = b.x - (nB?.gender === 'M' ? R : R);
-
-          const els = [];
-          const isDashed = ln.status === 'cohab';
-          els.push(<line key={ln.id} x1={x1} y1={a.y} x2={x2} y2={b.y} stroke="#444" strokeWidth="2" strokeDasharray={isDashed ? "8,6" : "0"} />);
-
-          const midX = (x1 + x2) / 2;
-          const midY = a.y;
-
-          if (ln.status === 'separated') {
-            els.push(<line key={`${ln.id}-s`} x1={midX - 6} y1={midY + 12} x2={midX + 6} y2={midY - 12} stroke="#444" strokeWidth="2" />);
-          } else if (ln.status === 'divorced') {
-            els.push(<line key={`${ln.id}-d1`} x1={midX - 8} y1={midY - 8} x2={midX + 8} y2={midY + 8} stroke="#444" strokeWidth="2" />);
-            els.push(<line key={`${ln.id}-d2`} x1={midX - 8} y1={midY + 8} x2={midX + 8} y2={midY - 8} stroke="#444" strokeWidth="2" />);
-          }
-          return <g key={ln.id}>{els}</g>;
-        }
-
-        if (ln.type === 'pc') {
-          const pA = pos(ln.pa), pB = pos(ln.pb);
-          const midX = (pA.x + pB.x) / 2;
-          const parentY = Math.max(pA.y, pB.y);
-          const kidPos = ln.kids.map(k => pos(k));
-          if (kidPos.length === 0) return null;
-
-          const childY = kidPos[0].y;
-          const parentBottom = parentY + R;
-          const childTop = childY - R;
-          const barY = (parentBottom + childTop) / 2;
-
-          const els = [];
-          els.push(<line key={`${ln.id}-v`} x1={midX} y1={parentY} x2={midX} y2={barY} stroke="#444" strokeWidth="2" />);
-
-          const minKX = Math.min(midX, ...kidPos.map(p => p.x));
-          const maxKX = Math.max(midX, ...kidPos.map(p => p.x));
-          els.push(<line key={`${ln.id}-h`} x1={minKX} y1={barY} x2={maxKX} y2={barY} stroke="#444" strokeWidth="2" />);
-
-          // --- 智慧多胞胎分群計算 ---
-          const multiGroups = [];
-          let currentGroup = [];
-          ln.kids.forEach((kidId, idx) => {
-            if (nodes.find(n => n.id === kidId)?.isMulti) {
-              currentGroup.push(idx);
-            } else {
-              if (currentGroup.length >= 2) multiGroups.push(currentGroup);
-              currentGroup = [];
-            }
-          });
-          if (currentGroup.length >= 2) multiGroups.push(currentGroup);
-
-          kidPos.forEach((kp, j) => {
-            const group = multiGroups.find(g => g.includes(j));
-            if (group) {
-              const groupXs = group.map(gIdx => kidPos[gIdx].x);
-              const centerX = groupXs.reduce((sum, x) => sum + x, 0) / groupXs.length;
-              els.push(<line key={`${ln.id}-m${j}`} x1={centerX} y1={barY} x2={kp.x} y2={kp.y - R} stroke="#444" strokeWidth="2" />);
-            } else {
-              els.push(<line key={`${ln.id}-k${j}`} x1={kp.x} y1={barY} x2={kp.x} y2={kp.y - R} stroke="#444" strokeWidth="2" />);
-            }
-          });
-          return <g key={ln.id}>{els}</g>;
-        }
-        return null;
-      });
-
-      /* ===== 渲染節點 ===== */
-      const drawNodes = () => nodes.map(nd => {
-        const p = pos(nd.id);
-        const isIP = nd.id === indexId;
-        const fill = isIP ? '#1e293b' : 'white';
-        const txtC = isIP ? 'white' : '#333';
-        const cur = drag?.id === nd.id ? 'grabbing' : 'grab';
-
-        return (
-          <g key={nd.id} transform={`translate(${p.x},${p.y})`} style={{ cursor: cur }}
-             onMouseDown={e => onDown(e, nd.id)} onClick={e => onClick(e, nd.id)}>
-            {nd.gender === 'M'
-              ? <rect x={-R} y={-R} width={SZ} height={SZ} fill={fill} stroke="#333" strokeWidth="2.5" rx="2" />
-              : <circle cx="0" cy="0" r={R} fill={fill} stroke="#333" strokeWidth="2.5" />}
-
-            {isIP && <text x="0" y="4" textAnchor="middle" fontSize="11" fontWeight="bold" fill={txtC}>案主</text>}
-
-            {deceasedIds.includes(nd.id) && (
-              <g stroke={isIP ? 'white' : '#333'} strokeWidth="2.5">
-                <line x1={-R} y1={-R} x2={R} y2={R} />
-                <line x1={R} y1={-R} x2={-R} y2={R} />
-              </g>
-            )}
-          </g>
-        );
-      });
-
-      /* ===== 渲染自由文字 ===== */
-      const drawTexts = () => texts.map(t => {
-        const isSelected = selectedTextId === t.id;
-        const estW = t.vertical ? t.fontSize * 1.3 : t.text.length * t.fontSize * 0.65;
-        const estH = t.vertical ? t.text.length * t.fontSize * 1.15 : t.fontSize * 1.3;
-
-        // 選取框與控制按鈕的座標
-        const selX = t.vertical ? -4 : -4;
-        const selY = t.vertical ? -4 : -estH;
-        const selW = (t.vertical ? t.fontSize * 1.5 : estW) + 8;
-        const selH = (t.vertical ? estH : t.fontSize * 1.3) + 8;
-
-        const delX = selX + selW;
-        const delY = selY;
-        const resX = selX + selW;
-        const resY = selY + selH;
-
-        return (
-          <g key={t.id} transform={`translate(${t.x},${t.y})`}>
-            {/* 選取虛線框 */}
-            {isSelected && (
-              <rect x={selX} y={selY} width={selW} height={selH}
-                    fill="none" stroke="#3b82f6" strokeWidth="1.5" strokeDasharray="4,3" rx="3" />
-            )}
-            {/* 文字本體 */}
-            <text
-              style={{
-                fontFamily: TEXT_FONT,
-                fontSize: t.fontSize,
-                writingMode: t.vertical ? 'vertical-rl' : undefined
-              }}
-              fill="#333"
-              cursor="move"
-              onMouseDown={e => onTextDown(e, t.id)}
-              onClick={e => onTextClick(e, t.id)}
-              onDoubleClick={e => onTextDoubleClick(e, t.id)}
-            >
-              {t.text}
-            </text>
-            {/* 選取時顯示控制元件 */}
-            {isSelected && (
-              <>
-                {/* ❌ 刪除按鈕 (右上角) */}
-                <g transform={`translate(${delX},${delY})`}
-                   style={{ cursor: 'pointer' }}
-                   onClick={e => { e.stopPropagation(); deleteText(t.id); }}>
-                  <circle cx="0" cy="0" r="10" fill="white" stroke="#ef4444" strokeWidth="1.5" />
-                  <text x="0" y="4" textAnchor="middle" fontSize="11" fill="#ef4444" pointerEvents="none">✕</text>
-                </g>
-                {/* ↘️ 縮放拉桿 (右下角) */}
-                <g transform={`translate(${resX},${resY})`}
-                   style={{ cursor: 'nwse-resize' }}
-                   onMouseDown={e => onResizeDown(e, t.id)}>
-                  <circle cx="0" cy="0" r="8" fill="#3b82f6" opacity="0.85" />
-                  <text x="0" y="3.5" textAnchor="middle" fontSize="9" fill="white" pointerEvents="none">↘</text>
-                </g>
-              </>
-            )}
-          </g>
-        );
-      });
-
-      /* ===== 表單面板 ===== */
+      /* ===== 介面渲染 ===== */
       return (
-        <div className="app-layout">
-          <div className="panel">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '14px', paddingBottom: '8px', borderBottom: '2px solid #3b82f6' }}>
-              <h2 style={{ margin: 0, border: 'none', padding: 0 }}>資料輸入面板</h2>
-              <div style={{ display: 'flex', gap: '6px' }}>
-                <button onClick={downloadJPG} style={{ padding: '5px 10px', fontSize: '12px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>
-                  下載
-                </button>
-                <button onClick={resetCanvas} style={{ padding: '5px 10px', fontSize: '12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>
-                  重置
-                </button>
-              </div>
-            </div>
+        <div>
+          {/* 頁籤列 */}
+          <div className="tab-nav">
+            <button className={`tab-btn ${activeTab === 'genogram' ? 'active' : ''}`} onClick={() => setActiveTab('genogram')}>📊 家系圖繪製</button>
+            <button className={`tab-btn ${activeTab === 'record' ? 'active' : ''}`} onClick={() => setActiveTab('record')}>📝 個案紀錄產生</button>
+          </div>
 
-            {/* 互動模式選單與快捷鍵 */}
-            <div className="section" style={{ background: '#eff6ff', borderColor: '#bfdbfe' }}>
-              <label>🛠️ 畫布互動模式 (可用快捷鍵切換)</label>
-              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '8px', fontSize: '13px', alignItems: 'center' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <input type="radio" name="mode" checked={mode === 'drag'} onChange={() => setMode('drag')} /> 🤚 拖曳
-                  [<input type="text" maxLength="1" value={shortcuts.drag} onChange={e => updateShortcut('drag', e.target.value)} style={{ width: '18px', padding: '0', textAlign: 'center', fontSize: '11px', background: 'transparent', border: 'none', borderBottom: '1px solid #3b82f6', outline: 'none' }} />]
-                </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <input type="radio" name="mode" checked={mode === 'index'} onChange={() => setMode('index')} /> 🎯 案主
-                  [<input type="text" maxLength="1" value={shortcuts.index} onChange={e => updateShortcut('index', e.target.value)} style={{ width: '18px', padding: '0', textAlign: 'center', fontSize: '11px', background: 'transparent', border: 'none', borderBottom: '1px solid #3b82f6', outline: 'none' }} />]
-                </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <input type="radio" name="mode" checked={mode === 'cohab'} onChange={() => setMode('cohab')} /> 🏠 同住
-                  [<input type="text" maxLength="1" value={shortcuts.cohab} onChange={e => updateShortcut('cohab', e.target.value)} style={{ width: '18px', padding: '0', textAlign: 'center', fontSize: '11px', background: 'transparent', border: 'none', borderBottom: '1px solid #3b82f6', outline: 'none' }} />]
-                  <span className="status-badge" data-status="cohab"
-                    ref={el => wheelRef(el, ['auto', 'poly'], cohabMode, setCohabMode)}
-                    title="滾輪切換：自動 / 多邊形">{cohabMode === 'auto' ? '自動' : '多邊形'}</span>
-                </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <input type="radio" name="mode" checked={mode === 'deceased'} onChange={() => setMode('deceased')} /> ✝️ 打叉
-                  [<input type="text" maxLength="1" value={shortcuts.deceased} onChange={e => updateShortcut('deceased', e.target.value)} style={{ width: '18px', padding: '0', textAlign: 'center', fontSize: '11px', background: 'transparent', border: 'none', borderBottom: '1px solid #3b82f6', outline: 'none' }} />]
-                </label>
-              </div>
-            </div>
-
-            {/* Gen1 */}
-            <div className="section">
-              <label>第一代（父母）</label>
-              <div className="sub" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span>系統預設一對父母 ■ 父 ● 母</span>
-                <span className="status-badge" data-status={g1Status}
-                  ref={el => wheelRef(el, G1_STATUSES, g1Status, setG1Status)}
-                  title="滾輪切換狀態">{G1_LABELS[g1Status]}</span>
-              </div>
-            </div>
-
-            {/* Gen2 Input */}
-            <div className="section">
-              <label>第二代子女順序</label>
-              <input type="text" value={gen2Str} onChange={e => onGen2Change(e.target.value)}
-                     placeholder="例：女女男男女 或 FFMMF" />
-              <div className="hint">輸入「男」或「女」(中文)，或 M / F (英文)，即時產生子代節點。</div>
-            </div>
-
-            {/* Gen2 Config */}
-            {gen2Cfg.length > 0 && (
-              <div className="section">
-                <label>第二代成員 — 婚姻與子女設定</label>
-                {gen2Cfg.map((c, i) => (
-                  <div key={i}>
-                    <div className="child-row">
-                      <span className={`child-icon ${c.gender === 'M' ? 'm' : 'f'}`}>
-                        {c.gender === 'M' ? '■' : '●'}
-                      </span>
-                      <span className={`child-name ${c.gender === 'M' ? 'm' : 'f'}`}>
-                        {c.gender === 'M' ? '子' : '女'}{i + 1}
-                      </span>
-                      <div className="chk-wrap" style={{ marginLeft: 'auto', display: 'flex', gap: '8px', alignItems: 'center' }}>
-                        <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px' }}>
-                          <input type="checkbox" checked={c.isMulti || false} onChange={() => toggleMulti(i)} /> 多胞胎
-                        </label>
-                        <span className="status-badge" data-status={c.partner || 'none'}
-                          ref={el => wheelRef(el, G2_STATUSES, c.partner || 'none', v => changePartner(i, v))}
-                          title="滾輪切換狀態">{G2_LABELS[c.partner || 'none']}</span>
-                      </div>
-                    </div>
-                    {c.partner !== 'none' && (
-                      <div className="gen3-block">
-                        <label>↳ 第三代子女順序（此對伴侶）</label>
-                        <input type="text" value={c.g3Str} onChange={e => setG3(i, e.target.value)}
-                               placeholder="例：男女 或 MF" />
-                      </div>
-                    )}
+          {/* 頁籤一：家系圖 */}
+          {activeTab === 'genogram' && (
+            <div className="app-layout">
+              {/* 左側面板 (保留原有) */}
+              <div className="panel">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '14px', paddingBottom: '8px', borderBottom: '2px solid #3b82f6' }}>
+                  <h2 style={{ margin: 0, border: 'none', padding: 0 }}>資料輸入面板</h2>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <button onClick={downloadJPG} style={{ padding: '5px 10px', fontSize: '12px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>下載</button>
+                    <button onClick={() => { if(window.confirm('確定重置？')) { setGen2Str(''); setGen2Cfg([]); setIndexId(null); setCohabMembers([]); setDeceasedIds([]); setPolygons([]); setTexts([]); } }} style={{ padding: '5px 10px', fontSize: '12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>重置</button>
                   </div>
-                ))}
-              </div>
-            )}
+                </div>
 
-            {/* 自由文字方塊 */}
-            <div className="section">
-              <label>📝 自由文字方塊</label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
-                <span style={{ fontSize: '12px', color: '#64748b' }}>方向：</span>
-                <span className="status-badge" data-status={textDirection}
-                  ref={el => wheelRef(el, TEXT_DIRS, textDirection, setTextDirection)}
-                  title="滾輪切換方向">{TEXT_DIR_LABELS[textDirection]}</span>
-                <button onClick={addText} style={{ padding: '4px 12px', fontSize: '12px', background: '#10b981', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', marginLeft: 'auto' }}>
-                  ➕ 新增至畫布
+                <div className="section">
+                  <label>🛠️ 畫布互動模式</label>
+                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', fontSize: '13px', alignItems: 'center' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><input type="radio" checked={mode === 'drag'} onChange={() => setMode('drag')} /> 🤚 拖曳</label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><input type="radio" checked={mode === 'index'} onChange={() => setMode('index')} /> 🎯 案主</label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <input type="radio" checked={mode === 'cohab'} onChange={() => setMode('cohab')} /> 🏠 同住
+                      <span className="status-badge" data-status="cohab" ref={el => wheelRef(el, ['auto', 'poly'], cohabMode, setCohabMode)} title="滾輪切換：自動 / 多邊形">{cohabMode === 'auto' ? '自動' : '多邊形'}</span>
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><input type="radio" checked={mode === 'deceased'} onChange={() => setMode('deceased')} /> ✝️ 打叉</label>
+                  </div>
+                </div>
+
+                <div className="section">
+                  <label>第一代（父母）</label>
+                  <div className="sub" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span>系統預設一對父母 ■ 父 ● 母</span>
+                    <span className="status-badge" data-status={g1Status} ref={el => wheelRef(el, G1_STATUSES, g1Status, setG1Status)}>{G1_LABELS[g1Status]}</span>
+                  </div>
+                </div>
+
+                <div className="section">
+                  <label>第二代子女順序 (可輸入數字 1男 2女)</label>
+                  <input type="text" value={gen2Str} onChange={e => onGen2Change(e.target.value)} placeholder="例：11221 或 女女男男女" />
+                </div>
+
+                {gen2Cfg.length > 0 && (
+                  <div className="section">
+                    <label>第二代成員設定</label>
+                    {gen2Cfg.map((c, i) => (
+                      <div key={i}>
+                        <div className="child-row">
+                          <span className={`child-icon ${c.gender === 'M' ? 'm' : 'f'}`}>{c.gender === 'M' ? '■' : '●'}</span>
+                          <span className={`child-name ${c.gender === 'M' ? 'm' : 'f'}`}>{getRelativeTitle(c.gender, i, gen2Cfg)}</span>
+                          <div className="chk-wrap">
+                            <label><input type="checkbox" checked={c.isMulti || false} onChange={() => toggleMulti(i)} /> 多胞胎</label>
+                            <span className="status-badge" data-status={c.partner || 'none'} ref={el => wheelRef(el, G2_STATUSES, c.partner || 'none', v => changePartner(i, v))} style={{marginLeft: '8px'}}>{G2_LABELS[c.partner || 'none']}</span>
+                          </div>
+                        </div>
+                        {c.partner !== 'none' && (
+                          <div className="gen3-block">
+                            <label>↳ 第三代 (例: 12 或 男女)</label>
+                            <input type="text" value={c.g3Str} onChange={e => setG3(i, e.target.value)} />
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                <div className="section">
+                  <label>📝 自由文字方塊</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                    <span style={{ fontSize: '12px', color: '#64748b' }}>方向：</span>
+                    <span className="status-badge" data-status={textDirection} ref={el => wheelRef(el, TEXT_DIRS, textDirection, setTextDirection)}>{TEXT_DIR_LABELS[textDirection]}</span>
+                    <button onClick={addText} style={{ padding: '4px 12px', fontSize: '12px', background: '#10b981', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', marginLeft: 'auto' }}>➕ 新增</button>
+                  </div>
+                </div>
+              </div>
+
+              {/* SVG 畫布 (保留原有渲染邏輯) */}
+              <div className="canvas-wrap">
+                <svg ref={svgRef} width={Math.max(800, (nodes.map(n => positions[n.id]?.x??n.dx).concat(texts.map(t=>t.x+100)).reduce((a,b)=>Math.max(a,b),0))+160)} height={Math.max(520, (nodes.map(n => positions[n.id]?.y??n.dy).concat(texts.map(t=>t.y+100)).reduce((a,b)=>Math.max(a,b),0))+80)} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp} onClick={() => { setSelectedTextId(null); setSelectedPolyId(null); }} style={{ background: '#fefefe', minWidth: '600px', cursor: mode === 'cohab' && cohabMode === 'poly' ? 'crosshair' : undefined }}>
+                  <defs><pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="#f0f0f0" strokeWidth="0.5" /></pattern></defs>
+                  <rect width="100%" height="100%" fill="url(#grid)" />
+                  
+                  {mode === 'cohab' && cohabMode === 'poly' && (
+                    <rect width="100%" height="100%" fill="transparent" style={{ cursor: 'crosshair' }} onClick={e => { e.stopPropagation(); const sp = svgPt(e); const pt = { x: sp.x, y: sp.y }; if (draftPoly.length >= 3 && Math.sqrt(Math.pow(pt.x - draftPoly[0].x,2) + Math.pow(pt.y - draftPoly[0].y,2)) < 15) { setPolygons(p => [...p, { id: 'pg_' + Date.now(), pts: draftPoly }]); setDraftPoly([]); setMousePos(null); return; } setDraftPoly(p => [...p, pt]); }} />
+                  )}
+
+                  {cohabitationBox && cohabitationBox.type === 'single' && <rect x={cohabitationBox.x} y={cohabitationBox.y} width={cohabitationBox.w} height={cohabitationBox.h} fill="none" stroke="#ef4444" strokeWidth="2.5" strokeDasharray="8,6" rx="15" />}
+                  {cohabitationBox && cohabitationBox.type === 'poly' && <path d={getSmoothPath(cohabitationBox.points, true)} fill="none" stroke="#ef4444" strokeWidth="2.5" strokeDasharray="8,6" strokeLinejoin="round" />}
+                  
+                  {polygons.map(pg => (
+                    <g key={pg.id}>
+                      <path d={getSmoothPath(pg.pts, true)} fill="rgba(239, 68, 68, 0.05)" stroke="#ef4444" strokeWidth="2.5" strokeDasharray="8,6" strokeLinejoin="round" style={{ cursor: mode === 'drag' ? 'pointer' : undefined }} onClick={e => { if (mode === 'drag') { e.stopPropagation(); setSelectedPolyId(pg.id); } }} onDoubleClick={e => { e.stopPropagation(); setPolygons(p => p.filter(x => x.id !== pg.id)); setSelectedPolyId(null); }} />
+                      {selectedPolyId === pg.id && pg.pts.map((pt, idx) => <circle key={`v${idx}`} cx={pt.x} cy={pt.y} r={6} fill="#3b82f6" stroke="white" strokeWidth="1.5" style={{ cursor: 'crosshair' }} onMouseDown={e => { e.stopPropagation(); const sp = svgPt(e); setDragVertex({ polyId: pg.id, index: idx, ox: sp.x - pt.x, oy: sp.y - pt.y }); }} />)}
+                    </g>
+                  ))}
+
+                  {draftPoly.length > 0 && (
+                    <g>
+                      {draftPoly.length >= 2 && <path d={getSmoothPath(draftPoly, false)} fill="none" stroke="#ef4444" strokeWidth="2.5" strokeDasharray="8,6" strokeLinejoin="round" strokeLinecap="round" pointerEvents="none" />}
+                      {mousePos && <line x1={draftPoly[draftPoly.length - 1].x} y1={draftPoly[draftPoly.length - 1].y} x2={mousePos.x} y2={mousePos.y} stroke="#ef4444" strokeWidth="1.5" strokeDasharray="4,4" opacity="0.6" pointerEvents="none" />}
+                      {draftPoly.map((pt, i) => <circle key={`d${i}`} cx={pt.x} cy={pt.y} r={i === 0 && draftPoly.length >= 3 ? 8 : 5} fill={i === 0 ? '#10b981' : '#ef4444'} stroke="white" strokeWidth="1.5" pointerEvents="none" />)}
+                    </g>
+                  )}
+
+                  <text x="16" y={GEN_Y[0] + 5} fontSize="12" fill="#b0b8c4" fontWeight="600" style={{fontFamily: TEXT_FONT}}>G1</text>
+                  {gen2Cfg.length > 0 && <text x="16" y={GEN_Y[1] + 5} fontSize="12" fill="#b0b8c4" fontWeight="600" style={{fontFamily: TEXT_FONT}}>G2</text>}
+                  {gen2Cfg.some(d => d.partner !== 'none' && d.g3Str) && <text x="16" y={GEN_Y[2] + 5} fontSize="12" fill="#b0b8c4" fontWeight="600" style={{fontFamily: TEXT_FONT}}>G3</text>}
+
+                  {lines.map(ln => {
+                    if (ln.type === 'marry') {
+                      const a = pos(ln.a), b = pos(ln.b), nA = nodes.find(n => n.id === ln.a), nB = nodes.find(n => n.id === ln.b);
+                      const x1 = a.x + R, x2 = b.x - R, midX = (x1 + x2) / 2, midY = a.y;
+                      const els = [<line key={ln.id} x1={x1} y1={a.y} x2={x2} y2={b.y} stroke="#444" strokeWidth="2" strokeDasharray={ln.status === 'cohab' ? "8,6" : "0"} />];
+                      if (ln.status === 'separated') els.push(<line key={`${ln.id}-s`} x1={midX-6} y1={midY+12} x2={midX+6} y2={midY-12} stroke="#444" strokeWidth="2" />);
+                      if (ln.status === 'divorced') els.push(<line key={`${ln.id}-d1`} x1={midX-8} y1={midY-8} x2={midX+8} y2={midY+8} stroke="#444" strokeWidth="2" />, <line key={`${ln.id}-d2`} x1={midX-8} y1={midY+8} x2={midX+8} y2={midY-8} stroke="#444" strokeWidth="2" />);
+                      return <g key={ln.id}>{els}</g>;
+                    }
+                    if (ln.type === 'pc') {
+                      const pA = pos(ln.pa), pB = pos(ln.pb), midX = (pA.x + pB.x) / 2, parentY = Math.max(pA.y, pB.y);
+                      const kidPos = ln.kids.map(k => pos(k)); if (kidPos.length === 0) return null;
+                      const barY = (parentY + R + kidPos[0].y - R) / 2, els = [];
+                      els.push(<line key={`${ln.id}-v`} x1={midX} y1={parentY} x2={midX} y2={barY} stroke="#444" strokeWidth="2" />);
+                      els.push(<line key={`${ln.id}-h`} x1={Math.min(midX, ...kidPos.map(p=>p.x))} y1={barY} x2={Math.max(midX, ...kidPos.map(p=>p.x))} y2={barY} stroke="#444" strokeWidth="2" />);
+                      const groups = []; let cur = []; ln.kids.forEach((k, i) => { if (nodes.find(n => n.id === k)?.isMulti) cur.push(i); else { if (cur.length >= 2) groups.push(cur); cur = []; } }); if (cur.length >= 2) groups.push(cur);
+                      kidPos.forEach((kp, j) => {
+                        const g = groups.find(x => x.includes(j));
+                        if (g) els.push(<line key={`${ln.id}-m${j}`} x1={g.map(i=>kidPos[i].x).reduce((a,b)=>a+b,0)/g.length} y1={barY} x2={kp.x} y2={kp.y - R} stroke="#444" strokeWidth="2" />);
+                        else els.push(<line key={`${ln.id}-k${j}`} x1={kp.x} y1={barY} x2={kp.x} y2={kp.y - R} stroke="#444" strokeWidth="2" />);
+                      });
+                      return <g key={ln.id}>{els}</g>;
+                    } return null;
+                  })}
+
+                  {nodes.map(nd => {
+                    const p = pos(nd.id), isIP = nd.id === indexId, fill = isIP ? '#1e293b' : 'white', txtC = isIP ? 'white' : '#333';
+                    return (
+                      <g key={nd.id} transform={`translate(${p.x},${p.y})`} style={{ cursor: drag?.id === nd.id ? 'grabbing' : 'grab' }} onMouseDown={e => onDown(e, nd.id)} onClick={e => onClick(e, nd.id)}>
+                        {nd.gender === 'M' ? <rect x={-R} y={-R} width={SZ} height={SZ} fill={fill} stroke="#333" strokeWidth="2.5" rx="2" /> : <circle cx="0" cy="0" r={R} fill={fill} stroke="#333" strokeWidth="2.5" />}
+                        {isIP && <text x="0" y="4" textAnchor="middle" fontSize="11" fontWeight="bold" fill={txtC} style={{fontFamily: TEXT_FONT}}>案主</text>}
+                        {deceasedIds.includes(nd.id) && <g stroke={isIP ? 'white' : '#333'} strokeWidth="2.5"><line x1={-R} y1={-R} x2={R} y2={R} /><line x1={R} y1={-R} x2={-R} y2={R} /></g>}
+                      </g>
+                    );
+                  })}
+
+                  {texts.map(t => {
+                    const isSel = selectedTextId === t.id, estW = t.vertical ? t.fontSize * 1.5 : t.text.length * t.fontSize * 0.7, estH = t.vertical ? t.text.length * t.fontSize * 1.2 : t.fontSize * 1.5;
+                    return (
+                      <g key={t.id} transform={`translate(${t.x},${t.y})`}>
+                        {isSel && <rect x="-4" y={t.vertical ? -4 : -estH} width={estW + 8} height={estH + 8} fill="none" stroke="#3b82f6" strokeWidth="1.5" strokeDasharray="4,3" rx="3" />}
+                        <text style={{ fontFamily: TEXT_FONT, fontSize: t.fontSize, writingMode: t.vertical ? 'vertical-rl' : undefined }} fill="#333" cursor="move" onMouseDown={e => onTextDown(e, t.id)} onClick={e => onTextClick(e, t.id)} onDoubleClick={e => onTextDoubleClick(e, t.id)}>{t.text}</text>
+                        {isSel && (
+                          <g>
+                            <g transform={`translate(${estW+4},${t.vertical ? -4 : -estH})`} style={{ cursor: 'pointer' }} onClick={e => { e.stopPropagation(); deleteText(t.id); }}><circle r="10" fill="white" stroke="#ef4444" strokeWidth="1.5" /><text y="4" textAnchor="middle" fontSize="11" fill="#ef4444" style={{fontFamily: TEXT_FONT}}>✕</text></g>
+                            <g transform={`translate(${estW+4},${t.vertical ? estH+4 : 8})`} style={{ cursor: 'nwse-resize' }} onMouseDown={e => onResizeDown(e, t.id)}><circle r="8" fill="#3b82f6" /><text y="3.5" textAnchor="middle" fontSize="9" fill="white" style={{fontFamily: TEXT_FONT}}>↘</text></g>
+                          </g>
+                        )}
+                      </g>
+                    );
+                  })}
+                </svg>
+              </div>
+            </div>
+          )}
+
+          {/* 頁籤二：個案紀錄產生器 */}
+          {activeTab === 'record' && (
+            <div className="record-layout">
+              <div className="record-form panel">
+                <h2 style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  案主基本資料
+                  {indexId ? <span style={{fontSize: '12px', background:'#1e293b', color:'white', padding:'2px 8px', borderRadius:'10px'}}>已於家系圖指定案主</span> : <span style={{fontSize: '12px', color:'#ef4444'}}>尚未指定案主</span>}
+                </h2>
+                
+                <div className="section">
+                  <label>身分別</label>
+                  <BadgeGroup options={['一般民眾', '自費民眾', '公費就養榮民', '就養榮民', '自費榮民', '榮眷', '遺眷']} value={subjInfo.identity} onChange={v => setSubjInfo({...subjInfo, identity: v})} />
+                </div>
+                
+                <div className="section">
+                  <label>教育程度</label>
+                  <BadgeGroup options={['不識字', '自學識字', '國小', '初中', '高中職', '大學以上']} value={subjInfo.edu} onChange={v => setSubjInfo({...subjInfo, edu: v})} />
+                </div>
+
+                <div className="section">
+                  <label>溝通語言</label>
+                  <BadgeGroup options={['國語', '台語', '國台語', '客家語']} value={subjInfo.lang} onChange={v => setSubjInfo({...subjInfo, lang: v})} />
+                </div>
+
+                <div className="section">
+                  <label>宗教信仰</label>
+                  <BadgeGroup options={['無宗教', '佛教', '道教', '基督教', '天主教']} value={subjInfo.religion} onChange={v => setSubjInfo({...subjInfo, religion: v})} />
+                </div>
+
+                <div className="section">
+                  <label>身障證明</label>
+                  <BadgeGroup options={['無身心障礙手冊', '有身障手冊']} value={subjInfo.disability} onChange={v => setSubjInfo({...subjInfo, disability: v})} />
+                </div>
+
+                <div className="section">
+                  <label>職業 / 經歷 (可自填)</label>
+                  <input type="text" value={subjInfo.job} onChange={e => setSubjInfo({...subjInfo, job: e.target.value})} placeholder="例：家管、務農、裝甲兵退役" />
+                </div>
+
+                <div className="section">
+                  <label>案主特殊備註</label>
+                  <input type="text" value={subjInfo.note} onChange={e => setSubjInfo({...subjInfo, note: e.target.value})} placeholder="例：安徽省巢縣人，每月有領取就養金" />
+                </div>
+
+                <h2 style={{ marginTop: '20px' }}>家屬動態清單 (由家系圖連動)</h2>
+                {gen2Cfg.length === 0 && <div className="hint" style={{fontSize: '13px'}}>請先於「家系圖繪製」頁籤輸入第二代子女，這裡會自動產生填寫欄位喔！</div>}
+                
+                {gen2Cfg.map((c, i) => {
+                  const title = getRelativeTitle(c.gender, i, gen2Cfg);
+                  const isDeceased = deceasedIds.includes(`c${i}`);
+                  const ext = famExtras[i] || { location: '', job: '', isPrimary: false, note: '' };
+                  
+                  return (
+                    <div key={i} className="fam-card" style={{ opacity: isDeceased ? 0.6 : 1 }}>
+                      <div className="fam-title">
+                        <span>{title} {isDeceased && <span style={{color: '#ef4444'}}>(已歿)</span>}</span>
+                        <label style={{fontSize: '12px', color: '#3b82f6', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer'}}>
+                          <input type="checkbox" checked={ext.isPrimary} onChange={e => handleFamExtra(i, 'isPrimary', e.target.checked)} disabled={isDeceased} /> 主要聯絡人
+                        </label>
+                      </div>
+                      
+                      {!isDeceased && (
+                        <div className="fam-grid">
+                          <div>
+                            <div className="hint" style={{marginBottom: '2px'}}>居住地</div>
+                            <input type="text" value={ext.location} onChange={e => handleFamExtra(i, 'location', e.target.value)} placeholder="例：台南" />
+                          </div>
+                          <div>
+                            <div className="hint" style={{marginBottom: '2px'}}>職業</div>
+                            <input type="text" value={ext.job} onChange={e => handleFamExtra(i, 'job', e.target.value)} placeholder="例：家管、從商" />
+                          </div>
+                          <div style={{gridColumn: '1 / -1'}}>
+                            <div className="hint" style={{marginBottom: '2px'}}>特殊備註</div>
+                            <input type="text" value={ext.note} onChange={e => handleFamExtra(i, 'note', e.target.value)} placeholder="例：拒絕回答孫輩狀況" />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+              </div>
+
+              {/* 右側即時預覽區 */}
+              <div className="record-preview">
+                <h2 style={{ margin: 0, border: 'none', padding: 0, color: '#1e293b', fontSize: '18px', marginBottom: '14px' }}>✨ 個案紀錄即時預覽</h2>
+                <textarea value={generatedText} readOnly />
+                <button onClick={copyRecord} style={{ padding: '12px', fontSize: '16px', background: '#10b981', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 4px 6px -1px rgba(16, 185, 129, 0.4)' }}>
+                  📋 一鍵複製至剪貼簿
                 </button>
               </div>
-              <div className="hint">單擊選取文字方塊（顯示框線與控制按鈕）；雙擊可編輯內容；選取後可刪除或拖曳右下角縮放。</div>
             </div>
+          )}
 
-            {/* 使用說明 */}
-            <div className="section">
-              <label>操作說明</label>
-              <div className="info-box">
-                ■ = 男性（正方形）　● = 女性（圓形）<br/>
-                點擊節點 → 標示 / 取消「案主」<br/>
-                拖曳節點 → 微調位置，連線即時跟隨<br/>
-                滑鼠滾輪於狀態標籤 → 循環切換婚姻狀態<br/>
-                📝 文字方塊 → 可拖曳、編輯、縮放、刪除<br/>
-                📥 下載 JPG → 自動裁切白邊並匯出
-              </div>
-            </div>
-          </div>
-
-          {/* ===== SVG 畫布 ===== */}
-          <div className="canvas-wrap">
-            <svg ref={svgRef} width={svgW} height={svgH}
-                 onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp}
-                 onClick={() => { setSelectedTextId(null); setSelectedPolyId(null); }}
-                 style={{ background: '#fefefe', minWidth: '600px', cursor: mode === 'cohab' && cohabMode === 'poly' ? 'crosshair' : undefined }}>
-              {/* 背景格線 */}
-              <defs>
-                <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                  <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#f0f0f0" strokeWidth="0.5" />
-                </pattern>
-              </defs>
-              <rect width="100%" height="100%" fill="url(#grid)" />
-
-              {/* 多邊形繪製模式：透明覆蓋層 (點擊新增端點) */}
-              {mode === 'cohab' && cohabMode === 'poly' && (
-                <rect width="100%" height="100%" fill="transparent"
-                  style={{ cursor: 'crosshair' }}
-                  onClick={e => {
-                    e.stopPropagation();
-                    const sp = svgPt(e);
-                    const pt = { x: sp.x, y: sp.y };
-                    // 點擊第一個端點附近 → 封閉多邊形
-                    if (draftPoly.length >= 3) {
-                      const first = draftPoly[0];
-                      const dx = pt.x - first.x, dy = pt.y - first.y;
-                      if (Math.sqrt(dx * dx + dy * dy) < 15) {
-                        setPolygons(prev => [...prev, { id: 'pg_' + Date.now(), pts: draftPoly }]);
-                        setDraftPoly([]);
-                        setMousePos(null);
-                        return;
-                      }
-                    }
-                    setDraftPoly(prev => [...prev, pt]);
-                  }}
-                />
-              )}
-
-              {/* 繪製同住家屬外框 (自動) */}
-              {cohabitationBox && cohabitationBox.type === 'single' && (
-                <rect
-                  x={cohabitationBox.x} y={cohabitationBox.y}
-                  width={cohabitationBox.w} height={cohabitationBox.h}
-                  fill="none" stroke="#ef4444" strokeWidth="2.5" strokeDasharray="8,6" rx="15"
-                />
-              )}
-              {cohabitationBox && cohabitationBox.type === 'poly' && (
-                <path
-                  d={getSmoothPath(cohabitationBox.points, true)}
-                  fill="none" stroke="#ef4444" strokeWidth="2.5" strokeDasharray="8,6" strokeLinejoin="round"
-                />
-              )}
-
-              {/* 繪製已完成的手動多邊形 */}
-              {polygons.map(pg => (
-                <g key={pg.id}>
-                  <path
-                    d={getSmoothPath(pg.pts, true)}
-                    fill="rgba(239, 68, 68, 0.05)" stroke="#ef4444" strokeWidth="2.5"
-                    strokeDasharray="8,6" strokeLinejoin="round"
-                    style={{ cursor: mode === 'drag' ? 'pointer' : undefined }}
-                    onClick={e => { if (mode === 'drag') { e.stopPropagation(); setSelectedPolyId(pg.id); } }}
-                    onDoubleClick={e => { e.stopPropagation(); setPolygons(prev => prev.filter(p => p.id !== pg.id)); setSelectedPolyId(null); }}
-                  />
-                  {/* 選取時顯示端點控制代碼 */}
-                  {selectedPolyId === pg.id && pg.pts.map((pt, idx) => (
-                    <circle key={`${pg.id}-v${idx}`}
-                      cx={pt.x} cy={pt.y} r={6}
-                      fill="#3b82f6" stroke="white" strokeWidth="1.5"
-                      style={{ cursor: 'crosshair' }}
-                      onMouseDown={e => {
-                        e.stopPropagation();
-                        const sp = svgPt(e);
-                        setDragVertex({ polyId: pg.id, index: idx, ox: sp.x - pt.x, oy: sp.y - pt.y });
-                      }}
-                    />
-                  ))}
-                </g>
-              ))}
-              {/* 繪製中的多邊形草稿 */}
-              {draftPoly.length > 0 && (
-                <g>
-                  {/* 已確定的邊 */}
-                  {draftPoly.length >= 2 && (
-                    <path
-                      d={getSmoothPath(draftPoly, false)}
-                      fill="none" stroke="#ef4444" strokeWidth="2.5" strokeDasharray="8,6"
-                      strokeLinejoin="round" strokeLinecap="round" pointerEvents="none"
-                    />
-                  )}
-                  {/* 從最後端點到滑鼠的輔助線 */}
-                  {mousePos && (
-                    <line
-                      x1={draftPoly[draftPoly.length - 1].x} y1={draftPoly[draftPoly.length - 1].y}
-                      x2={mousePos.x} y2={mousePos.y}
-                      stroke="#ef4444" strokeWidth="1.5" strokeDasharray="4,4" opacity="0.6"
-                      pointerEvents="none"
-                    />
-                  )}
-                  {/* 端點圓圈 */}
-                  {draftPoly.map((pt, i) => (
-                    <circle key={`draft-${i}`} cx={pt.x} cy={pt.y} r={i === 0 && draftPoly.length >= 3 ? 8 : 5}
-                      fill={i === 0 ? '#10b981' : '#ef4444'} stroke="white" strokeWidth="1.5"
-                      pointerEvents="none"
-                    />
-                  ))}
-                </g>
-              )}
-
-              {/* 世代標示 */}
-              <text x="16" y={GEN_Y[0] + 5} fontSize="12" fill="#b0b8c4" fontWeight="600">G1</text>
-              {gen2Cfg.length > 0 && <text x="16" y={GEN_Y[1] + 5} fontSize="12" fill="#b0b8c4" fontWeight="600">G2</text>}
-              {gen2Cfg.some(d => d.partner !== 'none' && d.g3Str) && <text x="16" y={GEN_Y[2] + 5} fontSize="12" fill="#b0b8c4" fontWeight="600">G3</text>}
-
-              {drawLines()}
-              {drawNodes()}
-              {drawTexts()}
-            </svg>
-          </div>
         </div>
       );
     };
