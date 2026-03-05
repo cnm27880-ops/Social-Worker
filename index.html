@@ -105,10 +105,34 @@
       if (!str) return [];
       const out = [];
       for (const c of str.trim()) {
-        if (c === '男' || c === 'M' || c === 'm') out.push('M');
-        else if (c === '女' || c === 'F' || c === 'f') out.push('F');
+        if (c === '男' || c === 'M' || c === 'm' || c === '1') out.push('M');
+        else if (c === '女' || c === 'F' || c === 'f' || c === '2') out.push('F');
       }
       return out;
+    }
+
+    /* ===== 數學魔法：平滑曲線生成器 (Catmull-Rom Spline) ===== */
+    function getSmoothPath(pts, closed = false) {
+      if (pts.length < 2) return '';
+      // 如果要封閉，就自動把頭部的點補到尾巴來計算平滑度
+      const points = closed ? [...pts, pts[0], pts[1], pts[2] || pts[0]] : pts;
+      let d = `M ${points[0].x},${points[0].y} `;
+      
+      for (let i = 0; i < (closed ? pts.length : points.length - 1); i++) {
+        const p0 = points[i === 0 ? 0 : i - 1];
+        const p1 = points[i];
+        const p2 = points[i + 1];
+        const p3 = points[i + 2] || p2;
+        
+        const tension = 0.18; // 張力係數，數字越大越圓潤
+        const cp1x = p1.x + (p2.x - p0.x) * tension;
+        const cp1y = p1.y + (p2.y - p0.y) * tension;
+        const cp2x = p2.x - (p3.x - p1.x) * tension;
+        const cp2y = p2.y - (p3.y - p1.y) * tension;
+        
+        d += `C ${cp1x},${cp1y} ${cp2x},${cp2y} ${p2.x},${p2.y} `;
+      }
+      return closed ? d + 'Z' : d;
     }
 
     /* ===== 主元件 ===== */
@@ -952,8 +976,8 @@
                 />
               )}
               {cohabitationBox && cohabitationBox.type === 'poly' && (
-                <polygon
-                  points={cohabitationBox.points.map(p => `${p.x},${p.y}`).join(' ')}
+                <path
+                  d={getSmoothPath(cohabitationBox.points, true)}
                   fill="none" stroke="#ef4444" strokeWidth="2.5" strokeDasharray="8,6" strokeLinejoin="round"
                 />
               )}
@@ -961,8 +985,8 @@
               {/* 繪製已完成的手動多邊形 */}
               {polygons.map(pg => (
                 <g key={pg.id}>
-                  <polygon
-                    points={pg.pts.map(p => `${p.x},${p.y}`).join(' ')}
+                  <path
+                    d={getSmoothPath(pg.pts, true)}
                     fill="rgba(239, 68, 68, 0.05)" stroke="#ef4444" strokeWidth="2.5"
                     strokeDasharray="8,6" strokeLinejoin="round"
                     style={{ cursor: mode === 'drag' ? 'pointer' : undefined }}
@@ -985,13 +1009,10 @@
                 </g>
               ))}
 
-              {/* 繪製中的多邊形草稿 */}
-              {draftPoly.length > 0 && (
-                <g>
-                  {/* 已確定的邊 */}
+              {/* 已確定的邊 */}
                   {draftPoly.length >= 2 && (
-                    <polyline
-                      points={draftPoly.map(p => `${p.x},${p.y}`).join(' ')}
+                    <path
+                      d={getSmoothPath(draftPoly, false)}
                       fill="none" stroke="#ef4444" strokeWidth="2.5" strokeDasharray="8,6"
                       strokeLinejoin="round" strokeLinecap="round" pointerEvents="none"
                     />
