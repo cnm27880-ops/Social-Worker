@@ -688,11 +688,7 @@
                             {showAgeMode && ageVal && <text x="0" y="4" textAnchor="middle" fontSize="13" fontWeight="bold" fill={txtC} style={{fontFamily: TEXT_FONT, pointerEvents: 'none'}}>{ageVal}</text>}
                           </>
                         )}
-                            {!isIP && showAgeMode && ageVal && <text x="0" y="4" textAnchor="middle" fontSize="13" fontWeight="bold" fill={txtC} style={{fontFamily: TEXT_FONT, pointerEvents: 'none'}}>{ageVal}</text>}
-                          </>
-                        )}
                         {deceasedIds.includes(nd.id) && <g stroke={isIP ? 'white' : '#333'} strokeWidth="2.5" pointerEvents="none"><line x1={-R} y1={-R} x2={R} y2={R} /><line x1={R} y1={-R} x2={-R} y2={R} /></g>}
-                      </g>
                     );
                   })}
 
@@ -735,6 +731,10 @@
                       </g>
                     );
                   })}
+                </svg>
+              </div>
+            </div>
+          )}
 
           {/* 頁籤二：個案紀錄產生器 */}
           {activeTab === 'record' && (
