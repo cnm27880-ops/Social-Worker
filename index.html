@@ -357,7 +357,53 @@
       }, [drag, textDrag, textResize, dragVertex, draftPoly, svgPt]);
 
       const onUp = () => { setDragVertex(null); setDrag(null); setTextDrag(null); setTextResize(null); };
+      const changePartner = (i, status) => setGen2Cfg(p => p.map((d, j) => j === i ? { ...d, partner: status, g3Str: status === 'none' ? '' : d.g3Str } : d));
+      const setG3 = (i, v) => setGen2Cfg(p => p.map((d, j) => j === i ? { ...d, g3Str: v } : d));
+      const toggleMulti = (i) => setGen2Cfg(p => p.map((d, j) => j === i ? { ...d, isMulti: !d.isMulti } : d));
 
+      const addText = () => {
+        const id = 'txt_' + Date.now();
+        setTexts(prev => [...prev, { id, x: 300, y: 200, text: '文字', fontSize: 16, vertical: textDirection === 'vertical' }]);
+      };
+      const deleteText = (id) => {
+        setTexts(prev => prev.filter(t => t.id !== id));
+        setSelectedTextId(null);
+      };
+
+      const onDown = useCallback((e, id) => {
+        e.stopPropagation();
+        const sp = svgPt(e);
+        const p = pos(id);
+        setDrag({ id, ox: sp.x - p.x, oy: sp.y - p.y });
+      }, [svgPt, pos]);
+
+      const onTextDown = useCallback((e, id) => {
+        e.stopPropagation();
+        textDragMoved.current = false;
+        const sp = svgPt(e);
+        const t = texts.find(t => t.id === id);
+        if (t) setTextDrag({ id, ox: sp.x - t.x, oy: sp.y - t.y });
+      }, [svgPt, texts]);
+
+      const onTextClick = useCallback((e, id) => {
+        e.stopPropagation();
+        if (textDragMoved.current) return;
+        setSelectedTextId(id);
+      }, []);
+
+      const onTextDoubleClick = useCallback((e, id) => {
+        e.stopPropagation();
+        const t = texts.find(t => t.id === id);
+        const newText = window.prompt('編輯文字內容：', t?.text || '');
+        if (newText !== null && newText !== '') setTexts(prev => prev.map(t => t.id === id ? { ...t, text: newText } : t));
+      }, [texts]);
+
+      const onResizeDown = useCallback((e, id) => {
+        e.stopPropagation();
+        const sp = svgPt(e);
+        const t = texts.find(t => t.id === id);
+        if (t) setTextResize({ id, startY: sp.y, startSize: t.fontSize });
+      }, [svgPt, texts]);
       const onClick = (e, id) => {
         e.stopPropagation();
         if (mode === 'index') setIndexId(p => p === id ? null : id);
@@ -443,7 +489,7 @@
                 </div>
 
                 <div className="section">
-                  <label>第二代子女順序 (輸入中文「男/女」、英文「M/F」或數字「1男/2女」，即時產生子代節點)</label>
+                  <label>第二代子女順序 (輸入男/女、M/F或1/2)</label>
                   <input type="text" value={gen2Str} onChange={e => onGen2Change(e.target.value)} placeholder="例：11221 或 女女男男女" />
                 </div>
 
