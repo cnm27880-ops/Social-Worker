@@ -9,7 +9,7 @@ import {
 const CUSTOM_LINK_STATUSES = ['married', 'divorced'];
 const CUSTOM_LINK_LABELS = { married: '已婚', divorced: '離婚' };
 const EXT_COLOR_MODES = ['black', 'blue'];
-const EXT_COLOR_LABELS = { black: '黑色 (一般)', blue: '藍色 (編輯)' };
+const EXT_COLOR_LABELS = { black: '一般', blue: '編輯' };
 
 const DEFAULT_SHORTCUTS = { drag: 'q', index: 'w', cohab: 'e', deceased: 'r' };
 
@@ -487,7 +487,9 @@ const GenogramTab = ({
             <button onClick={() => addFreeNode('M')} style={{ padding: '5px 10px', fontSize: '12px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>➕ 男性</button>
             <button onClick={() => addFreeNode('F')} style={{ padding: '5px 10px', fontSize: '12px', background: '#ec4899', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>➕ 女性</button>
             <button onClick={addEcoNode} style={{ padding: '5px 10px', fontSize: '12px', background: '#2563eb', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>➕ 生態圖</button>
-            <span className="status-badge" data-status={extColorMode === 'blue' ? 'horizontal' : 'none'} ref={el => wheelRef(el, EXT_COLOR_MODES, extColorMode, setExtColorMode)} title="滾輪切換：黑色/藍色" style={{ marginLeft: 'auto' }}>{EXT_COLOR_LABELS[extColorMode]}</span>
+            <div style={{ width: '1px', height: '14px', background: '#cbd5e1', margin: '0 4px' }}></div>
+            <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold' }}>模式：</span>
+            <span className="status-badge" data-status={extColorMode === 'blue' ? 'horizontal' : 'none'} ref={el => wheelRef(el, EXT_COLOR_MODES, extColorMode, setExtColorMode)} title="滾輪切換：一般/編輯">{EXT_COLOR_LABELS[extColorMode]}</span>
           </div>
           <div className="hint" style={{ marginTop: '6px' }}>拖曳擴充個體碰撞目標即可產生連線；生態圖新增後預設連結案主。</div>
         </div>
