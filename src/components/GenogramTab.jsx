@@ -28,6 +28,12 @@ const GenogramTab = ({
   const [selectedPolyId, setSelectedPolyId] = useState(null);
   const [dragVertex, setDragVertex] = useState(null);
 
+  // 持續同步的 ref，讓 useMemo / useCallback 可讀取最新值，但不觸發多餘的 re-compute
+  const freeNodesRef = useRef(freeNodes);
+  freeNodesRef.current = freeNodes;
+  const positionsRef = useRef(positions);
+  positionsRef.current = positions;
+
   const [texts, setTexts] = useState([]);
   const [selectedTextId, setSelectedTextId] = useState(null);
   const [textDrag, setTextDrag] = useState(null);
@@ -160,8 +166,8 @@ const GenogramTab = ({
     // === customLink kidsCfg → 整合為完全體節點 ===
     customLinks.forEach(lnk => {
       if (!lnk.kidsCfg || lnk.kidsCfg.length === 0) return;
-      const srcN = N.find(n => n.id === lnk.sourceId); const srcF = freeNodes.find(fn => fn.id === lnk.sourceId);
-      const tgtN = N.find(n => n.id === lnk.targetId); const tgtF = freeNodes.find(fn => fn.id === lnk.targetId);
+      const srcN = N.find(n => n.id === lnk.sourceId); const srcF = freeNodesRef.current.find(fn => fn.id === lnk.sourceId);
+      const tgtN = N.find(n => n.id === lnk.targetId); const tgtF = freeNodesRef.current.find(fn => fn.id === lnk.targetId);
       const spx = srcN?.dx ?? srcF?.x ?? 300, spy = srcN?.dy ?? srcF?.y ?? 160;
       const tpx = tgtN?.dx ?? tgtF?.x ?? 400, tpy = tgtN?.dy ?? tgtF?.y ?? 160;
       const parentMidX = (spx + tpx) / 2, parentY = Math.max(spy, tpy), kidsY = parentY + 80;
@@ -197,7 +203,7 @@ const GenogramTab = ({
     });
 
     return { nodes: N, lines: L };
-  }, [gen2Cfg, g1Status, customLinks, freeNodes]);
+  }, [gen2Cfg, g1Status, customLinks]); // freeNodes 改用 ref 讀取，避免每次拖曳觸發重算
 
   const structKey = useMemo(() => nodes.map(n => n.id).join(','), [nodes]);
   useEffect(() => { const m = {}; nodes.forEach(n => { m[n.id] = { x: n.dx, y: n.dy }; }); setPositions(m); }, [structKey]);
@@ -242,19 +248,22 @@ const GenogramTab = ({
     if (!drag) return;
     if (drag.isFree) {
       let newX = sp.x - drag.ox, newY = sp.y - drag.oy;
-      // 磁吸平行對齊：如果拖曳 Y 與相連節點 Y 差距 < 25px，強制鎖定至同一水平線
+      // 磁吸平行對齊：用 ref 讀取位置，避免 onMove 因 pos 依賴而每幀重建
       const connIds = customLinks
         .filter(l => l.sourceId === drag.id || l.targetId === drag.id)
         .map(l => l.sourceId === drag.id ? l.targetId : l.sourceId);
       for (const cid of connIds) {
-        const cp = pos(cid);
-        if (Math.abs(newY - cp.y) < 25) { newY = cp.y; break; }
+        const fromPos = positionsRef.current[cid];
+        const connY = fromPos?.y
+          ?? freeNodesRef.current.find(fn => fn.id === cid)?.y
+          ?? nodes.find(n => n.id === cid)?.dy;
+        if (connY != null && Math.abs(newY - connY) < 25) { newY = connY; break; }
       }
       setFreeNodes(prev => prev.map(fn => fn.id === drag.id ? { ...fn, x: newX, y: newY } : fn));
     } else {
       setPositions(prev => { let nX = sp.x - drag.ox, nY = sp.y - drag.oy; for (const [id, p] of Object.entries(prev)) { if (id === drag.id) continue; if (Math.abs(nX - p.x) < 12) nX = p.x; if (Math.abs(nY - p.y) < 12) nY = p.y; } return { ...prev, [drag.id]: { x: nX, y: nY } }; });
     }
-  }, [drag, textDrag, textResize, dragVertex, draftPoly, svgPt, setFreeNodes, customLinks, pos]);
+  }, [drag, textDrag, textResize, dragVertex, draftPoly, svgPt, setFreeNodes, customLinks, nodes]);
 
   const onUp = () => {
     if (drag && drag.isFree) {

@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import BadgeGroup from './BadgeGroup';
-import { getRelativeTitle, formatKidsText } from '../utils/helpers';
+import { getRelativeTitle, formatKidsText, G2_LABELS } from '../utils/helpers';
 
 const RecordTab = ({
   gen2Cfg, indexId, g1Status, cohabMembers, deceasedIds, customLinks
@@ -32,6 +32,21 @@ const RecordTab = ({
     identity: '一般民眾', job: '', edu: '', lang: '', religion: '', disability: '無身心障礙手冊', note: ''
   });
   const [famExtras, setFamExtras] = useState({}); // 儲存家屬的補充資訊 { index: { location, job, isPrimary, note } }
+
+  /* --- 共用工具函數 --- */
+  const getIndexGender = (id) => {
+    if (id === 'fa') return 'M';
+    if (id === 'mo') return 'F';
+    if (id?.startsWith('c')) return gen2Cfg[parseInt(id.replace('c', ''))]?.gender;
+    return null;
+  };
+  const getRankStr = (rank, total) => {
+    if (total === 1 || rank === 1) return '長';
+    if (rank === 2) return '次';
+    if (rank === total && rank > 2) return '么';
+    const nums = ['', '', '', '三', '四', '五', '六', '七', '八', '九', '十'];
+    return nums[rank] || String(rank);
+  };
 
   /* ===== 紀錄產生器邏輯 ===== */
   const generatedText = useMemo(() => {
@@ -74,8 +89,7 @@ const RecordTab = ({
       if (ext.location) fTxt += `居${ext.location}`;
       if (ext.job) fTxt += `，為${ext.job}`;
 
-      const partnerMap = { none: '未婚', married: '已婚', cohab: '同居', separated: '分居', divorced: '離婚' };
-      fTxt += `，${partnerMap[c.partner] || '未婚'}`;
+      fTxt += `，${G2_LABELS[c.partner] || '未婚'}`;
 
       if (c.g3Str) fTxt += `，${formatKidsText(c.g3Str)}`;
       if (ext.isPrimary) fTxt += `，為主要聯絡人及同意書填寫人`;
@@ -85,11 +99,7 @@ const RecordTab = ({
 
     /* --- 擴充連線 (customLinks) → 案主相關連線與擴充子代 --- */
     if (indexId && customLinks && customLinks.length > 0) {
-      const indexGender = indexId === 'fa' ? 'M' : indexId === 'mo' ? 'F' : (() => {
-        if (indexId.startsWith('c')) { const idx = parseInt(indexId.replace('c','')); return gen2Cfg[idx]?.gender; }
-        return null;
-      })();
-      const partnerMap = { none: '未婚', married: '已婚', cohab: '同居', separated: '分居', divorced: '離婚' };
+      const indexGender = getIndexGender(indexId);
       customLinks.forEach(lnk => {
         if (lnk.sourceId !== indexId && lnk.targetId !== indexId) return;
         const otherId = lnk.sourceId === indexId ? lnk.targetId : lnk.sourceId;
@@ -111,13 +121,10 @@ const RecordTab = ({
           const sameGenderCount = {};
           lnk.kidsCfg.forEach(kc => { sameGenderCount[kc.gender] = (sameGenderCount[kc.gender] || 0) + 1; });
           const rankCount = { M: 0, F: 0 };
-          const rankNums = ['','','','三','四','五','六','七','八','九','十'];
           lnk.kidsCfg.forEach((kc, ki) => {
             rankCount[kc.gender]++;
-            const rank = rankCount[kc.gender], total = sameGenderCount[kc.gender];
             const type = kc.gender === 'M' ? '子' : '女';
-            const rankStr = total === 1 ? '長' : (rank === total && rank > 2 ? '么' : (rank === 1 ? '長' : (rank === 2 ? '次' : (rankNums[rank] || rank))));
-            const title = `${partnerLabel}之${rankStr}${type}`;
+            const title = `${partnerLabel}之${getRankStr(rankCount[kc.gender], sameGenderCount[kc.gender])}${type}`;
             const kidKey = `${lnk.id}_c${ki}`;
             const isDeceased = deceasedIds.includes(kidKey);
             if (isDeceased) { txt += `${title}已歿；\n`; return; }
@@ -125,7 +132,7 @@ const RecordTab = ({
             let fTxt = title;
             if (ext.location) fTxt += `居${ext.location}`;
             if (ext.job) fTxt += `，為${ext.job}`;
-            fTxt += `，${partnerMap[kc.partner] || '未婚'}`;
+            fTxt += `，${G2_LABELS[kc.partner] || '未婚'}`;
             if (kc.g3Str) fTxt += `，${formatKidsText(kc.g3Str)}`;
             if (ext.isPrimary) fTxt += `，為主要聯絡人及同意書填寫人`;
             if (ext.note) fTxt += `，${ext.note}`;
@@ -233,11 +240,7 @@ const RecordTab = ({
         {/* 擴充連線子代動態卡片 */}
         {(() => {
           if (!indexId || !customLinks || customLinks.length === 0) return null;
-          const indexGender = indexId === 'fa' ? 'M' : indexId === 'mo' ? 'F' : (() => {
-            if (indexId.startsWith('c')) { const idx = parseInt(indexId.replace('c','')); return gen2Cfg[idx]?.gender; }
-            return null;
-          })();
-          const rankNums = ['','','','三','四','五','六','七','八','九','十'];
+          const indexGender = getIndexGender(indexId);
           const allCards = [];
           customLinks.forEach(lnk => {
             if (!((lnk.sourceId === indexId || lnk.targetId === indexId) && lnk.kidsCfg && lnk.kidsCfg.length > 0)) return;
@@ -251,10 +254,8 @@ const RecordTab = ({
             const rankCount = { M: 0, F: 0 };
             lnk.kidsCfg.forEach((kc, ki) => {
               rankCount[kc.gender]++;
-              const rank = rankCount[kc.gender], total = sameGenderCount[kc.gender];
               const type = kc.gender === 'M' ? '子' : '女';
-              const rankStr = total === 1 ? '長' : (rank === total && rank > 2 ? '么' : (rank === 1 ? '長' : (rank === 2 ? '次' : (rankNums[rank] || rank))));
-              const title = `${partnerLabel}之${rankStr}${type}`;
+              const title = `${partnerLabel}之${getRankStr(rankCount[kc.gender], sameGenderCount[kc.gender])}${type}`;
               const kidKey = `${lnk.id}_c${ki}`;
               const isDeceased = deceasedIds.includes(kidKey);
               const ext = famExtras[kidKey] || { location: '', job: '', isPrimary: false, note: '' };
