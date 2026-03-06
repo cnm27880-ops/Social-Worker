@@ -8,6 +8,8 @@ import {
 
 const CUSTOM_LINK_STATUSES = ['married', 'divorced'];
 const CUSTOM_LINK_LABELS = { married: '已婚', divorced: '離婚' };
+const EXT_COLOR_MODES = ['black', 'blue'];
+const EXT_COLOR_LABELS = { black: '黑色 (一般)', blue: '藍色 (編輯)' };
 
 const GenogramTab = ({
   gen2Str, setGen2Str, gen2Cfg, setGen2Cfg,
@@ -41,6 +43,9 @@ const GenogramTab = ({
   const [textDirection, setTextDirection] = useState('horizontal');
   const textDragMoved = useRef(false);
   const [mousePos, setMousePos] = useState(null);
+
+  /* --- 擴充區顏色模式 --- */
+  const [extColorMode, setExtColorMode] = useState('black');
 
   /* --- 年齡與文字編輯狀態 --- */
   const [showAgeMode, setShowAgeMode] = useState(false);
@@ -168,8 +173,13 @@ const GenogramTab = ({
       if (!lnk.kidsCfg || lnk.kidsCfg.length === 0) return;
       const srcN = N.find(n => n.id === lnk.sourceId); const srcF = freeNodesRef.current.find(fn => fn.id === lnk.sourceId);
       const tgtN = N.find(n => n.id === lnk.targetId); const tgtF = freeNodesRef.current.find(fn => fn.id === lnk.targetId);
-      const spx = srcN?.dx ?? srcF?.x ?? 300, spy = srcN?.dy ?? srcF?.y ?? 160;
-      const tpx = tgtN?.dx ?? tgtF?.x ?? 400, tpy = tgtN?.dy ?? tgtF?.y ?? 160;
+      
+      // 修正座標抓取：強制讀取拖曳後的實際視覺座標，防止兩段婚姻小孩擠在同一個中心點
+      const spx = positionsRef.current[lnk.sourceId]?.x ?? srcN?.dx ?? srcF?.x ?? 300;
+      const spy = positionsRef.current[lnk.sourceId]?.y ?? srcN?.dy ?? srcF?.y ?? 160;
+      const tpx = positionsRef.current[lnk.targetId]?.x ?? tgtN?.dx ?? tgtF?.x ?? 400;
+      const tpy = positionsRef.current[lnk.targetId]?.y ?? tgtN?.dy ?? tgtF?.y ?? 160;
+
       const parentMidX = (spx + tpx) / 2, parentY = Math.max(spy, tpy), kidsY = parentY + 80;
       const kidUnits = lnk.kidsCfg.map((kc) => {
         const isMarried = kc.partner !== 'none'; const g3 = isMarried ? parseGenders(kc.g3Str || '') : [];
@@ -184,22 +194,22 @@ const GenogramTab = ({
           const lx = kidUnits.length === 1 ? parentMidX - COUPLE_GAP / 2 : midU - COUPLE_GAP / 2;
           const rx = kidUnits.length === 1 ? parentMidX + COUPLE_GAP / 2 : midU + COUPLE_GAP / 2;
           const sid = `${lnk.id}_s${ki}`, cmx = (lx + rx) / 2;
-          N.push({ id: kidId, gender: ku.gender, gen: 2, dx: lx, dy: kidsY, label: `${ku.gender === 'M' ? '子' : '女'}${ki+1}` });
-          N.push({ id: sid, gender: ku.gender === 'M' ? 'F' : 'M', gen: 2, dx: rx, dy: kidsY, label: '配偶' });
-          L.push({ id: `${lnk.id}_ml_c${ki}`, type: 'marry', a: kidId, b: sid, status: ku.partner });
+          N.push({ id: kidId, gender: ku.gender, gen: 2, dx: lx, dy: kidsY, label: `${ku.gender === 'M' ? '子' : '女'}${ki+1}`, isExt: true });
+          N.push({ id: sid, gender: ku.gender === 'M' ? 'F' : 'M', gen: 2, dx: rx, dy: kidsY, label: '配偶', isExt: true });
+          L.push({ id: `${lnk.id}_ml_c${ki}`, type: 'marry', a: kidId, b: sid, status: ku.partner, isExt: true });
           kidIds.push(kidId);
           if (ku.g3.length > 0) {
             const g3Start = cmx - ((ku.g3.length - 1) * SIBLING_GAP) / 2, g3ids = [];
-            ku.g3.forEach((g, j) => { const gkid = `${lnk.id}_g${ki}_${j}`; N.push({ id: gkid, gender: g, gen: 3, dx: g3Start + j * SIBLING_GAP, dy: kidsY + 80, label: `${g === 'M' ? '孫' : '孫女'}${j+1}` }); g3ids.push(gkid); });
-            L.push({ id: `${lnk.id}_pc_c${ki}`, type: 'pc', pa: kidId, pb: sid, kids: g3ids });
+            ku.g3.forEach((g, j) => { const gkid = `${lnk.id}_g${ki}_${j}`; N.push({ id: gkid, gender: g, gen: 3, dx: g3Start + j * SIBLING_GAP, dy: kidsY + 80, label: `${g === 'M' ? '孫' : '孫女'}${j+1}`, isExt: true }); g3ids.push(gkid); });
+            L.push({ id: `${lnk.id}_pc_c${ki}`, type: 'pc', pa: kidId, pb: sid, kids: g3ids, isExt: true });
           }
         } else {
-          N.push({ id: kidId, gender: ku.gender, gen: 2, dx: midU, dy: kidsY, label: `${ku.gender === 'M' ? '子' : '女'}${ki+1}` });
+          N.push({ id: kidId, gender: ku.gender, gen: 2, dx: midU, dy: kidsY, label: `${ku.gender === 'M' ? '子' : '女'}${ki+1}`, isExt: true });
           kidIds.push(kidId);
         }
         ckx += ku.w;
       });
-      if (kidIds.length > 0) L.push({ id: `${lnk.id}_pc`, type: 'pc', pa: lnk.sourceId, pb: lnk.targetId, kids: kidIds });
+      if (kidIds.length > 0) L.push({ id: `${lnk.id}_pc`, type: 'pc', pa: lnk.sourceId, pb: lnk.targetId, kids: kidIds, isExt: true });
     });
 
     return { nodes: N, lines: L };
@@ -437,11 +447,12 @@ const GenogramTab = ({
 
         <div className="section">
           <label>🧩 自由擴充區</label>
-          <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+          <div style={{ display: 'flex', gap: '8px', marginTop: '4px', alignItems: 'center' }}>
             <button onClick={() => addFreeNode('M')} style={{ flex: 1, padding: '6px', fontSize: '13px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>➕ 新增男性</button>
             <button onClick={() => addFreeNode('F')} style={{ flex: 1, padding: '6px', fontSize: '13px', background: '#ec4899', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>➕ 新增女性</button>
+            <span className="status-badge" data-status={extColorMode === 'blue' ? 'horizontal' : 'none'} ref={el => wheelRef(el, EXT_COLOR_MODES, extColorMode, setExtColorMode)} title="滾輪切換：黑色/藍色" style={{ marginLeft: '4px' }}>{EXT_COLOR_LABELS[extColorMode]}</span>
           </div>
-          <div className="hint" style={{ marginTop: '6px' }}>拖曳擴充個體去碰撞目標節點即可自動產生連線。</div>
+          <div className="hint" style={{ marginTop: '6px' }}>拖曳擴充個體去碰撞目標節點即可產生連線；藍色模式方便編輯辨識。</div>
         </div>
 
         {customLinks.length > 0 && (
@@ -538,25 +549,26 @@ const GenogramTab = ({
           {gen2Cfg.some(d => d.partner !== 'none' && d.g3Str) && <text x="16" y={GEN_Y[2] + 5} fontSize="12" fill="#b0b8c4" fontWeight="600" style={{fontFamily: TEXT_FONT}}>G3</text>}
 
           {lines.map(ln => {
+            const lineColor = ln.isExt && extColorMode === 'blue' ? '#3b82f6' : '#444';
             if (ln.type === 'marry') {
-              const a = pos(ln.a), b = pos(ln.b);
+              const a = pos(ln.a), b = pos(ln.b), nA = nodes.find(n => n.id === ln.a), nB = nodes.find(n => n.id === ln.b);
               const x1 = a.x + R, x2 = b.x - R, midX = (x1 + x2) / 2, midY = a.y;
-              const els = [<line key={ln.id} x1={x1} y1={a.y} x2={x2} y2={b.y} stroke="#444" strokeWidth="2" strokeDasharray={ln.status === 'cohab' ? "8,6" : "0"} />];
-              if (ln.status === 'separated') els.push(<line key={`${ln.id}-s`} x1={midX-6} y1={midY+12} x2={midX+6} y2={midY-12} stroke="#444" strokeWidth="2" />);
-              if (ln.status === 'divorced') els.push(<line key={`${ln.id}-d1`} x1={midX-8} y1={midY-8} x2={midX+8} y2={midY+8} stroke="#444" strokeWidth="2" />, <line key={`${ln.id}-d2`} x1={midX-8} y1={midY+8} x2={midX+8} y2={midY-8} stroke="#444" strokeWidth="2" />);
+              const els = [<line key={ln.id} x1={x1} y1={a.y} x2={x2} y2={b.y} stroke={lineColor} strokeWidth="2" strokeDasharray={ln.status === 'cohab' ? "8,6" : "0"} />];
+              if (ln.status === 'separated') els.push(<line key={`${ln.id}-s`} x1={midX-6} y1={midY+12} x2={midX+6} y2={midY-12} stroke={lineColor} strokeWidth="2" />);
+              if (ln.status === 'divorced') els.push(<line key={`${ln.id}-d1`} x1={midX-8} y1={midY-8} x2={midX+8} y2={midY+8} stroke={lineColor} strokeWidth="2" />, <line key={`${ln.id}-d2`} x1={midX-8} y1={midY+8} x2={midX+8} y2={midY-8} stroke={lineColor} strokeWidth="2" />);
               return <g key={ln.id}>{els}</g>;
             }
             if (ln.type === 'pc') {
               const pA = pos(ln.pa), pB = pos(ln.pb), midX = (pA.x + pB.x) / 2, parentY = Math.max(pA.y, pB.y);
               const kidPos = ln.kids.map(k => pos(k)); if (kidPos.length === 0) return null;
               const barY = (parentY + R + kidPos[0].y - R) / 2, els = [];
-              els.push(<line key={`${ln.id}-v`} x1={midX} y1={parentY} x2={midX} y2={barY} stroke="#444" strokeWidth="2" />);
-              els.push(<line key={`${ln.id}-h`} x1={Math.min(midX, ...kidPos.map(p=>p.x))} y1={barY} x2={Math.max(midX, ...kidPos.map(p=>p.x))} y2={barY} stroke="#444" strokeWidth="2" />);
+              els.push(<line key={`${ln.id}-v`} x1={midX} y1={parentY} x2={midX} y2={barY} stroke={lineColor} strokeWidth="2" />);
+              els.push(<line key={`${ln.id}-h`} x1={Math.min(midX, ...kidPos.map(p=>p.x))} y1={barY} x2={Math.max(midX, ...kidPos.map(p=>p.x))} y2={barY} stroke={lineColor} strokeWidth="2" />);
               const groups = []; let cur = []; ln.kids.forEach((k, i) => { if (nodes.find(n => n.id === k)?.isMulti) cur.push(i); else { if (cur.length >= 2) groups.push(cur); cur = []; } }); if (cur.length >= 2) groups.push(cur);
               kidPos.forEach((kp, j) => {
                 const g = groups.find(x => x.includes(j));
-                if (g) els.push(<line key={`${ln.id}-m${j}`} x1={g.map(i=>kidPos[i].x).reduce((a,b)=>a+b,0)/g.length} y1={barY} x2={kp.x} y2={kp.y - R} stroke="#444" strokeWidth="2" />);
-                else els.push(<line key={`${ln.id}-k${j}`} x1={kp.x} y1={barY} x2={kp.x} y2={kp.y - R} stroke="#444" strokeWidth="2" />);
+                if (g) els.push(<line key={`${ln.id}-m${j}`} x1={g.map(i=>kidPos[i].x).reduce((a,b)=>a+b,0)/g.length} y1={barY} x2={kp.x} y2={kp.y - R} stroke={lineColor} strokeWidth="2" />);
+                else els.push(<line key={`${ln.id}-k${j}`} x1={kp.x} y1={barY} x2={kp.x} y2={kp.y - R} stroke={lineColor} strokeWidth="2" />);
               });
               return <g key={ln.id}>{els}</g>;
             } return null;
@@ -564,8 +576,8 @@ const GenogramTab = ({
 
           {/* === 所有節點 (原生 + 自由) 共用渲染 === */}
           {[
-            ...nodes.map(nd => ({ id: nd.id, gender: nd.gender, ...pos(nd.id), stroke: '#333', dash: undefined, isFree: false })),
-            ...freeNodes.map(fn => ({ id: fn.id, gender: fn.gender, x: fn.x, y: fn.y, stroke: '#333', dash: undefined, isFree: true }))
+            ...nodes.map(nd => ({ id: nd.id, gender: nd.gender, ...pos(nd.id), stroke: nd.isExt && extColorMode === 'blue' ? '#3b82f6' : '#333', dash: undefined, isFree: false })),
+            ...freeNodes.map(fn => ({ id: fn.id, gender: fn.gender, x: fn.x, y: fn.y, stroke: extColorMode === 'blue' ? '#3b82f6' : '#333', dash: undefined, isFree: true }))
           ].map(nd => {
             const isIP = nd.id === indexId, fill = isIP ? '#1e293b' : 'white', txtC = isIP ? 'white' : '#333';
             const isEditAge = editingAgeId === nd.id, ageVal = ages[nd.id] || '';
@@ -612,12 +624,13 @@ const GenogramTab = ({
             const x1 = isSpLeft ? sp.x + R : sp.x - R;
             const x2 = isSpLeft ? tp.x - R : tp.x + R;
             const midX = (x1 + x2) / 2, midY = (sp.y + tp.y) / 2;
+            const cStroke = extColorMode === 'blue' ? '#3b82f6' : '#444';
             return (
               <g key={lnk.id}>
-                <line x1={x1} y1={sp.y} x2={x2} y2={tp.y} stroke="#444" strokeWidth="2" />
+                <line x1={x1} y1={sp.y} x2={x2} y2={tp.y} stroke={cStroke} strokeWidth="2" />
                 {lnk.status === 'divorced' && <>
-                  <line x1={midX-8} y1={midY-8} x2={midX+8} y2={midY+8} stroke="#444" strokeWidth="2" />
-                  <line x1={midX-8} y1={midY+8} x2={midX+8} y2={midY-8} stroke="#444" strokeWidth="2" />
+                  <line x1={midX-8} y1={midY-8} x2={midX+8} y2={midY+8} stroke={cStroke} strokeWidth="2" />
+                  <line x1={midX-8} y1={midY+8} x2={midX+8} y2={midY-8} stroke={cStroke} strokeWidth="2" />
                 </>}
                 <line x1={x1} y1={sp.y} x2={x2} y2={tp.y} stroke="transparent" strokeWidth="12" style={{ cursor: 'pointer' }} onDoubleClick={e => { e.stopPropagation(); deleteCustomLink(lnk.id); }} />
               </g>
