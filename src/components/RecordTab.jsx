@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import BadgeGroup from './BadgeGroup';
-import { getRelativeTitle, formatKidsText } from '../utils/helpers';
+import { getRelativeTitle, formatKidsText, G2_LABELS } from '../utils/helpers';
 
 const RecordTab = ({
   gen2Cfg, indexId, g1Status, cohabMembers, deceasedIds, customLinks
@@ -32,6 +32,21 @@ const RecordTab = ({
     identity: '一般民眾', job: '', edu: '', lang: '', religion: '', disability: '無身心障礙手冊', note: ''
   });
   const [famExtras, setFamExtras] = useState({}); // 儲存家屬的補充資訊 { index: { location, job, isPrimary, note } }
+
+  /* --- 共用工具函數 --- */
+  const getIndexGender = (id) => {
+    if (id === 'fa') return 'M';
+    if (id === 'mo') return 'F';
+    if (id?.startsWith('c')) return gen2Cfg[parseInt(id.replace('c', ''))]?.gender;
+    return null;
+  };
+  const getRankStr = (rank, total) => {
+    if (total === 1 || rank === 1) return '長';
+    if (rank === 2) return '次';
+    if (rank === total && rank > 2) return '么';
+    const nums = ['', '', '', '三', '四', '五', '六', '七', '八', '九', '十'];
+    return nums[rank] || String(rank);
+  };
 
   /* ===== 紀錄產生器邏輯 ===== */
   const generatedText = useMemo(() => {
@@ -74,8 +89,7 @@ const RecordTab = ({
       if (ext.location) fTxt += `居${ext.location}`;
       if (ext.job) fTxt += `，為${ext.job}`;
 
-      const partnerMap = { none: '未婚', married: '已婚', cohab: '同居', separated: '分居', divorced: '離婚' };
-      fTxt += `，${partnerMap[c.partner] || '未婚'}`;
+      fTxt += `，${G2_LABELS[c.partner] || '未婚'}`;
 
       if (c.g3Str) fTxt += `，${formatKidsText(c.g3Str)}`;
       if (ext.isPrimary) fTxt += `，為主要聯絡人及同意書填寫人`;
@@ -83,28 +97,47 @@ const RecordTab = ({
       txt += `${fTxt}；\n`;
     });
 
-    /* --- 擴充連線 (customLinks) → 只處理案主的關係，忽略第二代 --- */
+    /* --- 擴充連線 (customLinks) → 案主相關連線與擴充子代 --- */
     if (indexId && customLinks && customLinks.length > 0) {
-      const indexGender = indexId === 'fa' ? 'M' : indexId === 'mo' ? 'F' : (() => {
-        if (indexId.startsWith('c')) { const idx = parseInt(indexId.replace('c','')); return gen2Cfg[idx]?.gender; }
-        return null;
-      })();
+      const indexGender = getIndexGender(indexId);
       customLinks.forEach(lnk => {
-        // 只處理案主相關的連線
         if (lnk.sourceId !== indexId && lnk.targetId !== indexId) return;
-        // 忽略連向第二代 (c0, c1...) 的 customLinks
         const otherId = lnk.sourceId === indexId ? lnk.targetId : lnk.sourceId;
         if (/^c\d+$/.test(otherId)) return;
         const spouseLabel = indexGender === 'M' ? '前妻' : '前夫';
         const remarryLabel = indexGender === 'M' ? '案妻' : '案夫';
+        const partnerLabel = lnk.status === 'divorced' ? spouseLabel : remarryLabel;
         if (lnk.status === 'divorced') {
           let line = `與${spouseLabel}`;
-          if (lnk.g3Str) line += `${formatKidsText(lnk.g3Str)}`;
+          if (lnk.kidsStr) line += `，${formatKidsText(lnk.kidsStr)}`;
           txt += `${line}；\n`;
         } else if (lnk.status === 'married') {
           let line = `再婚，與${remarryLabel}`;
-          if (lnk.g3Str) line += `${formatKidsText(lnk.g3Str)}`;
+          if (lnk.kidsStr) line += `，${formatKidsText(lnk.kidsStr)}`;
           txt += `${line}；\n`;
+        }
+        // 遍歷 kidsCfg，輸出與原生第二代相同的文案邏輯
+        if (lnk.kidsCfg && lnk.kidsCfg.length > 0) {
+          const sameGenderCount = {};
+          lnk.kidsCfg.forEach(kc => { sameGenderCount[kc.gender] = (sameGenderCount[kc.gender] || 0) + 1; });
+          const rankCount = { M: 0, F: 0 };
+          lnk.kidsCfg.forEach((kc, ki) => {
+            rankCount[kc.gender]++;
+            const type = kc.gender === 'M' ? '子' : '女';
+            const title = `${partnerLabel}之${getRankStr(rankCount[kc.gender], sameGenderCount[kc.gender])}${type}`;
+            const kidKey = `${lnk.id}_c${ki}`;
+            const isDeceased = deceasedIds.includes(kidKey);
+            if (isDeceased) { txt += `${title}已歿；\n`; return; }
+            const ext = famExtras[kidKey] || {};
+            let fTxt = title;
+            if (ext.location) fTxt += `居${ext.location}`;
+            if (ext.job) fTxt += `，為${ext.job}`;
+            fTxt += `，${G2_LABELS[kc.partner] || '未婚'}`;
+            if (kc.g3Str) fTxt += `，${formatKidsText(kc.g3Str)}`;
+            if (ext.isPrimary) fTxt += `，為主要聯絡人及同意書填寫人`;
+            if (ext.note) fTxt += `，${ext.note}`;
+            txt += `${fTxt}；\n`;
+          });
         }
       });
     }
@@ -203,6 +236,65 @@ const RecordTab = ({
             </div>
           );
         })}
+
+        {/* 擴充連線子代動態卡片 */}
+        {(() => {
+          if (!indexId || !customLinks || customLinks.length === 0) return null;
+          const indexGender = getIndexGender(indexId);
+          const allCards = [];
+          customLinks.forEach(lnk => {
+            if (!((lnk.sourceId === indexId || lnk.targetId === indexId) && lnk.kidsCfg && lnk.kidsCfg.length > 0)) return;
+            const otherId = lnk.sourceId === indexId ? lnk.targetId : lnk.sourceId;
+            if (/^c\d+$/.test(otherId)) return;
+            const spouseLabel = indexGender === 'M' ? '前妻' : '前夫';
+            const remarryLabel = indexGender === 'M' ? '案妻' : '案夫';
+            const partnerLabel = lnk.status === 'divorced' ? spouseLabel : remarryLabel;
+            const sameGenderCount = {};
+            lnk.kidsCfg.forEach(kc => { sameGenderCount[kc.gender] = (sameGenderCount[kc.gender] || 0) + 1; });
+            const rankCount = { M: 0, F: 0 };
+            lnk.kidsCfg.forEach((kc, ki) => {
+              rankCount[kc.gender]++;
+              const type = kc.gender === 'M' ? '子' : '女';
+              const title = `${partnerLabel}之${getRankStr(rankCount[kc.gender], sameGenderCount[kc.gender])}${type}`;
+              const kidKey = `${lnk.id}_c${ki}`;
+              const isDeceased = deceasedIds.includes(kidKey);
+              const ext = famExtras[kidKey] || { location: '', job: '', isPrimary: false, note: '' };
+              allCards.push(
+                <div key={kidKey} className="fam-card" style={{ opacity: isDeceased ? 0.6 : 1, borderLeft: '3px solid #8b5cf6' }}>
+                  <div className="fam-title">
+                    <span>{title} {isDeceased && <span style={{color: '#ef4444'}}>(已歿)</span>}</span>
+                    <label style={{fontSize: '12px', color: '#3b82f6', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer'}}>
+                      <input type="checkbox" checked={ext.isPrimary || false} onChange={e => handleFamExtra(kidKey, 'isPrimary', e.target.checked)} disabled={isDeceased} /> 主要聯絡人
+                    </label>
+                  </div>
+                  {!isDeceased && (
+                    <div className="fam-grid">
+                      <div>
+                        <div className="hint" style={{marginBottom: '2px'}}>居住地</div>
+                        <input type="text" value={ext.location || ''} onChange={e => handleFamExtra(kidKey, 'location', e.target.value)} placeholder="例：台南" />
+                      </div>
+                      <div>
+                        <div className="hint" style={{marginBottom: '2px'}}>職業</div>
+                        <input type="text" value={ext.job || ''} onChange={e => handleFamExtra(kidKey, 'job', e.target.value)} placeholder="例：家管、從商" />
+                      </div>
+                      <div style={{gridColumn: '1 / -1'}}>
+                        <div className="hint" style={{marginBottom: '2px'}}>特殊備註</div>
+                        <input type="text" value={ext.note || ''} onChange={e => handleFamExtra(kidKey, 'note', e.target.value)} placeholder="例：拒絕回答孫輩狀況" />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            });
+          });
+          if (allCards.length === 0) return null;
+          return (
+            <>
+              <h2 style={{ marginTop: '20px' }}>擴充連線子代動態</h2>
+              {allCards}
+            </>
+          );
+        })()}
 
       </div>
 
