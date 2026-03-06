@@ -296,9 +296,7 @@ const GenogramTab = ({
     } else {
       setPositions(prev => {
         let nX = sp.x - drag.ox, nY = sp.y - drag.oy;
-        // 磁吸：先對齊已拖曳節點，再對齊未拖曳的原始座標
         for (const [id, p] of Object.entries(prev)) { if (id === drag.id) continue; if (Math.abs(nX - p.x) < 12) nX = p.x; if (Math.abs(nY - p.y) < 12) nY = p.y; }
-        for (const nd of nodes) { if (nd.id === drag.id || prev[nd.id]) continue; if (Math.abs(nX - nd.dx) < 12) nX = nd.dx; if (Math.abs(nY - nd.dy) < 12) nY = nd.dy; }
         return { ...prev, [drag.id]: { x: nX, y: nY } };
       });
     }
@@ -477,9 +475,8 @@ const GenogramTab = ({
         )}
 
         <div className="section">
-          <label>📝 文字方塊</label>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
-            <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold' }}>方向：</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <label style={{ margin: 0 }}>📝 文字方塊</label>
             <span className="status-badge" data-status={textDirection} ref={el => wheelRef(el, TEXT_DIRS, textDirection, setTextDirection)} title="滾輪切換：橫式/直式">{TEXT_DIR_LABELS[textDirection]}</span>
             <button onClick={addText} style={{ padding: '5px 10px', fontSize: '12px', background: '#10b981', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', marginLeft: 'auto' }}>➕ 新增至畫布</button>
           </div>
@@ -611,8 +608,10 @@ const GenogramTab = ({
               const kidPos = ln.kids.map(k => pos(k)); if (kidPos.length === 0) return null;
               const barY = (parentY + R + kidPos[0].y - R) / 2, els = [];
               els.push(<line key={`${ln.id}-v`} x1={midX} y1={parentY} x2={midX} y2={barY} stroke={lineColor} strokeWidth="2" />);
-              els.push(<line key={`${ln.id}-h`} x1={Math.min(midX, ...kidPos.map(p=>p.x))} y1={barY} x2={Math.max(midX, ...kidPos.map(p=>p.x))} y2={barY} stroke={lineColor} strokeWidth="2" />);
               const groups = []; let cur = []; ln.kids.forEach((k, i) => { if (nodes.find(n => n.id === k)?.isMulti) cur.push(i); else { if (cur.length >= 2) groups.push(cur); cur = []; } }); if (cur.length >= 2) groups.push(cur);
+              // 計算水平線端點：多胞胎用匯集中心點，非多胞胎用個體 X
+              const barXs = kidPos.map((kp, j) => { const g = groups.find(x => x.includes(j)); return g ? g.map(i => kidPos[i].x).reduce((a, b) => a + b, 0) / g.length : kp.x; });
+              els.push(<line key={`${ln.id}-h`} x1={Math.min(midX, ...barXs)} y1={barY} x2={Math.max(midX, ...barXs)} y2={barY} stroke={lineColor} strokeWidth="2" />);
               kidPos.forEach((kp, j) => {
                 const g = groups.find(x => x.includes(j));
                 if (g) els.push(<line key={`${ln.id}-m${j}`} x1={g.map(i=>kidPos[i].x).reduce((a,b)=>a+b,0)/g.length} y1={barY} x2={kp.x} y2={kp.y - R} stroke={lineColor} strokeWidth="2" />);
