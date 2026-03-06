@@ -472,11 +472,10 @@ const GenogramTab = ({
         )}
 
         <div className="section">
-          <label>📝 自由文字方塊</label>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
-            <span style={{ fontSize: '12px', color: '#64748b' }}>方向：</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <label style={{ margin: 0 }}>📝 文字方塊</label>
             <span className="status-badge" data-status={textDirection} ref={el => wheelRef(el, TEXT_DIRS, textDirection, setTextDirection)}>{TEXT_DIR_LABELS[textDirection]}</span>
-            <button onClick={addText} style={{ padding: '4px 12px', fontSize: '12px', background: '#10b981', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', marginLeft: 'auto' }}>➕ 新增至畫布</button>
+            <button onClick={addText} style={{ padding: '4px 12px', fontSize: '12px', background: '#10b981', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', marginLeft: 'auto' }}>➕ 新增</button>
           </div>
           <div className="hint" style={{marginTop: '6px'}}>單擊選取文字方塊（顯示框線與控制按鈕）；雙擊可編輯內容；選取後可刪除或拖曳右下角縮放。</div>
         </div>
@@ -702,11 +701,15 @@ const GenogramTab = ({
                   const rx = Math.max(35, len * 9 + 15), ry = 28;
                   return (rx * ry) / Math.sqrt(Math.pow(ry * Math.cos(ang), 2) + Math.pow(rx * Math.sin(ang), 2));
                 }
+                if (node?.gender === 'M') {
+                  const cosA = Math.abs(Math.cos(ang)), sinA = Math.abs(Math.sin(ang));
+                  return cosA > sinA ? R / cosA : R / sinA;
+                }
                 return R;
               };
 
-              const r1 = getRadius(srcNode, angle) + 2;
-              const r2 = getRadius(tgtNode, angle + Math.PI) + 2;
+              const r1 = getRadius(srcNode, angle);
+              const r2 = getRadius(tgtNode, angle + Math.PI);
 
               const x1 = sp.x + Math.cos(angle) * r1, y1 = sp.y + Math.sin(angle) * r1;
               const x2 = tp.x - Math.cos(angle) * r2, y2 = tp.y - Math.sin(angle) * r2;
