@@ -177,27 +177,27 @@ const RecordTab = ({
           </button>
         </h2>
 
-        <div className="section">
+        <div className="section section-inline">
           <label>身分別</label>
           <BadgeGroup options={tagOptions.identity} value={subjInfo.identity} onChange={v => setSubjInfo({...subjInfo, identity: v})} isEditing={isEditingTags} onAdd={t => handleAddTag('identity', t)} onRemove={t => handleRemoveTag('identity', t)} />
         </div>
 
-        <div className="section">
+        <div className="section section-inline">
           <label>教育程度</label>
           <BadgeGroup options={tagOptions.edu} value={subjInfo.edu} onChange={v => setSubjInfo({...subjInfo, edu: v})} isEditing={isEditingTags} onAdd={t => handleAddTag('edu', t)} onRemove={t => handleRemoveTag('edu', t)} />
         </div>
 
-        <div className="section">
+        <div className="section section-inline">
           <label>溝通語言</label>
           <BadgeGroup options={tagOptions.lang} value={subjInfo.lang} onChange={v => setSubjInfo({...subjInfo, lang: v})} isEditing={isEditingTags} onAdd={t => handleAddTag('lang', t)} onRemove={t => handleRemoveTag('lang', t)} />
         </div>
 
-        <div className="section">
+        <div className="section section-inline">
           <label>宗教信仰</label>
           <BadgeGroup options={tagOptions.religion} value={subjInfo.religion} onChange={v => setSubjInfo({...subjInfo, religion: v})} isEditing={isEditingTags} onAdd={t => handleAddTag('religion', t)} onRemove={t => handleRemoveTag('religion', t)} />
         </div>
 
-        <div className="section">
+        <div className="section section-inline">
           <label>身障證明</label>
           <BadgeGroup options={tagOptions.disability} value={subjInfo.disability} onChange={v => setSubjInfo({...subjInfo, disability: v})} isEditing={isEditingTags} onAdd={t => handleAddTag('disability', t)} onRemove={t => handleRemoveTag('disability', t)} />
         </div>
