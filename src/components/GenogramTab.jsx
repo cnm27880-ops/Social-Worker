@@ -470,7 +470,7 @@ const GenogramTab = ({
         )}
 
         <div className="section">
-          <label>📝 自由文字方塊</label>
+          <label>📝 文字方塊</label>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
             <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold' }}>方向：</span>
             <span className="status-badge" data-status={textDirection} ref={el => wheelRef(el, TEXT_DIRS, textDirection, setTextDirection)} title="滾輪切換：橫式/直式">{TEXT_DIR_LABELS[textDirection]}</span>
