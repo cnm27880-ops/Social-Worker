@@ -7,11 +7,11 @@ const RecordTab = ({
 }) => {
   /* --- 自訂標籤狀態 --- */
   const DEFAULT_TAGS = {
-    identity: ['一般民眾', '自費民眾', '公費就養榮民', '就養榮民', '自費榮民', '榮眷', '遺眷'],
+    identity: ['一般民眾', '自費民眾', '就養榮民', '自費榮民', '榮眷', '遺眷'],
     edu: ['不識字', '自學識字', '國小', '初中', '高中職', '大學以上'],
     lang: ['國語', '台語', '國台語', '客家語'],
     religion: ['無宗教', '佛教', '道教', '基督教', '天主教'],
-    disability: ['無身心障礙手冊', '有身障手冊']
+    disability: ['無身心障礙手冊', '有身心障礙手冊']
   };
   const [tagOptions, setTagOptions] = useState(() => {
     try { const saved = localStorage.getItem('genogram-tags'); if (saved) return { ...DEFAULT_TAGS, ...JSON.parse(saved) }; } catch {}
@@ -52,7 +52,7 @@ const RecordTab = ({
   const generatedText = useMemo(() => {
     let txt = `案主為${subjInfo.identity}`;
     if (subjInfo.job) txt += `，${subjInfo.job}`;
-    if (subjInfo.edu) txt += `，${subjInfo.edu}`;
+    if (subjInfo.edu) txt += `，${subjInfo.edu}${['不識字', '自學識字'].includes(subjInfo.edu) ? '' : '學歷'}`;
     if (subjInfo.lang) txt += `，${subjInfo.lang}溝通`;
     if (subjInfo.religion) txt += `，${subjInfo.religion}信仰`;
     if (subjInfo.disability) txt += `，${subjInfo.disability}`;
@@ -74,8 +74,19 @@ const RecordTab = ({
       if (others.length > 0) cohabText = `與${others.join('、')}同住`;
     }
     txt += `，${cohabText}。`;
-    if (subjInfo.note) txt += `${subjInfo.note}；`;
+    if (subjInfo.note) txt += `${subjInfo.note}；\n`;
     else txt += `；\n`;
+
+    // 統計原生家庭的子代總數
+    if (gen2Cfg.length > 0) {
+      const m = gen2Cfg.filter(c => c.gender === 'M').length;
+      const f = gen2Cfg.filter(c => c.gender === 'F').length;
+      let res = '育有';
+      if (m > 0 && f > 0) res += `${m}子${f}女`;
+      else if (m > 0) res += `${m}子`;
+      else if (f > 0) res += `${f}女`;
+      txt += `${res}，`;
+    }
 
     gen2Cfg.forEach((c, i) => {
       const title = getRelativeTitle(c.gender, i, gen2Cfg);
