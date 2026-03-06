@@ -12,6 +12,8 @@ const EXT_COLOR_MODES = ['black', 'blue'];
 const EXT_COLOR_LABELS = { black: '一般', blue: '編輯' };
 
 const DEFAULT_SHORTCUTS = { drag: 'q', index: 'w', cohab: 'e', deceased: 'r' };
+const ecoRx = (text) => Math.max(35, (text?.length || 1) * 9 + 15);
+const ECO_RY = 28;
 
 const GenogramTab = ({
   gen2Str, setGen2Str, gen2Cfg, setGen2Cfg,
@@ -238,8 +240,6 @@ const GenogramTab = ({
     return { nodes: N, lines: L };
   }, [gen2Cfg, g1Status, customLinks]); // freeNodes 改用 ref 讀取，避免每次拖曳觸發重算
 
-  const structKey = useMemo(() => nodes.map(n => n.id).join(','), [nodes]);
-  useEffect(() => { setPositions(prev => { const m = {}; nodes.forEach(n => { m[n.id] = prev[n.id] || { x: n.dx, y: n.dy }; }); return m; }); }, [structKey]);
 
   const pos = useCallback((id) => {
     if (positions[id]) return positions[id];
@@ -294,7 +294,13 @@ const GenogramTab = ({
       }
       setFreeNodes(prev => prev.map(fn => fn.id === drag.id ? { ...fn, x: newX, y: newY } : fn));
     } else {
-      setPositions(prev => { let nX = sp.x - drag.ox, nY = sp.y - drag.oy; for (const [id, p] of Object.entries(prev)) { if (id === drag.id) continue; if (Math.abs(nX - p.x) < 12) nX = p.x; if (Math.abs(nY - p.y) < 12) nY = p.y; } return { ...prev, [drag.id]: { x: nX, y: nY } }; });
+      setPositions(prev => {
+        let nX = sp.x - drag.ox, nY = sp.y - drag.oy;
+        // 磁吸：先對齊已拖曳節點，再對齊未拖曳的原始座標
+        for (const [id, p] of Object.entries(prev)) { if (id === drag.id) continue; if (Math.abs(nX - p.x) < 12) nX = p.x; if (Math.abs(nY - p.y) < 12) nY = p.y; }
+        for (const nd of nodes) { if (nd.id === drag.id || prev[nd.id]) continue; if (Math.abs(nX - nd.dx) < 12) nX = nd.dx; if (Math.abs(nY - nd.dy) < 12) nY = nd.dy; }
+        return { ...prev, [drag.id]: { x: nX, y: nY } };
+      });
     }
   }, [drag, textDrag, textResize, dragVertex, draftPoly, svgPt, setFreeNodes, customLinks, nodes]);
 
@@ -361,9 +367,8 @@ const GenogramTab = ({
     nodes.forEach(n => { const p = pos(n.id); allXs.push(p.x - R, p.x + R); allYs.push(p.y - R, p.y + R); });
     freeNodes.forEach(fn => {
       if (fn.type === 'eco') {
-        const ecoRx = Math.max(35, (fn.text?.length || 1) * 9 + 15);
-        const ecoRy = 28;
-        allXs.push(fn.x - ecoRx, fn.x + ecoRx); allYs.push(fn.y - ecoRy, fn.y + ecoRy);
+        const rx = ecoRx(fn.text);
+        allXs.push(fn.x - rx, fn.x + rx); allYs.push(fn.y - ECO_RY, fn.y + ECO_RY);
       } else {
         allXs.push(fn.x - R, fn.x + R); allYs.push(fn.y - R, fn.y + R);
       }
@@ -386,7 +391,7 @@ const GenogramTab = ({
 
   /* ===== SVG 尺寸計算 ===== */
   const allX = nodes.map(n => positions[n.id]?.x ?? n.dx).concat(texts.map(t => t.x + 100), freeNodes.map(fn => {
-    if (fn.type === 'eco') return fn.x + Math.max(35, (fn.text?.length || 1) * 9 + 15);
+    if (fn.type === 'eco') return fn.x + ecoRx(fn.text);
     return fn.x + 100;
   }));
   const allY = nodes.map(n => positions[n.id]?.y ?? n.dy).concat(texts.map(t => t.y + 100), freeNodes.map(fn => fn.y + 100));
@@ -406,7 +411,7 @@ const GenogramTab = ({
               年齡 {showAgeMode ? 'ON' : 'OFF'}
             </label>
             <button onClick={downloadJPG} style={{ padding: '5px 10px', fontSize: '12px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>下載</button>
-            <button onClick={() => { if(window.confirm('確定重置？')) { setGen2Str(''); setGen2Cfg([]); setIndexId(null); setCohabMembers([]); setDeceasedIds([]); setPolygons([]); setTexts([]); setAges({}); setFreeNodes([]); setCustomLinks([]); } }} style={{ padding: '5px 10px', fontSize: '12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>重置</button>
+            <button onClick={() => { if(window.confirm('確定重置？')) { setGen2Str(''); setGen2Cfg([]); setIndexId(null); setCohabMembers([]); setDeceasedIds([]); setPolygons([]); setTexts([]); setAges({}); setFreeNodes([]); setCustomLinks([]); setPositions({}); } }} style={{ padding: '5px 10px', fontSize: '12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>重置</button>
           </div>
         </div>
 
@@ -472,12 +477,12 @@ const GenogramTab = ({
         )}
 
         <div className="section">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <label style={{ margin: 0 }}>📝 文字方塊</label>
-            <span className="status-badge" data-status={textDirection} ref={el => wheelRef(el, TEXT_DIRS, textDirection, setTextDirection)}>{TEXT_DIR_LABELS[textDirection]}</span>
-            <button onClick={addText} style={{ padding: '4px 12px', fontSize: '12px', background: '#10b981', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', marginLeft: 'auto' }}>➕ 新增</button>
+          <label>📝 文字方塊</label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
+            <span className="status-badge" data-status={textDirection} ref={el => wheelRef(el, TEXT_DIRS, textDirection, setTextDirection)} title="滾輪切換：橫式/直式">{TEXT_DIR_LABELS[textDirection]}</span>
+            <button onClick={addText} style={{ padding: '5px 10px', fontSize: '12px', background: '#10b981', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', marginLeft: 'auto' }}>➕新增</button>
           </div>
-          <div className="hint" style={{marginTop: '6px'}}>單擊選取文字方塊（顯示框線與控制按鈕）；雙擊可編輯內容；選取後可刪除或拖曳右下角縮放。</div>
+          <div className="hint" style={{marginTop: '6px'}}>單擊選取文字方塊（顯示框線）；雙擊可編輯內容；選取後可刪除或拖曳右下角縮放。</div>
         </div>
 
         <div className="section">
@@ -660,16 +665,15 @@ const GenogramTab = ({
 
           {/* === 生態圖節點 (鈷藍色動態橢圓) === */}
           {freeNodes.filter(fn => fn.type === 'eco').map(ecoNode => {
-            const ecoRx = Math.max(35, (ecoNode.text?.length || 1) * 9 + 15);
-            const ecoRy = 28;
+            const rx = ecoRx(ecoNode.text);
             const isEditingThis = editingEcoId === ecoNode.id;
             return (
               <g key={ecoNode.id} transform={`translate(${ecoNode.x},${ecoNode.y})`} style={{ cursor: drag?.id === ecoNode.id ? 'grabbing' : 'grab' }}
                  onMouseDown={e => onDown(e, ecoNode.id)}
                  onDoubleClick={e => { e.stopPropagation(); setEditingEcoId(ecoNode.id); }}>
-                <ellipse cx="0" cy="0" rx={ecoRx} ry={ecoRy} fill="#2563eb" stroke="#1e40af" strokeWidth="2.5" />
+                <ellipse cx="0" cy="0" rx={rx} ry={ECO_RY} fill="#2563eb" stroke="#1e40af" strokeWidth="2.5" />
                 {isEditingThis ? (
-                  <foreignObject x={-ecoRx + 4} y={-14} width={(ecoRx - 4) * 2} height={28}>
+                  <foreignObject x={-rx + 4} y={-14} width={(rx - 4) * 2} height={28}>
                     <input autoFocus defaultValue={ecoNode.text || ''}
                       onBlur={e => finishEditingEco(ecoNode.id, e.target.value)}
                       onKeyDown={e => { e.stopPropagation(); if (e.key === 'Enter') finishEditingEco(ecoNode.id, e.target.value); }}
@@ -697,9 +701,8 @@ const GenogramTab = ({
 
               const getRadius = (node, ang) => {
                 if (node?.type === 'eco') {
-                  const len = node.text ? node.text.length : 1;
-                  const rx = Math.max(35, len * 9 + 15), ry = 28;
-                  return (rx * ry) / Math.sqrt(Math.pow(ry * Math.cos(ang), 2) + Math.pow(rx * Math.sin(ang), 2));
+                  const rx = ecoRx(node.text);
+                  return (rx * ECO_RY) / Math.sqrt(Math.pow(ECO_RY * Math.cos(ang), 2) + Math.pow(rx * Math.sin(ang), 2));
                 }
                 if (node?.gender === 'M') {
                   const cosA = Math.abs(Math.cos(ang)), sinA = Math.abs(Math.sin(ang));
