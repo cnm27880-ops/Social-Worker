@@ -655,24 +655,25 @@ const GenogramTab = ({
             );
           })}
 
-          {/* === 生態圖節點 (鈷藍色膠囊) === */}
+          {/* === 生態圖節點 (鈷藍色動態橢圓) === */}
           {freeNodes.filter(fn => fn.type === 'eco').map(ecoNode => {
-            const ecoW = Math.max(80, (ecoNode.text || '').length * 16 + 30);
+            const ecoRx = Math.max(35, (ecoNode.text?.length || 1) * 9 + 15);
+            const ecoRy = 28;
             const isEditingThis = editingEcoId === ecoNode.id;
             return (
               <g key={ecoNode.id} transform={`translate(${ecoNode.x},${ecoNode.y})`} style={{ cursor: drag?.id === ecoNode.id ? 'grabbing' : 'grab' }}
                  onMouseDown={e => onDown(e, ecoNode.id)}
                  onDoubleClick={e => { e.stopPropagation(); setEditingEcoId(ecoNode.id); }}>
-                <rect rx="20" ry="20" width={ecoW} height={40} x={-ecoW / 2} y={-20} fill="#2563eb" stroke="#1e40af" strokeWidth="2.5" />
+                <ellipse cx="0" cy="0" rx={ecoRx} ry={ecoRy} fill="#2563eb" stroke="#1e40af" strokeWidth="2.5" />
                 {isEditingThis ? (
-                  <foreignObject x={-ecoW / 2 + 4} y={-14} width={ecoW - 8} height={28}>
+                  <foreignObject x={-ecoRx + 4} y={-14} width={(ecoRx - 4) * 2} height={28}>
                     <input autoFocus defaultValue={ecoNode.text || ''}
                       onBlur={e => finishEditingEco(ecoNode.id, e.target.value)}
                       onKeyDown={e => { e.stopPropagation(); if (e.key === 'Enter') finishEditingEco(ecoNode.id, e.target.value); }}
                       style={{ width: '100%', height: '100%', textAlign: 'center', fontSize: '13px', fontFamily: TEXT_FONT, border: 'none', background: 'transparent', outline: 'none', color: 'white', fontWeight: 'bold', padding: 0 }} />
                   </foreignObject>
                 ) : (
-                  <text x="0" y="5" textAnchor="middle" fontSize="13" fontWeight="bold" fill="white" style={{ fontFamily: TEXT_FONT, pointerEvents: 'none' }}>{ecoNode.text || ''}</text>
+                  <text x="0" y="4" textAnchor="middle" fontSize="13" fontWeight="bold" fill="white" style={{ fontFamily: TEXT_FONT, pointerEvents: 'none' }}>{ecoNode.text || ''}</text>
                 )}
               </g>
             );
@@ -684,11 +685,33 @@ const GenogramTab = ({
             const isEcoLink = lnk.type === 'eco';
 
             if (isEcoLink) {
-              // 生態圖連線：從節點中心直連，不偏移 R
+              // 生態圖連線：三角函數邊緣偵測，線條精準停在半徑邊緣
+              const srcNode = nodes.find(n => n.id === lnk.sourceId) || freeNodes.find(fn => fn.id === lnk.sourceId);
+              const tgtNode = nodes.find(n => n.id === lnk.targetId) || freeNodes.find(fn => fn.id === lnk.targetId);
+
+              const dx = tp.x - sp.x, dy = tp.y - sp.y;
+              const angle = Math.atan2(dy, dx);
+
+              const getRadius = (node, ang) => {
+                if (node?.type === 'eco') {
+                  const len = node.text ? node.text.length : 1;
+                  const rx = Math.max(35, len * 9 + 15), ry = 28;
+                  return (rx * ry) / Math.sqrt(Math.pow(ry * Math.cos(ang), 2) + Math.pow(rx * Math.sin(ang), 2));
+                }
+                return R;
+              };
+
+              const r1 = getRadius(srcNode, angle) + 2;
+              const r2 = getRadius(tgtNode, angle + Math.PI) + 2;
+
+              const x1 = sp.x + Math.cos(angle) * r1, y1 = sp.y + Math.sin(angle) * r1;
+              const x2 = tp.x - Math.cos(angle) * r2, y2 = tp.y - Math.sin(angle) * r2;
+
+              const cStroke = '#2563eb';
               return (
                 <g key={lnk.id}>
-                  <line x1={sp.x} y1={sp.y} x2={tp.x} y2={tp.y} stroke="#2563eb" strokeWidth="2" />
-                  <line x1={sp.x} y1={sp.y} x2={tp.x} y2={tp.y} stroke="transparent" strokeWidth="12" style={{ cursor: 'pointer' }} onDoubleClick={e => { e.stopPropagation(); deleteCustomLink(lnk.id); }} />
+                  <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={cStroke} strokeWidth="2" strokeDasharray="4,4" />
+                  <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent" strokeWidth="12" style={{ cursor: 'pointer' }} onDoubleClick={e => { e.stopPropagation(); deleteCustomLink(lnk.id); }} />
                 </g>
               );
             }
