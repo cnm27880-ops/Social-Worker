@@ -32,6 +32,7 @@ const RecordTab = ({
     identity: '一般民眾', job: '', edu: '', lang: '', religion: '', disability: '無身心障礙手冊', note: ''
   });
   const [famExtras, setFamExtras] = useState({}); // 儲存家屬的補充資訊 { index: { location, job, isPrimary, note } }
+  const [savedNotes, setSavedNotes] = useState(['']);
 
   /* --- 共用工具函數 --- */
   const getIndexGender = (id) => {
@@ -203,12 +204,12 @@ const RecordTab = ({
 
         <div className="section">
           <label>職業 / 經歷 (可自填)</label>
-          <input type="text" value={subjInfo.job} onChange={e => setSubjInfo({...subjInfo, job: e.target.value})} placeholder="例：家管、務農、裝甲兵退役" />
+          <input type="text" value={subjInfo.job} onChange={e => setSubjInfo({...subjInfo, job: e.target.value})} placeholder="例：家管、務農、退休人員" />
         </div>
 
         <div className="section">
           <label>案主特殊備註</label>
-          <input type="text" value={subjInfo.note} onChange={e => setSubjInfo({...subjInfo, note: e.target.value})} placeholder="例：安徽省巢縣人，每月有領取就養金" />
+          <input type="text" value={subjInfo.note} onChange={e => setSubjInfo({...subjInfo, note: e.target.value})} placeholder="例：每月領取相關補助，或具其他特殊背景" />
         </div>
 
         <h2 style={{ marginTop: '20px' }}>家屬動態清單 (由家系圖連動)</h2>
@@ -312,10 +313,39 @@ const RecordTab = ({
       {/* 右側即時預覽區 */}
       <div className="record-preview">
         <h2 style={{ margin: 0, border: 'none', padding: 0, color: '#1e293b', fontSize: '18px', marginBottom: '14px' }}>✨ 個案紀錄即時預覽</h2>
-        <textarea value={generatedText} readOnly />
+        <textarea value={generatedText} readOnly style={{ minHeight: '250px' }} />
         <button onClick={copyRecord} style={{ padding: '12px', fontSize: '16px', background: '#10b981', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 4px 6px -1px rgba(16, 185, 129, 0.4)' }}>
           📋 一鍵複製至剪貼簿
         </button>
+
+        {/* 自由保存區 */}
+        <div style={{ marginTop: '20px', padding: '16px', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+          <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', color: '#1e293b' }}>📝 自由保存區</h3>
+          {savedNotes.map((note, idx) => (
+            <div key={idx} style={{ display: 'flex', gap: '6px', marginBottom: '8px', alignItems: 'center' }}>
+              <textarea
+                value={note}
+                onChange={e => {
+                  const updated = [...savedNotes];
+                  updated[idx] = e.target.value;
+                  setSavedNotes(updated);
+                }}
+                placeholder={`備註 ${idx + 1}`}
+                style={{ flex: 1, minHeight: '40px', resize: 'vertical', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px', fontFamily: 'inherit' }}
+              />
+              {savedNotes.length > 1 && (
+                <button
+                  onClick={() => setSavedNotes(prev => prev.filter((_, i) => i !== idx))}
+                  style={{ padding: '4px 8px', fontSize: '12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                >✕</button>
+              )}
+            </div>
+          ))}
+          <button
+            onClick={() => setSavedNotes(prev => [...prev, ''])}
+            style={{ padding: '8px 16px', fontSize: '14px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
+          >➕ 新增一行</button>
+        </div>
       </div>
     </div>
   );

@@ -27,8 +27,8 @@ const App = () => {
         <button className={`tab-btn ${activeTab === 'record' ? 'active' : ''}`} onClick={() => setActiveTab('record')}>📝 個案紀錄產生</button>
       </div>
 
-      {/* 頁籤一：家系圖 */}
-      {activeTab === 'genogram' && (
+      {/* 頁籤一：家系圖（用 CSS display 控制，避免 unmount 丟失狀態） */}
+      <div style={{ display: activeTab === 'genogram' ? 'block' : 'none' }}>
         <GenogramTab
           gen2Str={gen2Str} setGen2Str={setGen2Str}
           gen2Cfg={gen2Cfg} setGen2Cfg={setGen2Cfg}
@@ -39,10 +39,10 @@ const App = () => {
           freeNodes={freeNodes} setFreeNodes={setFreeNodes}
           customLinks={customLinks} setCustomLinks={setCustomLinks}
         />
-      )}
+      </div>
 
-      {/* 頁籤二：個案紀錄產生器 */}
-      {activeTab === 'record' && (
+      {/* 頁籤二：個案紀錄產生器（同樣用 CSS display 控制） */}
+      <div style={{ display: activeTab === 'record' ? 'block' : 'none' }}>
         <RecordTab
           gen2Cfg={gen2Cfg}
           indexId={indexId}
@@ -51,7 +51,7 @@ const App = () => {
           deceasedIds={deceasedIds}
           customLinks={customLinks}
         />
-      )}
+      </div>
     </div>
   );
 };
