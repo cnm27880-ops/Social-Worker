@@ -238,8 +238,6 @@ const GenogramTab = ({
     return { nodes: N, lines: L };
   }, [gen2Cfg, g1Status, customLinks]); // freeNodes 改用 ref 讀取，避免每次拖曳觸發重算
 
-  const structKey = useMemo(() => nodes.map(n => n.id).join(','), [nodes]);
-  useEffect(() => { setPositions(prev => { const m = {}; nodes.forEach(n => { m[n.id] = prev[n.id] || { x: n.dx, y: n.dy }; }); return m; }); }, [structKey]);
 
   const pos = useCallback((id) => {
     if (positions[id]) return positions[id];
@@ -472,12 +470,13 @@ const GenogramTab = ({
         )}
 
         <div className="section">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <label style={{ margin: 0 }}>📝 文字方塊</label>
-            <span className="status-badge" data-status={textDirection} ref={el => wheelRef(el, TEXT_DIRS, textDirection, setTextDirection)}>{TEXT_DIR_LABELS[textDirection]}</span>
-            <button onClick={addText} style={{ padding: '4px 12px', fontSize: '12px', background: '#10b981', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', marginLeft: 'auto' }}>➕ 新增</button>
+          <label>📝 自由文字方塊</label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
+            <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold' }}>方向：</span>
+            <span className="status-badge" data-status={textDirection} ref={el => wheelRef(el, TEXT_DIRS, textDirection, setTextDirection)} title="滾輪切換：橫式/直式">{TEXT_DIR_LABELS[textDirection]}</span>
+            <button onClick={addText} style={{ padding: '5px 10px', fontSize: '12px', background: '#10b981', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', marginLeft: 'auto' }}>➕ 新增至畫布</button>
           </div>
-          <div className="hint" style={{marginTop: '6px'}}>單擊選取文字方塊（顯示框線與控制按鈕）；雙擊可編輯內容；選取後可刪除或拖曳右下角縮放。</div>
+          <div className="hint" style={{marginTop: '6px'}}>單擊選取文字方塊（顯示框線）；雙擊可編輯內容；選取後可刪除或拖曳右下角縮放。</div>
         </div>
 
         <div className="section">
