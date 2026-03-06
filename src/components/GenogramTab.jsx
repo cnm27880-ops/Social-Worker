@@ -194,7 +194,7 @@ const GenogramTab = ({
           const lx = kidUnits.length === 1 ? parentMidX - COUPLE_GAP / 2 : midU - COUPLE_GAP / 2;
           const rx = kidUnits.length === 1 ? parentMidX + COUPLE_GAP / 2 : midU + COUPLE_GAP / 2;
           const sid = `${lnk.id}_s${ki}`, cmx = (lx + rx) / 2;
-          N.push({ id: kidId, gender: ku.gender, gen: 2, dx: lx, dy: kidsY, label: `${ku.gender === 'M' ? '子' : '女'}${ki+1}`, isExt: true });
+          N.push({ id: kidId, gender: ku.gender, gen: 2, dx: lx, dy: kidsY, label: getRelativeTitle(ku.gender, ki, lnk.kidsCfg), isExt: true });
           N.push({ id: sid, gender: ku.gender === 'M' ? 'F' : 'M', gen: 2, dx: rx, dy: kidsY, label: '配偶', isExt: true });
           L.push({ id: `${lnk.id}_ml_c${ki}`, type: 'marry', a: kidId, b: sid, status: ku.partner, isExt: true });
           kidIds.push(kidId);
@@ -204,7 +204,7 @@ const GenogramTab = ({
             L.push({ id: `${lnk.id}_pc_c${ki}`, type: 'pc', pa: kidId, pb: sid, kids: g3ids, isExt: true });
           }
         } else {
-          N.push({ id: kidId, gender: ku.gender, gen: 2, dx: midU, dy: kidsY, label: `${ku.gender === 'M' ? '子' : '女'}${ki+1}`, isExt: true });
+          N.push({ id: kidId, gender: ku.gender, gen: 2, dx: midU, dy: kidsY, label: getRelativeTitle(ku.gender, ki, lnk.kidsCfg), isExt: true });
           kidIds.push(kidId);
         }
         ckx += ku.w;
@@ -484,7 +484,7 @@ const GenogramTab = ({
                         <div key={ki}>
                           <div className="child-row">
                             <span className={`child-icon ${kc.gender === 'M' ? 'm' : 'f'}`}>{kc.gender === 'M' ? '■' : '●'}</span>
-                            <span className={`child-name ${kc.gender === 'M' ? 'm' : 'f'}`}>{kc.gender === 'M' ? '子' : '女'}{ki+1}</span>
+                            <span className={`child-name ${kc.gender === 'M' ? 'm' : 'f'}`}>{getRelativeTitle(kc.gender, ki, lnk.kidsCfg)}</span>
                             <div className="chk-wrap">
                               <span className="status-badge" data-status={kc.partner || 'none'} ref={el => wheelRef(el, G2_STATUSES, kc.partner || 'none', v => setCustomLinks(prev => prev.map(l => l.id === lnk.id ? { ...l, kidsCfg: l.kidsCfg.map((k, idx) => idx === ki ? { ...k, partner: v, g3Str: v === 'none' ? '' : k.g3Str } : k) } : l)))}>{G2_LABELS[kc.partner || 'none']}</span>
                             </div>
