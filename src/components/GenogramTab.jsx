@@ -216,7 +216,7 @@ const GenogramTab = ({
   }, [gen2Cfg, g1Status, customLinks]); // freeNodes 改用 ref 讀取，避免每次拖曳觸發重算
 
   const structKey = useMemo(() => nodes.map(n => n.id).join(','), [nodes]);
-  useEffect(() => { const m = {}; nodes.forEach(n => { m[n.id] = { x: n.dx, y: n.dy }; }); setPositions(m); }, [structKey]);
+  useEffect(() => { setPositions(prev => { const m = {}; nodes.forEach(n => { m[n.id] = prev[n.id] || { x: n.dx, y: n.dy }; }); return m; }); }, [structKey]);
 
   const pos = useCallback((id) => {
     if (positions[id]) return positions[id];
