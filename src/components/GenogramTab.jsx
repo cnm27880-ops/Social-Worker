@@ -710,7 +710,7 @@ const GenogramTab = ({
               const cStroke = '#2563eb';
               return (
                 <g key={lnk.id}>
-                  <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={cStroke} strokeWidth="2" strokeDasharray="4,4" />
+                  <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={cStroke} strokeWidth="2" />
                   <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent" strokeWidth="12" style={{ cursor: 'pointer' }} onDoubleClick={e => { e.stopPropagation(); deleteCustomLink(lnk.id); }} />
                 </g>
               );
