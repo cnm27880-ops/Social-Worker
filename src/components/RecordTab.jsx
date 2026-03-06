@@ -2,17 +2,26 @@ import { useState, useMemo, useEffect } from 'react';
 import BadgeGroup from './BadgeGroup';
 import { getRelativeTitle, formatKidsText, G2_LABELS } from '../utils/helpers';
 
+const DEFAULT_TAGS = {
+  identity: ['一般民眾', '就養榮民', '非就養榮民', '榮眷', '遺眷'],
+  edu: ['不詳', '不識字',  '自學識字', '國小', '初中', '高中職', '大學以上'],
+  lang: ['國語', '台語', '國台語', '客家語'],
+  religion: ['無宗教', '民間信仰', '佛教', '道教', '基督教', '天主教', '回教'],
+  disability: ['無身心障礙手冊', '有身心障礙手冊']
+};
+
+const getRankStr = (rank, total) => {
+  if (total === 1 || rank === 1) return '長';
+  if (rank === 2) return '次';
+  if (rank === total && rank > 2) return '么';
+  const nums = ['', '', '', '三', '四', '五', '六', '七', '八', '九', '十'];
+  return nums[rank] || String(rank);
+};
+
 const RecordTab = ({
   gen2Cfg, indexId, g1Status, cohabMembers, deceasedIds, customLinks
 }) => {
   /* --- 自訂標籤狀態 --- */
-  const DEFAULT_TAGS = {
-    identity: ['一般民眾', '就養榮民', '非就養榮民', '榮眷', '遺眷'],
-    edu: ['不詳', '不識字',  '自學識字', '國小', '初中', '高中職', '大學以上'],
-    lang: ['國語', '台語', '國台語', '客家語'],
-    religion: ['無宗教', '民間信仰', '佛教', '道教', '基督教', '天主教', '回教'],
-    disability: ['無身心障礙手冊', '有身心障礙手冊']
-  };
   const [tagOptions, setTagOptions] = useState(() => {
     try { const saved = localStorage.getItem('genogram-tags'); if (saved) return { ...DEFAULT_TAGS, ...JSON.parse(saved) }; } catch {}
     return DEFAULT_TAGS;
@@ -32,7 +41,11 @@ const RecordTab = ({
     identity: '一般民眾', job: '', edu: '', lang: '', religion: '', disability: '無身心障礙手冊', note: ''
   });
   const [famExtras, setFamExtras] = useState({}); // 儲存家屬的補充資訊 { index: { location, job, isPrimary, note } }
-  const [savedNotes, setSavedNotes] = useState(['']);
+  const [savedNotes, setSavedNotes] = useState(() => {
+    try { const saved = localStorage.getItem('genogram-savedNotes'); if (saved) return JSON.parse(saved); } catch {}
+    return [''];
+  });
+  useEffect(() => { try { localStorage.setItem('genogram-savedNotes', JSON.stringify(savedNotes)); } catch {} }, [savedNotes]);
 
   /* --- 共用工具函數 --- */
   const getIndexGender = (id) => {
@@ -41,14 +54,6 @@ const RecordTab = ({
     if (id?.startsWith('c')) return gen2Cfg[parseInt(id.replace('c', ''))]?.gender;
     return null;
   };
-  const getRankStr = (rank, total) => {
-    if (total === 1 || rank === 1) return '長';
-    if (rank === 2) return '次';
-    if (rank === total && rank > 2) return '么';
-    const nums = ['', '', '', '三', '四', '五', '六', '七', '八', '九', '十'];
-    return nums[rank] || String(rank);
-  };
-
   /* ===== 紀錄產生器邏輯 ===== */
   const generatedText = useMemo(() => {
     let txt = `案主為${subjInfo.identity}`;
@@ -57,7 +62,7 @@ const RecordTab = ({
     if (subjInfo.lang) txt += `，${subjInfo.lang}溝通`;
     if (subjInfo.religion) txt += `，${subjInfo.religion}信仰`;
     if (subjInfo.disability) txt += `，${subjInfo.disability}`;
-    txt += `，${g1Status === 'married' ? '已婚' : '喪偶'}`;
+    txt += `，${g1Status === 'married' ? '已婚' : '離婚'}`;
 
     let cohabText = '獨居';
     if (indexId && cohabMembers.includes(indexId)) {
@@ -66,7 +71,8 @@ const RecordTab = ({
         if (id === 'mo') return '案母';
         if (id.startsWith('c')) {
           const idx = parseInt(id.replace('c',''));
-          return getRelativeTitle(gen2Cfg[idx].gender, idx, gen2Cfg);
+          if (idx >= 0 && idx < gen2Cfg.length) return getRelativeTitle(gen2Cfg[idx].gender, idx, gen2Cfg);
+          return '';
         }
         if (id.startsWith('s')) return '案子女配偶';
         if (id.startsWith('g')) return '案孫輩';
@@ -113,6 +119,7 @@ const RecordTab = ({
     if (indexId && customLinks && customLinks.length > 0) {
       const indexGender = getIndexGender(indexId);
       customLinks.forEach(lnk => {
+        if (lnk.type === 'eco') return; // 生態圖連線不納入個案紀錄
         if (lnk.sourceId !== indexId && lnk.targetId !== indexId) return;
         const otherId = lnk.sourceId === indexId ? lnk.targetId : lnk.sourceId;
         if (/^c\d+$/.test(otherId)) return;
@@ -161,6 +168,39 @@ const RecordTab = ({
     setFamExtras(prev => ({ ...prev, [idx]: { ...(prev[idx] || {}), [field]: val } }));
   };
 
+  const exportBackup = () => {
+    const data = JSON.stringify({ tagOptions, savedNotes }, null, 2);
+    const blob = new Blob([data], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'social-worker-backup.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importBackup = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const parsed = JSON.parse(evt.target.result);
+        if (parsed.tagOptions) {
+          setTagOptions(parsed.tagOptions);
+        }
+        if (parsed.savedNotes) {
+          setSavedNotes(parsed.savedNotes);
+        }
+        alert('✅ 設定檔匯入成功！');
+      } catch {
+        alert('❌ 檔案格式錯誤，請確認是否為有效的 JSON 設定檔。');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
   const copyRecord = () => {
     navigator.clipboard.writeText(generatedText).then(() => {
       alert('✅ 個案紀錄已成功複製！');
@@ -177,27 +217,27 @@ const RecordTab = ({
           </button>
         </h2>
 
-        <div className="section">
+        <div className="section section-inline">
           <label>身分別</label>
           <BadgeGroup options={tagOptions.identity} value={subjInfo.identity} onChange={v => setSubjInfo({...subjInfo, identity: v})} isEditing={isEditingTags} onAdd={t => handleAddTag('identity', t)} onRemove={t => handleRemoveTag('identity', t)} />
         </div>
 
-        <div className="section">
+        <div className="section section-inline">
           <label>教育程度</label>
           <BadgeGroup options={tagOptions.edu} value={subjInfo.edu} onChange={v => setSubjInfo({...subjInfo, edu: v})} isEditing={isEditingTags} onAdd={t => handleAddTag('edu', t)} onRemove={t => handleRemoveTag('edu', t)} />
         </div>
 
-        <div className="section">
+        <div className="section section-inline">
           <label>溝通語言</label>
           <BadgeGroup options={tagOptions.lang} value={subjInfo.lang} onChange={v => setSubjInfo({...subjInfo, lang: v})} isEditing={isEditingTags} onAdd={t => handleAddTag('lang', t)} onRemove={t => handleRemoveTag('lang', t)} />
         </div>
 
-        <div className="section">
+        <div className="section section-inline">
           <label>宗教信仰</label>
           <BadgeGroup options={tagOptions.religion} value={subjInfo.religion} onChange={v => setSubjInfo({...subjInfo, religion: v})} isEditing={isEditingTags} onAdd={t => handleAddTag('religion', t)} onRemove={t => handleRemoveTag('religion', t)} />
         </div>
 
-        <div className="section">
+        <div className="section section-inline">
           <label>身障證明</label>
           <BadgeGroup options={tagOptions.disability} value={subjInfo.disability} onChange={v => setSubjInfo({...subjInfo, disability: v})} isEditing={isEditingTags} onAdd={t => handleAddTag('disability', t)} onRemove={t => handleRemoveTag('disability', t)} />
         </div>
@@ -233,15 +273,15 @@ const RecordTab = ({
                 <div className="fam-grid">
                   <div>
                     <div className="hint" style={{marginBottom: '2px'}}>居住地</div>
-                    <input type="text" value={ext.location} onChange={e => handleFamExtra(i, 'location', e.target.value)} placeholder="例：台南" />
+                    <input type="text" value={ext.location || ''} onChange={e => handleFamExtra(i, 'location', e.target.value)} placeholder="例：台南" />
                   </div>
                   <div>
                     <div className="hint" style={{marginBottom: '2px'}}>職業</div>
-                    <input type="text" value={ext.job} onChange={e => handleFamExtra(i, 'job', e.target.value)} placeholder="例：家管、從商" />
+                    <input type="text" value={ext.job || ''} onChange={e => handleFamExtra(i, 'job', e.target.value)} placeholder="例：家管、從商" />
                   </div>
                   <div style={{gridColumn: '1 / -1'}}>
                     <div className="hint" style={{marginBottom: '2px'}}>特殊備註</div>
-                    <input type="text" value={ext.note} onChange={e => handleFamExtra(i, 'note', e.target.value)} placeholder="例：拒絕回答孫輩狀況" />
+                    <input type="text" value={ext.note || ''} onChange={e => handleFamExtra(i, 'note', e.target.value)} placeholder="例：拒絕回答孫輩狀況" />
                   </div>
                 </div>
               )}
@@ -255,6 +295,7 @@ const RecordTab = ({
           const indexGender = getIndexGender(indexId);
           const allCards = [];
           customLinks.forEach(lnk => {
+            if (lnk.type === 'eco') return; // 生態圖連線不納入動態卡片
             if (!((lnk.sourceId === indexId || lnk.targetId === indexId) && lnk.kidsCfg && lnk.kidsCfg.length > 0)) return;
             const otherId = lnk.sourceId === indexId ? lnk.targetId : lnk.sourceId;
             if (/^c\d+$/.test(otherId)) return;
@@ -307,6 +348,18 @@ const RecordTab = ({
             </>
           );
         })()}
+
+        <div className="section">
+          <label>💾 系統資料備份與還原</label>
+          <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+            <button onClick={exportBackup} style={{ flex: 1, padding: '8px', fontSize: '13px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>📥 匯出設定檔</button>
+            <label style={{ flex: 1, padding: '8px', fontSize: '13px', background: '#10b981', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', textAlign: 'center', margin: 0 }}>
+              📤 匯入設定檔
+              <input type="file" accept=".json" onChange={importBackup} style={{ display: 'none' }} />
+            </label>
+          </div>
+          <div className="hint" style={{ marginTop: '6px' }}>可將自訂標籤與常用短語下載備份；更換電腦或清除瀏覽器資料後可重新匯入還原。</div>
+        </div>
 
       </div>
 
