@@ -475,10 +475,10 @@ const GenogramTab = ({
         )}
 
         <div className="section">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <label style={{ margin: 0 }}>📝 文字方塊</label>
+          <label>📝 文字方塊</label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
             <span className="status-badge" data-status={textDirection} ref={el => wheelRef(el, TEXT_DIRS, textDirection, setTextDirection)} title="滾輪切換：橫式/直式">{TEXT_DIR_LABELS[textDirection]}</span>
-            <button onClick={addText} style={{ padding: '5px 10px', fontSize: '12px', background: '#10b981', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', marginLeft: 'auto' }}>➕ 新增至畫布</button>
+            <button onClick={addText} style={{ padding: '5px 10px', fontSize: '12px', background: '#10b981', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', marginLeft: 'auto' }}>➕新增</button>
           </div>
           <div className="hint" style={{marginTop: '6px'}}>單擊選取文字方塊（顯示框線）；雙擊可編輯內容；選取後可刪除或拖曳右下角縮放。</div>
         </div>
