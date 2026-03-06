@@ -161,6 +161,41 @@ const RecordTab = ({
     setFamExtras(prev => ({ ...prev, [idx]: { ...(prev[idx] || {}), [field]: val } }));
   };
 
+  const exportBackup = () => {
+    const data = JSON.stringify({ tagOptions, savedNotes }, null, 2);
+    const blob = new Blob([data], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'social-worker-backup.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importBackup = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const parsed = JSON.parse(evt.target.result);
+        if (parsed.tagOptions) {
+          setTagOptions(parsed.tagOptions);
+          localStorage.setItem('genogram-tags', JSON.stringify(parsed.tagOptions));
+        }
+        if (parsed.savedNotes) {
+          setSavedNotes(parsed.savedNotes);
+          localStorage.setItem('genogram-savedNotes', JSON.stringify(parsed.savedNotes));
+        }
+        alert('✅ 設定檔匯入成功！');
+      } catch {
+        alert('❌ 檔案格式錯誤，請確認是否為有效的 JSON 設定檔。');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
   const copyRecord = () => {
     navigator.clipboard.writeText(generatedText).then(() => {
       alert('✅ 個案紀錄已成功複製！');
@@ -307,6 +342,18 @@ const RecordTab = ({
             </>
           );
         })()}
+
+        <div className="section">
+          <label>💾 系統資料備份與還原</label>
+          <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+            <button onClick={exportBackup} style={{ flex: 1, padding: '8px', fontSize: '13px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>📥 匯出設定檔</button>
+            <label style={{ flex: 1, padding: '8px', fontSize: '13px', background: '#10b981', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', textAlign: 'center', margin: 0 }}>
+              📤 匯入設定檔
+              <input type="file" accept=".json" onChange={importBackup} style={{ display: 'none' }} />
+            </label>
+          </div>
+          <div className="hint" style={{ marginTop: '6px' }}>可將自訂標籤與常用短語下載備份；更換電腦或清除瀏覽器資料後可重新匯入還原。</div>
+        </div>
 
       </div>
 
