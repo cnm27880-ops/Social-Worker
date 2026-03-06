@@ -361,8 +361,9 @@ const GenogramTab = ({
     nodes.forEach(n => { const p = pos(n.id); allXs.push(p.x - R, p.x + R); allYs.push(p.y - R, p.y + R); });
     freeNodes.forEach(fn => {
       if (fn.type === 'eco') {
-        const ecoHalfW = Math.max(80, (fn.text || '').length * 16 + 30) / 2;
-        allXs.push(fn.x - ecoHalfW, fn.x + ecoHalfW); allYs.push(fn.y - 20, fn.y + 20);
+        const ecoRx = Math.max(35, (fn.text?.length || 1) * 9 + 15);
+        const ecoRy = 28;
+        allXs.push(fn.x - ecoRx, fn.x + ecoRx); allYs.push(fn.y - ecoRy, fn.y + ecoRy);
       } else {
         allXs.push(fn.x - R, fn.x + R); allYs.push(fn.y - R, fn.y + R);
       }
@@ -384,7 +385,10 @@ const GenogramTab = ({
   };
 
   /* ===== SVG 尺寸計算 ===== */
-  const allX = nodes.map(n => positions[n.id]?.x ?? n.dx).concat(texts.map(t => t.x + 100), freeNodes.map(fn => fn.x + 100));
+  const allX = nodes.map(n => positions[n.id]?.x ?? n.dx).concat(texts.map(t => t.x + 100), freeNodes.map(fn => {
+    if (fn.type === 'eco') return fn.x + Math.max(35, (fn.text?.length || 1) * 9 + 15);
+    return fn.x + 100;
+  }));
   const allY = nodes.map(n => positions[n.id]?.y ?? n.dy).concat(texts.map(t => t.y + 100), freeNodes.map(fn => fn.y + 100));
   const svgW = Math.max(800, (allX.length ? Math.max(...allX) : 0) + 160);
   const svgH = Math.max(520, (allY.length ? Math.max(...allY) : 0) + 80);
