@@ -235,8 +235,8 @@ const GenogramTab = ({
   }, [svgPt, pos, freeNodes]);
 
   const onTextDown = useCallback((e, id) => {
-    e.stopPropagation(); textDragMoved.current = false; const sp = svgPt(e); const t = texts.find(t => t.id === id);
-    if (t) setTextDrag({ id, ox: sp.x - t.x, oy: sp.y - t.y });
+    e.stopPropagation(); textDragMoved.current = false; const sp = svgPt(e); const found = texts.find(v => v.id === id);
+    if (found) setTextDrag({ id, ox: sp.x - found.x, oy: sp.y - found.y });
   }, [svgPt, texts]);
 
   const onTextClick = useCallback((e, id) => { e.stopPropagation(); if (textDragMoved.current) return; setSelectedTextId(id); }, []);
@@ -245,8 +245,8 @@ const GenogramTab = ({
   }, []);
 
   const onResizeDown = useCallback((e, id) => {
-    e.stopPropagation(); const sp = svgPt(e); const t = texts.find(t => t.id === id);
-    if (t) setTextResize({ id, startY: sp.y, startSize: t.fontSize });
+    e.stopPropagation(); const sp = svgPt(e); const found = texts.find(v => v.id === id);
+    if (found) setTextResize({ id, startY: sp.y, startSize: found.fontSize });
   }, [svgPt, texts]);
 
   const onMove = useCallback((e) => {
@@ -275,7 +275,7 @@ const GenogramTab = ({
     }
   }, [drag, textDrag, textResize, dragVertex, draftPoly, svgPt, setFreeNodes, customLinks, nodes]);
 
-  const onUp = () => {
+  const onUp = useCallback(() => {
     if (drag && drag.isFree) {
       const draggedNode = freeNodes.find(fn => fn.id === drag.id);
       if (draggedNode) {
@@ -307,7 +307,7 @@ const GenogramTab = ({
       }
     }
     setDragVertex(null); setDrag(null); setTextDrag(null); setTextResize(null);
-  };
+  }, [drag, freeNodes, nodes, pos, customLinks, setCustomLinks, setFreeNodes]);
 
   const onClick = (e, id) => {
     e.stopPropagation();

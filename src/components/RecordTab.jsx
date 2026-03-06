@@ -2,17 +2,18 @@ import { useState, useMemo, useEffect } from 'react';
 import BadgeGroup from './BadgeGroup';
 import { getRelativeTitle, formatKidsText, G2_LABELS } from '../utils/helpers';
 
+const DEFAULT_TAGS = {
+  identity: ['一般民眾', '就養榮民', '非就養榮民', '榮眷', '遺眷'],
+  edu: ['不詳', '不識字',  '自學識字', '國小', '初中', '高中職', '大學以上'],
+  lang: ['國語', '台語', '國台語', '客家語'],
+  religion: ['無宗教', '民間信仰', '佛教', '道教', '基督教', '天主教', '回教'],
+  disability: ['無身心障礙手冊', '有身心障礙手冊']
+};
+
 const RecordTab = ({
   gen2Cfg, indexId, g1Status, cohabMembers, deceasedIds, customLinks
 }) => {
   /* --- 自訂標籤狀態 --- */
-  const DEFAULT_TAGS = {
-    identity: ['一般民眾', '就養榮民', '非就養榮民', '榮眷', '遺眷'],
-    edu: ['不詳', '不識字',  '自學識字', '國小', '初中', '高中職', '大學以上'],
-    lang: ['國語', '台語', '國台語', '客家語'],
-    religion: ['無宗教', '民間信仰', '佛教', '道教', '基督教', '天主教', '回教'],
-    disability: ['無身心障礙手冊', '有身心障礙手冊']
-  };
   const [tagOptions, setTagOptions] = useState(() => {
     try { const saved = localStorage.getItem('genogram-tags'); if (saved) return { ...DEFAULT_TAGS, ...JSON.parse(saved) }; } catch {}
     return DEFAULT_TAGS;
@@ -32,7 +33,11 @@ const RecordTab = ({
     identity: '一般民眾', job: '', edu: '', lang: '', religion: '', disability: '無身心障礙手冊', note: ''
   });
   const [famExtras, setFamExtras] = useState({}); // 儲存家屬的補充資訊 { index: { location, job, isPrimary, note } }
-  const [savedNotes, setSavedNotes] = useState(['']);
+  const [savedNotes, setSavedNotes] = useState(() => {
+    try { const saved = localStorage.getItem('genogram-savedNotes'); if (saved) return JSON.parse(saved); } catch {}
+    return [''];
+  });
+  useEffect(() => { try { localStorage.setItem('genogram-savedNotes', JSON.stringify(savedNotes)); } catch {} }, [savedNotes]);
 
   /* --- 共用工具函數 --- */
   const getIndexGender = (id) => {
@@ -66,7 +71,8 @@ const RecordTab = ({
         if (id === 'mo') return '案母';
         if (id.startsWith('c')) {
           const idx = parseInt(id.replace('c',''));
-          return getRelativeTitle(gen2Cfg[idx].gender, idx, gen2Cfg);
+          if (idx >= 0 && idx < gen2Cfg.length) return getRelativeTitle(gen2Cfg[idx].gender, idx, gen2Cfg);
+          return '';
         }
         if (id.startsWith('s')) return '案子女配偶';
         if (id.startsWith('g')) return '案孫輩';
@@ -181,11 +187,9 @@ const RecordTab = ({
         const parsed = JSON.parse(evt.target.result);
         if (parsed.tagOptions) {
           setTagOptions(parsed.tagOptions);
-          localStorage.setItem('genogram-tags', JSON.stringify(parsed.tagOptions));
         }
         if (parsed.savedNotes) {
           setSavedNotes(parsed.savedNotes);
-          localStorage.setItem('genogram-savedNotes', JSON.stringify(parsed.savedNotes));
         }
         alert('✅ 設定檔匯入成功！');
       } catch {
