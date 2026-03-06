@@ -119,6 +119,7 @@ const RecordTab = ({
     if (indexId && customLinks && customLinks.length > 0) {
       const indexGender = getIndexGender(indexId);
       customLinks.forEach(lnk => {
+        if (lnk.type === 'eco') return; // 生態圖連線不納入個案紀錄
         if (lnk.sourceId !== indexId && lnk.targetId !== indexId) return;
         const otherId = lnk.sourceId === indexId ? lnk.targetId : lnk.sourceId;
         if (/^c\d+$/.test(otherId)) return;
@@ -294,6 +295,7 @@ const RecordTab = ({
           const indexGender = getIndexGender(indexId);
           const allCards = [];
           customLinks.forEach(lnk => {
+            if (lnk.type === 'eco') return; // 生態圖連線不納入動態卡片
             if (!((lnk.sourceId === indexId || lnk.targetId === indexId) && lnk.kidsCfg && lnk.kidsCfg.length > 0)) return;
             const otherId = lnk.sourceId === indexId ? lnk.targetId : lnk.sourceId;
             if (/^c\d+$/.test(otherId)) return;

@@ -52,6 +52,7 @@ const GenogramTab = ({
   const [ages, setAges] = useState({});
   const [editingAgeId, setEditingAgeId] = useState(null);
   const [editingTextId, setEditingTextId] = useState(null);
+  const [editingEcoId, setEditingEcoId] = useState(null);
 
   const finishEditingText = (id, newText) => {
     setTexts(prev => prev.map(t => t.id === id ? { ...t, text: newText } : t));
@@ -114,10 +115,30 @@ const GenogramTab = ({
     setSelectedTextId(null);
   };
 
+  const finishEditingEco = (id, newText) => {
+    if (!newText.trim()) {
+      // 清空文字 → 刪除該生態圖節點及相關連線
+      setCustomLinks(prev => prev.filter(l => l.sourceId !== id && l.targetId !== id));
+      setFreeNodes(prev => prev.filter(fn => fn.id !== id));
+    } else {
+      setFreeNodes(prev => prev.map(fn => fn.id === id ? { ...fn, text: newText } : fn));
+    }
+    setEditingEcoId(null);
+  };
+
   /* --- 自由節點操作 --- */
   const addFreeNode = (gender) => {
     const id = 'f_' + Date.now();
     setFreeNodes(prev => [...prev, { id, gender, x: 500, y: 320 }]);
+  };
+  const addEcoNode = () => {
+    const id = 'eco_' + Date.now();
+    const hasIndex = !!indexId;
+    const newNode = { id, type: 'eco', text: '資源名稱', x: hasIndex ? 650 : 100, y: hasIndex ? 100 : 100 };
+    setFreeNodes(prev => [...prev, newNode]);
+    if (hasIndex) {
+      setCustomLinks(prev => [...prev, { id: 'l_' + Date.now(), sourceId: indexId, targetId: id, type: 'eco', status: 'married', kidsStr: '', kidsCfg: [] }]);
+    }
   };
   const updateCustomLink = (linkId, field, val) => {
     setCustomLinks(prev => prev.map(l => l.id === linkId ? { ...l, [field]: val } : l));
@@ -170,6 +191,7 @@ const GenogramTab = ({
 
     // === customLink kidsCfg → 整合為完全體節點 ===
     customLinks.forEach(lnk => {
+      if (lnk.type === 'eco') return; // 生態圖連線不參與節點生成
       if (!lnk.kidsCfg || lnk.kidsCfg.length === 0) return;
       const srcN = N.find(n => n.id === lnk.sourceId); const srcF = freeNodesRef.current.find(fn => fn.id === lnk.sourceId);
       const tgtN = N.find(n => n.id === lnk.targetId); const tgtF = freeNodesRef.current.find(fn => fn.id === lnk.targetId);
@@ -296,7 +318,9 @@ const GenogramTab = ({
         if (closestId) {
           const alreadyLinked = customLinks.some(l => (l.sourceId === drag.id && l.targetId === closestId) || (l.sourceId === closestId && l.targetId === drag.id));
           if (!alreadyLinked) {
-            setCustomLinks(prev => [...prev, { id: 'l_' + Date.now(), sourceId: closestId, targetId: drag.id, status: 'married', kidsStr: '', kidsCfg: [] }]);
+            const draggedIsEco = draggedNode.type === 'eco';
+            const newLinkType = draggedIsEco ? 'eco' : undefined;
+            setCustomLinks(prev => [...prev, { id: 'l_' + Date.now(), sourceId: closestId, targetId: drag.id, ...(newLinkType ? { type: newLinkType } : {}), status: 'married', kidsStr: '', kidsCfg: [] }]);
             // Push freeNode away to prevent overlap
             const tp = pos(closestId);
             const angle = Math.atan2(dp.y - tp.y, dp.x - tp.x);
@@ -447,57 +471,63 @@ const GenogramTab = ({
 
         <div className="section">
           <label>🧩 自由擴充區</label>
-          <div style={{ display: 'flex', gap: '8px', marginTop: '4px', alignItems: 'center' }}>
-            <button onClick={() => addFreeNode('M')} style={{ flex: 1, padding: '6px', fontSize: '13px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>➕ 新增男性</button>
-            <button onClick={() => addFreeNode('F')} style={{ flex: 1, padding: '6px', fontSize: '13px', background: '#ec4899', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>➕ 新增女性</button>
-            <span className="status-badge" data-status={extColorMode === 'blue' ? 'horizontal' : 'none'} ref={el => wheelRef(el, EXT_COLOR_MODES, extColorMode, setExtColorMode)} title="滾輪切換：黑色/藍色" style={{ marginLeft: '4px' }}>{EXT_COLOR_LABELS[extColorMode]}</span>
+          <div style={{ display: 'flex', gap: '6px', marginTop: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <button onClick={() => addFreeNode('M')} style={{ padding: '5px 10px', fontSize: '12px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>➕ 男性</button>
+            <button onClick={() => addFreeNode('F')} style={{ padding: '5px 10px', fontSize: '12px', background: '#ec4899', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>➕ 女性</button>
+            <button onClick={addEcoNode} style={{ padding: '5px 10px', fontSize: '12px', background: '#2563eb', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>➕ 生態圖</button>
+            <span className="status-badge" data-status={extColorMode === 'blue' ? 'horizontal' : 'none'} ref={el => wheelRef(el, EXT_COLOR_MODES, extColorMode, setExtColorMode)} title="滾輪切換：黑色/藍色" style={{ marginLeft: 'auto' }}>{EXT_COLOR_LABELS[extColorMode]}</span>
           </div>
-          <div className="hint" style={{ marginTop: '6px' }}>拖曳擴充個體去碰撞目標節點即可產生連線；藍色模式方便編輯辨識。</div>
+          <div className="hint" style={{ marginTop: '6px' }}>拖曳擴充個體碰撞目標即可產生連線；生態圖新增後預設連結案主。</div>
         </div>
 
         {customLinks.length > 0 && (
           <div className="section">
             <label>🔗 擴充連線設定</label>
             {customLinks.map(lnk => {
+              const isEcoLink = lnk.type === 'eco';
               const srcNode = nodes.find(n => n.id === lnk.sourceId) || freeNodes.find(n => n.id === lnk.sourceId);
               const tgtNode = nodes.find(n => n.id === lnk.targetId) || freeNodes.find(n => n.id === lnk.targetId);
-              const srcLabel = srcNode?.label || (srcNode?.gender === 'M' ? '■' : '●');
-              const tgtLabel = tgtNode?.label || (tgtNode?.gender === 'M' ? '■' : '●');
+              const srcLabel = srcNode?.type === 'eco' ? (srcNode?.text || '生態圖') : (srcNode?.label || (srcNode?.gender === 'M' ? '■' : '●'));
+              const tgtLabel = tgtNode?.type === 'eco' ? (tgtNode?.text || '生態圖') : (tgtNode?.label || (tgtNode?.gender === 'M' ? '■' : '●'));
               return (
-                <div key={lnk.id} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '8px', marginTop: '6px' }}>
+                <div key={lnk.id} style={{ background: isEcoLink ? '#eff6ff' : '#f8fafc', border: `1px solid ${isEcoLink ? '#bfdbfe' : '#e2e8f0'}`, borderRadius: '6px', padding: '8px', marginTop: '6px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}>
-                    <span>{srcLabel} ↔ {tgtLabel}</span>
-                    <span className="status-badge" data-status={lnk.status} ref={el => wheelRef(el, CUSTOM_LINK_STATUSES, lnk.status, v => updateCustomLink(lnk.id, 'status', v))}>{CUSTOM_LINK_LABELS[lnk.status]}</span>
+                    <span>{isEcoLink ? '🌐 ' : ''}{srcLabel} ↔ {tgtLabel}</span>
+                    {!isEcoLink && <span className="status-badge" data-status={lnk.status} ref={el => wheelRef(el, CUSTOM_LINK_STATUSES, lnk.status, v => updateCustomLink(lnk.id, 'status', v))}>{CUSTOM_LINK_LABELS[lnk.status]}</span>}
                     <button onClick={() => deleteCustomLink(lnk.id)} style={{ marginLeft: 'auto', padding: '2px 8px', fontSize: '11px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>刪除</button>
                   </div>
-                  <div style={{ marginTop: '4px' }}>
-                    <input type="text" value={lnk.kidsStr || ''} onChange={e => {
-                      const val = e.target.value;
-                      const gs = parseGenders(val);
-                      const newKidsCfg = gs.map((g, i) => (lnk.kidsCfg?.[i]?.gender === g) ? lnk.kidsCfg[i] : { gender: g, partner: 'none', g3Str: '' });
-                      setCustomLinks(prev => prev.map(l => l.id === lnk.id ? { ...l, kidsStr: val, kidsCfg: newKidsCfg } : l));
-                    }} placeholder="子代 (例: 男女 或 MF 或 12)" style={{ width: '100%', fontSize: '12px' }} />
-                  </div>
-                  {lnk.kidsCfg && lnk.kidsCfg.length > 0 && (
-                    <div style={{ marginTop: '6px', paddingLeft: '8px', borderLeft: '2px solid #e2e8f0' }}>
-                      {lnk.kidsCfg.map((kc, ki) => (
-                        <div key={ki}>
-                          <div className="child-row">
-                            <span className={`child-icon ${kc.gender === 'M' ? 'm' : 'f'}`}>{kc.gender === 'M' ? '■' : '●'}</span>
-                            <span className={`child-name ${kc.gender === 'M' ? 'm' : 'f'}`}>{getRelativeTitle(kc.gender, ki, lnk.kidsCfg)}</span>
-                            <div className="chk-wrap">
-                              <span className="status-badge" data-status={kc.partner || 'none'} ref={el => wheelRef(el, G2_STATUSES, kc.partner || 'none', v => setCustomLinks(prev => prev.map(l => l.id === lnk.id ? { ...l, kidsCfg: l.kidsCfg.map((k, idx) => idx === ki ? { ...k, partner: v, g3Str: v === 'none' ? '' : k.g3Str } : k) } : l)))}>{G2_LABELS[kc.partner || 'none']}</span>
+                  {!isEcoLink && (
+                    <>
+                      <div style={{ marginTop: '4px' }}>
+                        <input type="text" value={lnk.kidsStr || ''} onChange={e => {
+                          const val = e.target.value;
+                          const gs = parseGenders(val);
+                          const newKidsCfg = gs.map((g, i) => (lnk.kidsCfg?.[i]?.gender === g) ? lnk.kidsCfg[i] : { gender: g, partner: 'none', g3Str: '' });
+                          setCustomLinks(prev => prev.map(l => l.id === lnk.id ? { ...l, kidsStr: val, kidsCfg: newKidsCfg } : l));
+                        }} placeholder="子代 (例: 男女 或 MF 或 12)" style={{ width: '100%', fontSize: '12px' }} />
+                      </div>
+                      {lnk.kidsCfg && lnk.kidsCfg.length > 0 && (
+                        <div style={{ marginTop: '6px', paddingLeft: '8px', borderLeft: '2px solid #e2e8f0' }}>
+                          {lnk.kidsCfg.map((kc, ki) => (
+                            <div key={ki}>
+                              <div className="child-row">
+                                <span className={`child-icon ${kc.gender === 'M' ? 'm' : 'f'}`}>{kc.gender === 'M' ? '■' : '●'}</span>
+                                <span className={`child-name ${kc.gender === 'M' ? 'm' : 'f'}`}>{getRelativeTitle(kc.gender, ki, lnk.kidsCfg)}</span>
+                                <div className="chk-wrap">
+                                  <span className="status-badge" data-status={kc.partner || 'none'} ref={el => wheelRef(el, G2_STATUSES, kc.partner || 'none', v => setCustomLinks(prev => prev.map(l => l.id === lnk.id ? { ...l, kidsCfg: l.kidsCfg.map((k, idx) => idx === ki ? { ...k, partner: v, g3Str: v === 'none' ? '' : k.g3Str } : k) } : l)))}>{G2_LABELS[kc.partner || 'none']}</span>
+                                </div>
+                              </div>
+                              {kc.partner !== 'none' && (
+                                <div className="gen3-block">
+                                  <label>↳ 第三代 (例: 男/女 或 M/F 或 1/2)</label>
+                                  <input type="text" value={kc.g3Str || ''} onChange={e => setCustomLinks(prev => prev.map(l => l.id === lnk.id ? { ...l, kidsCfg: l.kidsCfg.map((k, idx) => idx === ki ? { ...k, g3Str: e.target.value } : k) } : l))} />
+                                </div>
+                              )}
                             </div>
-                          </div>
-                          {kc.partner !== 'none' && (
-                            <div className="gen3-block">
-                              <label>↳ 第三代 (例: 男/女 或 M/F 或 1/2)</label>
-                              <input type="text" value={kc.g3Str || ''} onChange={e => setCustomLinks(prev => prev.map(l => l.id === lnk.id ? { ...l, kidsCfg: l.kidsCfg.map((k, idx) => idx === ki ? { ...k, g3Str: e.target.value } : k) } : l))} />
-                            </div>
-                          )}
+                          ))}
                         </div>
-                      ))}
-                    </div>
+                      )}
+                    </>
                   )}
                 </div>
               );
@@ -511,7 +541,8 @@ const GenogramTab = ({
             ■ / ●：點擊節點切換案主；雙擊可輸入年齡。<br/>
             狀態切換：滑鼠停在狀態標籤上【上下滾動滾輪】即可切換。<br/>
             文字方塊：單擊選取/縮放；雙擊直接打字 (可 Enter 換行)。<br/>
-            自由連線：拖曳【🧩擴充個體】去碰撞目標即可產生連線；雙擊關係線可刪除。
+            自由連線：拖曳【🧩擴充個體】去碰撞目標即可產生連線；雙擊關係線可刪除。<br/>
+            生態圖：新增後預設連結案主，雙擊圖形可編輯文字，清空文字即刪除；雙擊關係線可刪除連線並重新拖曳碰撞。
           </div>
         </div>
       </div>
@@ -574,22 +605,21 @@ const GenogramTab = ({
             } return null;
           })}
 
-          {/* === 所有節點 (原生 + 自由) 共用渲染 === */}
+          {/* === 所有節點 (原生 + 自由人物) 共用渲染 === */}
           {[
             ...nodes.map(nd => ({ id: nd.id, gender: nd.gender, ...pos(nd.id), stroke: nd.isExt && extColorMode === 'blue' ? '#3b82f6' : '#333', dash: undefined, isFree: false })),
-            ...freeNodes.map(fn => ({ id: fn.id, gender: fn.gender, x: fn.x, y: fn.y, stroke: extColorMode === 'blue' ? '#3b82f6' : '#333', dash: undefined, isFree: true }))
+            ...freeNodes.filter(fn => fn.type !== 'eco').map(fn => ({ id: fn.id, gender: fn.gender, x: fn.x, y: fn.y, stroke: extColorMode === 'blue' ? '#3b82f6' : '#333', dash: undefined, isFree: true }))
           ].map(nd => {
             const isIP = nd.id === indexId, fill = isIP ? '#1e293b' : 'white', txtC = isIP ? 'white' : '#333';
             const isEditAge = editingAgeId === nd.id, ageVal = ages[nd.id] || '';
             return (
               <g key={nd.id} transform={`translate(${nd.x},${nd.y})`} style={{ cursor: drag?.id === nd.id ? 'grabbing' : 'grab' }}
                  onMouseDown={e => onDown(e, nd.id)} onClick={e => onClick(e, nd.id)}
-                 onDoubleClick={e => { 
-                   e.stopPropagation(); 
+                 onDoubleClick={e => {
+                   e.stopPropagation();
                    if(showAgeMode) {
-                     setEditingAgeId(nd.id); 
+                     setEditingAgeId(nd.id);
                    } else if(nd.isFree) {
-                     // 雙擊刪除自由個體 (必須在「年齡模式 OFF」時操作)
                      if(window.confirm('確定要刪除這個擴充個體嗎？(相關連線也會一併刪除)')) {
                        setCustomLinks(prev => prev.filter(l => l.sourceId !== nd.id && l.targetId !== nd.id));
                        setFreeNodes(prev => prev.filter(fn => fn.id !== nd.id));
@@ -617,9 +647,44 @@ const GenogramTab = ({
             );
           })}
 
+          {/* === 生態圖節點 (鈷藍色膠囊) === */}
+          {freeNodes.filter(fn => fn.type === 'eco').map(ecoNode => {
+            const ecoW = Math.max(80, (ecoNode.text || '').length * 16 + 30);
+            const isEditingThis = editingEcoId === ecoNode.id;
+            return (
+              <g key={ecoNode.id} transform={`translate(${ecoNode.x},${ecoNode.y})`} style={{ cursor: drag?.id === ecoNode.id ? 'grabbing' : 'grab' }}
+                 onMouseDown={e => onDown(e, ecoNode.id)}
+                 onDoubleClick={e => { e.stopPropagation(); setEditingEcoId(ecoNode.id); }}>
+                <rect rx="20" ry="20" width={ecoW} height={40} x={-ecoW / 2} y={-20} fill="#2563eb" stroke="#1e40af" strokeWidth="2.5" />
+                {isEditingThis ? (
+                  <foreignObject x={-ecoW / 2 + 4} y={-14} width={ecoW - 8} height={28}>
+                    <input autoFocus defaultValue={ecoNode.text || ''}
+                      onBlur={e => finishEditingEco(ecoNode.id, e.target.value)}
+                      onKeyDown={e => { e.stopPropagation(); if (e.key === 'Enter') finishEditingEco(ecoNode.id, e.target.value); }}
+                      style={{ width: '100%', height: '100%', textAlign: 'center', fontSize: '13px', fontFamily: TEXT_FONT, border: 'none', background: 'transparent', outline: 'none', color: 'white', fontWeight: 'bold', padding: 0 }} />
+                  </foreignObject>
+                ) : (
+                  <text x="0" y="5" textAnchor="middle" fontSize="13" fontWeight="bold" fill="white" style={{ fontFamily: TEXT_FONT, pointerEvents: 'none' }}>{ecoNode.text || ''}</text>
+                )}
+              </g>
+            );
+          })}
+
           {/* === 自訂連線 (customLinks) === */}
           {customLinks.map(lnk => {
             const sp = pos(lnk.sourceId), tp = pos(lnk.targetId);
+            const isEcoLink = lnk.type === 'eco';
+
+            if (isEcoLink) {
+              // 生態圖連線：從節點中心直連，不偏移 R
+              return (
+                <g key={lnk.id}>
+                  <line x1={sp.x} y1={sp.y} x2={tp.x} y2={tp.y} stroke="#2563eb" strokeWidth="2" />
+                  <line x1={sp.x} y1={sp.y} x2={tp.x} y2={tp.y} stroke="transparent" strokeWidth="12" style={{ cursor: 'pointer' }} onDoubleClick={e => { e.stopPropagation(); deleteCustomLink(lnk.id); }} />
+                </g>
+              );
+            }
+
             const isSpLeft = sp.x < tp.x;
             const x1 = isSpLeft ? sp.x + R : sp.x - R;
             const x2 = isSpLeft ? tp.x - R : tp.x + R;
