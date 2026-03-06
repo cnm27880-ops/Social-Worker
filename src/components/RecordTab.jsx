@@ -10,6 +10,14 @@ const DEFAULT_TAGS = {
   disability: ['無身心障礙手冊', '有身心障礙手冊']
 };
 
+const getRankStr = (rank, total) => {
+  if (total === 1 || rank === 1) return '長';
+  if (rank === 2) return '次';
+  if (rank === total && rank > 2) return '么';
+  const nums = ['', '', '', '三', '四', '五', '六', '七', '八', '九', '十'];
+  return nums[rank] || String(rank);
+};
+
 const RecordTab = ({
   gen2Cfg, indexId, g1Status, cohabMembers, deceasedIds, customLinks
 }) => {
@@ -46,14 +54,6 @@ const RecordTab = ({
     if (id?.startsWith('c')) return gen2Cfg[parseInt(id.replace('c', ''))]?.gender;
     return null;
   };
-  const getRankStr = (rank, total) => {
-    if (total === 1 || rank === 1) return '長';
-    if (rank === 2) return '次';
-    if (rank === total && rank > 2) return '么';
-    const nums = ['', '', '', '三', '四', '五', '六', '七', '八', '九', '十'];
-    return nums[rank] || String(rank);
-  };
-
   /* ===== 紀錄產生器邏輯 ===== */
   const generatedText = useMemo(() => {
     let txt = `案主為${subjInfo.identity}`;
@@ -62,7 +62,7 @@ const RecordTab = ({
     if (subjInfo.lang) txt += `，${subjInfo.lang}溝通`;
     if (subjInfo.religion) txt += `，${subjInfo.religion}信仰`;
     if (subjInfo.disability) txt += `，${subjInfo.disability}`;
-    txt += `，${g1Status === 'married' ? '已婚' : '喪偶'}`;
+    txt += `，${g1Status === 'married' ? '已婚' : '離婚'}`;
 
     let cohabText = '獨居';
     if (indexId && cohabMembers.includes(indexId)) {
@@ -273,15 +273,15 @@ const RecordTab = ({
                 <div className="fam-grid">
                   <div>
                     <div className="hint" style={{marginBottom: '2px'}}>居住地</div>
-                    <input type="text" value={ext.location} onChange={e => handleFamExtra(i, 'location', e.target.value)} placeholder="例：台南" />
+                    <input type="text" value={ext.location || ''} onChange={e => handleFamExtra(i, 'location', e.target.value)} placeholder="例：台南" />
                   </div>
                   <div>
                     <div className="hint" style={{marginBottom: '2px'}}>職業</div>
-                    <input type="text" value={ext.job} onChange={e => handleFamExtra(i, 'job', e.target.value)} placeholder="例：家管、從商" />
+                    <input type="text" value={ext.job || ''} onChange={e => handleFamExtra(i, 'job', e.target.value)} placeholder="例：家管、從商" />
                   </div>
                   <div style={{gridColumn: '1 / -1'}}>
                     <div className="hint" style={{marginBottom: '2px'}}>特殊備註</div>
-                    <input type="text" value={ext.note} onChange={e => handleFamExtra(i, 'note', e.target.value)} placeholder="例：拒絕回答孫輩狀況" />
+                    <input type="text" value={ext.note || ''} onChange={e => handleFamExtra(i, 'note', e.target.value)} placeholder="例：拒絕回答孫輩狀況" />
                   </div>
                 </div>
               )}

@@ -11,6 +11,8 @@ const CUSTOM_LINK_LABELS = { married: '已婚', divorced: '離婚' };
 const EXT_COLOR_MODES = ['black', 'blue'];
 const EXT_COLOR_LABELS = { black: '黑色 (一般)', blue: '藍色 (編輯)' };
 
+const DEFAULT_SHORTCUTS = { drag: 'q', index: 'w', cohab: 'e', deceased: 'r' };
+
 const GenogramTab = ({
   gen2Str, setGen2Str, gen2Cfg, setGen2Cfg,
   indexId, setIndexId,
@@ -64,7 +66,6 @@ const GenogramTab = ({
   };
 
   /* --- 快捷鍵狀態 --- */
-  const DEFAULT_SHORTCUTS = { drag: 'q', index: 'w', cohab: 'e', deceased: 'r' };
   const [shortcuts, setShortcuts] = useState(() => {
     try { const saved = localStorage.getItem('genogram-shortcuts'); if (saved) return { ...DEFAULT_SHORTCUTS, ...JSON.parse(saved) }; } catch {}
     return DEFAULT_SHORTCUTS;
@@ -358,7 +359,14 @@ const GenogramTab = ({
   const downloadJPG = () => {
     const PAD = 40, allXs = [], allYs = [];
     nodes.forEach(n => { const p = pos(n.id); allXs.push(p.x - R, p.x + R); allYs.push(p.y - R, p.y + R); });
-    freeNodes.forEach(fn => { allXs.push(fn.x - R, fn.x + R); allYs.push(fn.y - R, fn.y + R); });
+    freeNodes.forEach(fn => {
+      if (fn.type === 'eco') {
+        const ecoHalfW = Math.max(80, (fn.text || '').length * 16 + 30) / 2;
+        allXs.push(fn.x - ecoHalfW, fn.x + ecoHalfW); allYs.push(fn.y - 20, fn.y + 20);
+      } else {
+        allXs.push(fn.x - R, fn.x + R); allYs.push(fn.y - R, fn.y + R);
+      }
+    });
     texts.forEach(t => { const w = t.vertical ? t.fontSize * 1.5 : t.text.length * t.fontSize * 0.7, h = t.vertical ? t.text.length * t.fontSize * 1.2 : t.fontSize * 1.5; allXs.push(t.x - 4, t.x + (t.vertical ? t.fontSize * 1.5 : w)); allYs.push(t.y - (t.vertical ? 4 : t.fontSize + 4), t.y + (t.vertical ? h : 8)); });
     polygons.forEach(pg => pg.pts.forEach(pt => { allXs.push(pt.x); allYs.push(pt.y); }));
     if (cohabitationBox && cohabitationBox.type === 'single') { allXs.push(cohabitationBox.x, cohabitationBox.x + cohabitationBox.w); allYs.push(cohabitationBox.y, cohabitationBox.y + cohabitationBox.h); }
@@ -582,7 +590,7 @@ const GenogramTab = ({
           {lines.map(ln => {
             const lineColor = ln.isExt && extColorMode === 'blue' ? '#3b82f6' : '#444';
             if (ln.type === 'marry') {
-              const a = pos(ln.a), b = pos(ln.b), nA = nodes.find(n => n.id === ln.a), nB = nodes.find(n => n.id === ln.b);
+              const a = pos(ln.a), b = pos(ln.b);
               const x1 = a.x + R, x2 = b.x - R, midX = (x1 + x2) / 2, midY = a.y;
               const els = [<line key={ln.id} x1={x1} y1={a.y} x2={x2} y2={b.y} stroke={lineColor} strokeWidth="2" strokeDasharray={ln.status === 'cohab' ? "8,6" : "0"} />];
               if (ln.status === 'separated') els.push(<line key={`${ln.id}-s`} x1={midX-6} y1={midY+12} x2={midX+6} y2={midY-12} stroke={lineColor} strokeWidth="2" />);
