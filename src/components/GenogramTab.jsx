@@ -279,25 +279,59 @@ const GenogramTab = ({
     if (textResize) { setTexts(p => p.map(t => t.id === textResize.id ? { ...t, fontSize: Math.max(10, Math.min(72, Math.round(textResize.startSize + (sp.y - textResize.startY) * 0.3))) } : t)); return; }
     if (textDrag) { textDragMoved.current = true; setTexts(p => p.map(t => t.id === textDrag.id ? { ...t, x: sp.x - textDrag.ox, y: sp.y - textDrag.oy } : t)); return; }
     if (!drag) return;
+
+    // 收集畫面上「所有」節點的最新座標，作為全域磁吸的對象
+    const allSnaps = [];
+    nodes.forEach(n => {
+      if (n.id !== drag.id) {
+        const p = positionsRef.current[n.id] || { x: n.dx, y: n.dy };
+        allSnaps.push(p);
+      }
+    });
+    freeNodesRef.current.forEach(fn => {
+      if (fn.id !== drag.id) {
+        allSnaps.push({ x: fn.x, y: fn.y });
+      }
+    });
+
     if (drag.isFree) {
       let newX = sp.x - drag.ox, newY = sp.y - drag.oy;
-      // 磁吸平行對齊：用 ref 讀取位置，避免 onMove 因 pos 依賴而每幀重建
+      
+      // 1. 擴充關係優先：25px 強力磁吸伴侶
       const connIds = customLinks
         .filter(l => l.sourceId === drag.id || l.targetId === drag.id)
         .map(l => l.sourceId === drag.id ? l.targetId : l.sourceId);
+      
+      let matchedPartner = false;
       for (const cid of connIds) {
         const fromPos = positionsRef.current[cid];
         const connY = fromPos?.y
           ?? freeNodesRef.current.find(fn => fn.id === cid)?.y
           ?? nodes.find(n => n.id === cid)?.dy;
-        if (connY != null && Math.abs(newY - connY) < 25) { newY = connY; break; }
+        if (connY != null && Math.abs(newY - connY) < 25) { 
+          newY = connY; 
+          matchedPartner = true;
+          break; 
+        }
+      }
+
+      // 2. 沒吸到伴侶時，啟動 12px 全域磁吸 (對齊網格上其他人)
+      if (!matchedPartner) {
+        for (const p of allSnaps) {
+          if (Math.abs(newX - p.x) < 12) newX = p.x;
+          if (Math.abs(newY - p.y) < 12) newY = p.y;
+        }
       }
       setFreeNodes(prev => prev.map(fn => fn.id === drag.id ? { ...fn, x: newX, y: newY } : fn));
     } else {
-      setPositions(prev => {
-        let nX = sp.x - drag.ox, nY = sp.y - drag.oy;
-        for (const [id, p] of Object.entries(prev)) { if (id === drag.id) continue; if (Math.abs(nX - p.x) < 12) nX = p.x; if (Math.abs(nY - p.y) < 12) nY = p.y; }
-        return { ...prev, [drag.id]: { x: nX, y: nY } };
+      // 原生節點：啟動 12px 全域磁吸
+      setPositions(prev => { 
+        let nX = sp.x - drag.ox, nY = sp.y - drag.oy; 
+        for (const p of allSnaps) { 
+          if (Math.abs(nX - p.x) < 12) nX = p.x; 
+          if (Math.abs(nY - p.y) < 12) nY = p.y; 
+        } 
+        return { ...prev, [drag.id]: { x: nX, y: nY } }; 
       });
     }
   }, [drag, textDrag, textResize, dragVertex, draftPoly, svgPt, setFreeNodes, customLinks, nodes]);
@@ -475,10 +509,13 @@ const GenogramTab = ({
         )}
 
         <div className="section">
-          <label>📝 文字方塊</label>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
-            <span className="status-badge" data-status={textDirection} ref={el => wheelRef(el, TEXT_DIRS, textDirection, setTextDirection)} title="滾輪切換：橫式/直式">{TEXT_DIR_LABELS[textDirection]}</span>
-            <button onClick={addText} style={{ padding: '5px 10px', fontSize: '12px', background: '#10b981', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', marginLeft: 'auto' }}>➕新增</button>
+          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
+            <label style={{ margin: 0 }}>📝 文字方塊</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: 'auto' }}>
+              <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold' }}>方向：</span>
+              <span className="status-badge" data-status={textDirection} ref={el => wheelRef(el, TEXT_DIRS, textDirection, setTextDirection)} title="滾輪切換：橫式/直式">{TEXT_DIR_LABELS[textDirection]}</span>
+              <button onClick={addText} style={{ padding: '5px 10px', fontSize: '12px', background: '#10b981', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>➕ 新增</button>
+            </div>
           </div>
           <div className="hint" style={{marginTop: '6px'}}>單擊選取文字方塊（顯示框線）；雙擊可編輯內容；選取後可刪除或拖曳右下角縮放。</div>
         </div>
