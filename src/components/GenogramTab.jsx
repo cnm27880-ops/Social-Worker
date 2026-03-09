@@ -508,16 +508,11 @@ const GenogramTab = ({
           </div>
         )}
 
-        <div className="section">
-          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
-            <label style={{ margin: 0 }}>📝 文字方塊</label>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: 'auto' }}>
-              <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold' }}>方向：</span>
-              <span className="status-badge" data-status={textDirection} ref={el => wheelRef(el, TEXT_DIRS, textDirection, setTextDirection)} title="滾輪切換：橫式/直式">{TEXT_DIR_LABELS[textDirection]}</span>
-              <button onClick={addText} style={{ padding: '5px 10px', fontSize: '12px', background: '#10b981', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>➕ 新增</button>
-            </div>
-          </div>
-          <div className="hint" style={{marginTop: '6px'}}>單擊選取文字方塊（顯示框線）；雙擊可編輯內容；選取後可刪除或拖曳右下角縮放。</div>
+        <div className="section" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px' }}>
+          <label style={{ margin: 0 }}>📝 文字方塊</label>
+          <span className="status-badge" data-status={textDirection} ref={el => wheelRef(el, TEXT_DIRS, textDirection, setTextDirection)} title="滾輪切換：橫式/直式">{TEXT_DIR_LABELS[textDirection]}</span>
+          <button onClick={addText} style={{ padding: '4px 10px', fontSize: '12px', background: '#10b981', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', marginLeft: 'auto' }}>➕ 新增</button>
+          <div className="hint" style={{ width: '100%', marginTop: '0' }}>單擊選取文字方塊（顯示框線）；雙擊可編輯內容；選取後可刪除或拖曳右下角縮放。</div>
         </div>
 
         <div className="section">
