@@ -13,6 +13,7 @@ const App = () => {
   const [indexId, setIndexId] = useState(null);
   const [cohabMembers, setCohabMembers] = useState([]);
   const [deceasedIds, setDeceasedIds] = useState([]);
+  const [disabledIds, setDisabledIds] = useState([]);
   const [g1Status, setG1Status] = useState('married');
 
   /* --- 自由樂高節點 & 自訂連線 --- */
@@ -35,6 +36,7 @@ const App = () => {
           indexId={indexId} setIndexId={setIndexId}
           cohabMembers={cohabMembers} setCohabMembers={setCohabMembers}
           deceasedIds={deceasedIds} setDeceasedIds={setDeceasedIds}
+          disabledIds={disabledIds} setDisabledIds={setDisabledIds}
           g1Status={g1Status} setG1Status={setG1Status}
           freeNodes={freeNodes} setFreeNodes={setFreeNodes}
           customLinks={customLinks} setCustomLinks={setCustomLinks}
@@ -49,6 +51,7 @@ const App = () => {
           g1Status={g1Status}
           cohabMembers={cohabMembers}
           deceasedIds={deceasedIds}
+          disabledIds={disabledIds}
           customLinks={customLinks}
         />
       </div>

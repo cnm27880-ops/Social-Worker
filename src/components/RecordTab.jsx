@@ -19,7 +19,7 @@ const getRankStr = (rank, total) => {
 };
 
 const RecordTab = ({
-  gen2Cfg, indexId, g1Status, cohabMembers, deceasedIds, customLinks
+  gen2Cfg, indexId, g1Status, cohabMembers, deceasedIds, disabledIds = [], customLinks
 }) => {
   /* --- 自訂標籤狀態 --- */
   const [tagOptions, setTagOptions] = useState(() => {
@@ -102,6 +102,7 @@ const RecordTab = ({
         txt += `${title}已歿；`;
         return;
       }
+      const isDisabled = disabledIds.includes(`c${i}`);
       const ext = famExtras[i] || {};
       let fTxt = `${title}`;
       if (ext.location) fTxt += `居${ext.location}`;
@@ -112,6 +113,7 @@ const RecordTab = ({
       if (c.g3Str) fTxt += `，${formatKidsText(c.g3Str)}`;
       if (ext.isPrimary) fTxt += `，為主要聯絡人及同意書填寫人`;
       if (ext.note) fTxt += `，${ext.note}`;
+      if (isDisabled) fTxt += `，領有身心障礙證明`;
       txt += `${fTxt}；\n`;
     });
 
@@ -147,6 +149,7 @@ const RecordTab = ({
             const kidKey = `${lnk.id}_c${ki}`;
             const isDeceased = deceasedIds.includes(kidKey);
             if (isDeceased) { txt += `${title}已歿；\n`; return; }
+            const isDisabled = disabledIds.includes(kidKey);
             const ext = famExtras[kidKey] || {};
             let fTxt = title;
             if (ext.location) fTxt += `居${ext.location}`;
@@ -155,6 +158,7 @@ const RecordTab = ({
             if (kc.g3Str) fTxt += `，${formatKidsText(kc.g3Str)}`;
             if (ext.isPrimary) fTxt += `，為主要聯絡人及同意書填寫人`;
             if (ext.note) fTxt += `，${ext.note}`;
+            if (isDisabled) fTxt += `，領有身心障礙證明`;
             txt += `${fTxt}；\n`;
           });
         }
@@ -162,7 +166,7 @@ const RecordTab = ({
     }
 
     return txt;
-  }, [subjInfo, gen2Cfg, g1Status, cohabMembers, deceasedIds, famExtras, indexId, customLinks]);
+  }, [subjInfo, gen2Cfg, g1Status, cohabMembers, deceasedIds, disabledIds, famExtras, indexId, customLinks]);
 
   const handleFamExtra = (idx, field, val) => {
     setFamExtras(prev => ({ ...prev, [idx]: { ...(prev[idx] || {}), [field]: val } }));
