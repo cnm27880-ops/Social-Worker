@@ -30,6 +30,7 @@ const GenogramTab = ({
   const [mode, setMode] = useState(null);
   const [cohabMode, setCohabMode] = useState('auto');
   const [cohabSolid, setCohabSolid] = useState(false);
+  const [indexStyle, setIndexStyle] = useState('filled');
   const [polygons, setPolygons] = useState([]);
   const [draftPoly, setDraftPoly] = useState([]);
   const [selectedPolyId, setSelectedPolyId] = useState(null);
@@ -433,7 +434,7 @@ const GenogramTab = ({
           <h2 style={{ margin: 0, border: 'none', padding: 0 }}>資料輸入面板</h2>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             <button onClick={downloadJPG} style={{ padding: '5px 10px', fontSize: '12px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>下載圖片</button>
-            <button onClick={() => { if(window.confirm('確定重置？')) { setGen2Str(''); setGen2Cfg([]); setIndexId(null); setCohabMembers([]); setDeceasedIds([]); setDisabledIds([]); setCohabSolid(false); setPolygons([]); setTexts([]); setAges({}); setFreeNodes([]); setCustomLinks([]); setPositions({}); } }} style={{ padding: '5px 10px', fontSize: '12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>重置</button>
+            <button onClick={() => { if(window.confirm('確定重置？')) { setGen2Str(''); setGen2Cfg([]); setIndexId(null); setCohabMembers([]); setDeceasedIds([]); setDisabledIds([]); setCohabSolid(false); setIndexStyle('filled'); setPolygons([]); setTexts([]); setAges({}); setFreeNodes([]); setCustomLinks([]); setPositions({}); } }} style={{ padding: '5px 10px', fontSize: '12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>重置</button>
           </div>
         </div>
 
@@ -441,7 +442,10 @@ const GenogramTab = ({
           <label>快捷操作面板</label>
           <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
             <button onClick={() => setShowAgeMode(p => !p)} style={{ padding: '5px 10px', fontSize: '12px', fontWeight: 'bold', borderRadius: '5px', border: '1px solid', cursor: 'pointer', background: showAgeMode ? '#ecfdf5' : '#f1f5f9', color: showAgeMode ? '#10b981' : '#64748b', borderColor: showAgeMode ? '#10b981' : '#cbd5e1' }}>年齡 {showAgeMode ? 'ON' : 'OFF'}</button>
-            <button onClick={() => setMode(p => p === 'index' ? null : 'index')} style={{ padding: '5px 10px', fontSize: '12px', fontWeight: 'bold', borderRadius: '5px', border: '1px solid', cursor: 'pointer', background: mode === 'index' ? '#dbeafe' : '#f1f5f9', color: mode === 'index' ? '#1d4ed8' : '#64748b', borderColor: mode === 'index' ? '#1d4ed8' : '#cbd5e1' }}>🎯 案主 [Q]</button>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 6px', borderRadius: '5px', border: '1px solid #cbd5e1', background: '#f8fafc' }}>
+              <button onClick={() => setMode(p => p === 'index' ? null : 'index')} style={{ padding: '3px 8px', fontSize: '12px', fontWeight: 'bold', borderRadius: '4px', border: '1px solid', cursor: 'pointer', background: mode === 'index' ? '#dbeafe' : '#ffffff', color: mode === 'index' ? '#1d4ed8' : '#64748b', borderColor: mode === 'index' ? '#1d4ed8' : '#cbd5e1' }}>🎯 案主 [Q]</button>
+              <button onClick={() => setIndexStyle(p => p === 'filled' ? 'double' : 'filled')} style={{ padding: '3px 8px', fontSize: '12px', fontWeight: 'bold', borderRadius: '4px', border: '1px solid #cbd5e1', cursor: 'pointer', background: '#ffffff', color: '#475569' }}>{indexStyle === 'filled' ? '填滿' : '雙線'}</button>
+            </div>
             <button onClick={() => setMode(p => p === 'disabled' ? null : 'disabled')} style={{ padding: '5px 10px', fontSize: '12px', fontWeight: 'bold', borderRadius: '5px', border: '1px solid', cursor: 'pointer', background: mode === 'disabled' ? '#fef3c7' : '#f1f5f9', color: mode === 'disabled' ? '#b45309' : '#64748b', borderColor: mode === 'disabled' ? '#b45309' : '#cbd5e1' }}>♿ 身障 [W]</button>
             <button onClick={() => setMode(p => p === 'deceased' ? null : 'deceased')} style={{ padding: '5px 10px', fontSize: '12px', fontWeight: 'bold', borderRadius: '5px', border: '1px solid', cursor: 'pointer', background: mode === 'deceased' ? '#fee2e2' : '#f1f5f9', color: mode === 'deceased' ? '#b91c1c' : '#64748b', borderColor: mode === 'deceased' ? '#b91c1c' : '#cbd5e1' }}>✝️ 死亡 [E]</button>
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 6px', borderRadius: '5px', border: '1px solid #cbd5e1', background: '#f8fafc' }}>
@@ -641,7 +645,11 @@ const GenogramTab = ({
             ...nodes.map(nd => ({ id: nd.id, gender: nd.gender, ...pos(nd.id), stroke: nd.isExt && extColorMode === 'blue' ? '#3b82f6' : '#333', dash: undefined, isFree: false })),
             ...freeNodes.filter(fn => fn.type !== 'eco').map(fn => ({ id: fn.id, gender: fn.gender, x: fn.x, y: fn.y, stroke: extColorMode === 'blue' ? '#3b82f6' : '#333', dash: undefined, isFree: true }))
           ].map(nd => {
-            const isIP = nd.id === indexId, fill = isIP ? '#1e293b' : 'white', txtC = isIP ? 'white' : '#333';
+            const isIP = nd.id === indexId;
+            const isDouble = isIP && indexStyle === 'double';
+            const fill = isIP && !isDouble ? '#1e293b' : 'white';
+            const txtC = isIP && !isDouble ? 'white' : '#333';
+            const overlayDark = isIP && !isDouble ? 'white' : '#333';
             const isEditAge = editingAgeId === nd.id, ageVal = ages[nd.id] || '';
             return (
               <g key={nd.id} transform={`translate(${nd.x},${nd.y})`} style={{ cursor: drag?.id === nd.id ? 'grabbing' : 'grab' }}
@@ -657,12 +665,15 @@ const GenogramTab = ({
                      }
                    }
                  }}>
+                {isDouble && (nd.gender === 'M'
+                  ? <rect x={-(R+5)} y={-(R+5)} width={SZ+10} height={SZ+10} fill="none" stroke={nd.stroke} strokeWidth="2.5" rx="3" pointerEvents="none" />
+                  : <circle cx="0" cy="0" r={R+5} fill="none" stroke={nd.stroke} strokeWidth="2.5" pointerEvents="none" />)}
                 {nd.gender === 'M'
                   ? <rect x={-R} y={-R} width={SZ} height={SZ} fill={fill} stroke={nd.stroke} strokeWidth="2.5" rx="2" strokeDasharray={nd.dash} />
                   : <circle cx="0" cy="0" r={R} fill={fill} stroke={nd.stroke} strokeWidth="2.5" strokeDasharray={nd.dash} />}
                 {disabledIds.includes(nd.id) && (nd.gender === 'M'
-                  ? <path d={`M 0,${-R} L ${-R+2},${-R} A 2,2 0 0,0 ${-R},${-R+2} L ${-R},${R-2} A 2,2 0 0,0 ${-R+2},${R} L 0,${R} Z`} fill={isIP ? 'white' : '#333'} pointerEvents="none" />
-                  : <path d={`M 0,${-R} A ${R},${R} 0 0,0 0,${R} Z`} fill={isIP ? 'white' : '#333'} pointerEvents="none" />)}
+                  ? <path d={`M 0,${-R} L ${-R+2},${-R} A 2,2 0 0,0 ${-R},${-R+2} L ${-R},${R-2} A 2,2 0 0,0 ${-R+2},${R} L 0,${R} Z`} fill={overlayDark} pointerEvents="none" />
+                  : <path d={`M 0,${-R} A ${R},${R} 0 0,0 0,${R} Z`} fill={overlayDark} pointerEvents="none" />)}
                 {isEditAge ? (
                   <foreignObject x={-R} y={-10} width={SZ} height={20}>
                     <input autoFocus defaultValue={ageVal}
@@ -672,11 +683,16 @@ const GenogramTab = ({
                   </foreignObject>
                 ) : (
                   <>
-                    {isIP && (!showAgeMode || !ageVal) && <text x="0" y="4" textAnchor="middle" fontSize="11" fontWeight="bold" fill={txtC} style={{fontFamily: TEXT_FONT, pointerEvents: 'none'}}>案主</text>}
-                    {showAgeMode && ageVal && <text x="0" y="4" textAnchor="middle" fontSize="13" fontWeight="bold" fill={txtC} style={{fontFamily: TEXT_FONT, pointerEvents: 'none'}}>{ageVal}</text>}
+                    {isIP && (!showAgeMode || !ageVal) && <text x="0" y="4" textAnchor="middle" fontSize="11" fontWeight="bold" fill={isDouble ? '#ef4444' : txtC} stroke="white" strokeWidth="3" paintOrder="stroke" strokeLinejoin="round" style={{fontFamily: TEXT_FONT, pointerEvents: 'none'}}>案主</text>}
+                    {showAgeMode && ageVal && <text x="0" y="4" textAnchor="middle" fontSize="13" fontWeight="bold" fill={txtC} stroke="white" strokeWidth="3" paintOrder="stroke" strokeLinejoin="round" style={{fontFamily: TEXT_FONT, pointerEvents: 'none'}}>{ageVal}</text>}
                   </>
                 )}
-                {deceasedIds.includes(nd.id) && <g stroke={isIP ? 'white' : '#333'} strokeWidth="2.5" pointerEvents="none"><line x1={-R} y1={-R} x2={R} y2={R} /><line x1={R} y1={-R} x2={-R} y2={R} /></g>}
+                {deceasedIds.includes(nd.id) && <g pointerEvents="none">
+                  <line x1={-R} y1={-R} x2={R} y2={R} stroke="white" strokeWidth="5" strokeLinecap="round" />
+                  <line x1={R} y1={-R} x2={-R} y2={R} stroke="white" strokeWidth="5" strokeLinecap="round" />
+                  <line x1={-R} y1={-R} x2={R} y2={R} stroke={overlayDark} strokeWidth="2.5" />
+                  <line x1={R} y1={-R} x2={-R} y2={R} stroke={overlayDark} strokeWidth="2.5" />
+                </g>}
               </g>
             );
           })}
