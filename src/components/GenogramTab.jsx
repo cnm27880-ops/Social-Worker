@@ -30,7 +30,7 @@ const GenogramTab = ({
   const [mode, setMode] = useState(null);
   const [cohabMode, setCohabMode] = useState('auto');
   const [cohabSolid, setCohabSolid] = useState(false);
-  const [indexStyle, setIndexStyle] = useState('filled');
+  const [ipStyle, setIpStyle] = useState('filled');
   const [polygons, setPolygons] = useState([]);
   const [draftPoly, setDraftPoly] = useState([]);
   const [selectedPolyId, setSelectedPolyId] = useState(null);
@@ -434,24 +434,64 @@ const GenogramTab = ({
           <h2 style={{ margin: 0, border: 'none', padding: 0 }}>資料輸入面板</h2>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             <button onClick={downloadJPG} style={{ padding: '5px 10px', fontSize: '12px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>下載圖片</button>
-            <button onClick={() => { if(window.confirm('確定重置？')) { setGen2Str(''); setGen2Cfg([]); setIndexId(null); setCohabMembers([]); setDeceasedIds([]); setDisabledIds([]); setCohabSolid(false); setIndexStyle('filled'); setPolygons([]); setTexts([]); setAges({}); setFreeNodes([]); setCustomLinks([]); setPositions({}); } }} style={{ padding: '5px 10px', fontSize: '12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>重置</button>
+            <button onClick={() => { if(window.confirm('確定重置？')) { setGen2Str(''); setGen2Cfg([]); setIndexId(null); setCohabMembers([]); setDeceasedIds([]); setDisabledIds([]); setCohabSolid(false); setIpStyle('filled'); setPolygons([]); setTexts([]); setAges({}); setFreeNodes([]); setCustomLinks([]); setPositions({}); } }} style={{ padding: '5px 10px', fontSize: '12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>重置</button>
           </div>
         </div>
 
-        <div className="section">
-          <label>快捷操作面板</label>
-          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
-            <button onClick={() => setShowAgeMode(p => !p)} style={{ padding: '5px 10px', fontSize: '12px', fontWeight: 'bold', borderRadius: '5px', border: '1px solid', cursor: 'pointer', background: showAgeMode ? '#ecfdf5' : '#f1f5f9', color: showAgeMode ? '#10b981' : '#64748b', borderColor: showAgeMode ? '#10b981' : '#cbd5e1' }}>年齡 {showAgeMode ? 'ON' : 'OFF'}</button>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 6px', borderRadius: '5px', border: '1px solid #cbd5e1', background: '#f8fafc' }}>
-              <button onClick={() => setMode(p => p === 'index' ? null : 'index')} style={{ padding: '3px 8px', fontSize: '12px', fontWeight: 'bold', borderRadius: '4px', border: '1px solid', cursor: 'pointer', background: mode === 'index' ? '#dbeafe' : '#ffffff', color: mode === 'index' ? '#1d4ed8' : '#64748b', borderColor: mode === 'index' ? '#1d4ed8' : '#cbd5e1' }}>🎯 案主 [Q]</button>
-              <button onClick={() => setIndexStyle(p => p === 'filled' ? 'double' : 'filled')} style={{ padding: '3px 8px', fontSize: '12px', fontWeight: 'bold', borderRadius: '4px', border: '1px solid #cbd5e1', cursor: 'pointer', background: '#ffffff', color: '#475569' }}>{indexStyle === 'filled' ? '填滿' : '雙線'}</button>
+        <div className="section" style={{ padding: '14px' }}>
+          <label style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span>🛠️ 快捷操作工具列</span>
+            <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 'normal' }}>點擊按鈕或快捷鍵 [Q/W/E/R]，右側標籤支援滑鼠滾輪</span>
+          </label>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {/* 第一排：全域顯示與案主 */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+              <button onClick={() => setShowAgeMode(!showAgeMode)}
+                      style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', fontSize: '13px', borderRadius: '6px', border: `1px solid ${showAgeMode ? '#10b981' : '#cbd5e1'}`, background: showAgeMode ? '#ecfdf5' : 'white', color: showAgeMode ? '#059669' : '#64748b', cursor: 'pointer', fontWeight: 'bold' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                年齡顯示 {showAgeMode ? 'ON' : 'OFF'}
+              </button>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: mode === 'index' ? '#eff6ff' : '#f8fafc', border: `1px solid ${mode === 'index' ? '#3b82f6' : '#cbd5e1'}`, padding: '4px 6px', borderRadius: '6px' }}>
+                <button onClick={() => setMode(mode === 'index' ? null : 'index')}
+                        style={{ display: 'flex', alignItems: 'center', gap: '6px', background: mode === 'index' ? '#3b82f6' : 'transparent', border: 'none', borderRadius: '4px', color: mode === 'index' ? 'white' : '#64748b', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px', padding: '4px 8px' }}>
+                  <svg width="14" height="14" viewBox="0 0 14 14"><rect x="1" y="1" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2"/><rect x="4" y="4" width="6" height="6" fill="currentColor"/></svg>
+                  案主 [Q]
+                </button>
+                <span className="status-badge" data-status={ipStyle === 'filled' ? 'horizontal' : 'none'} onClick={() => setIpStyle(ipStyle === 'filled' ? 'double' : 'filled')} ref={el => wheelRef(el, ['filled', 'double'], ipStyle, setIpStyle)} style={{ fontSize: '11px', padding: '2px 8px', margin: 0 }}>
+                  {ipStyle === 'filled' ? '填滿' : '雙線'}
+                </span>
+              </div>
             </div>
-            <button onClick={() => setMode(p => p === 'disabled' ? null : 'disabled')} style={{ padding: '5px 10px', fontSize: '12px', fontWeight: 'bold', borderRadius: '5px', border: '1px solid', cursor: 'pointer', background: mode === 'disabled' ? '#fef3c7' : '#f1f5f9', color: mode === 'disabled' ? '#b45309' : '#64748b', borderColor: mode === 'disabled' ? '#b45309' : '#cbd5e1' }}>♿ 身障 [W]</button>
-            <button onClick={() => setMode(p => p === 'deceased' ? null : 'deceased')} style={{ padding: '5px 10px', fontSize: '12px', fontWeight: 'bold', borderRadius: '5px', border: '1px solid', cursor: 'pointer', background: mode === 'deceased' ? '#fee2e2' : '#f1f5f9', color: mode === 'deceased' ? '#b91c1c' : '#64748b', borderColor: mode === 'deceased' ? '#b91c1c' : '#cbd5e1' }}>✝️ 死亡 [E]</button>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 6px', borderRadius: '5px', border: '1px solid #cbd5e1', background: '#f8fafc' }}>
-              <button onClick={() => setMode(p => p === 'cohab' ? null : 'cohab')} style={{ padding: '3px 8px', fontSize: '12px', fontWeight: 'bold', borderRadius: '4px', border: '1px solid', cursor: 'pointer', background: mode === 'cohab' ? '#fee2e2' : '#ffffff', color: mode === 'cohab' ? '#b91c1c' : '#64748b', borderColor: mode === 'cohab' ? '#b91c1c' : '#cbd5e1' }}>🏠 同住 [R]</button>
-              <button onClick={() => setCohabMode(p => p === 'auto' ? 'poly' : 'auto')} style={{ padding: '3px 8px', fontSize: '12px', fontWeight: 'bold', borderRadius: '4px', border: '1px solid #cbd5e1', cursor: 'pointer', background: '#ffffff', color: '#475569' }}>{cohabMode === 'auto' ? '自動' : '點繪'}</button>
-              <button onClick={() => setCohabSolid(p => !p)} style={{ padding: '3px 8px', fontSize: '12px', fontWeight: 'bold', borderRadius: '4px', border: '1px solid #cbd5e1', cursor: 'pointer', background: '#ffffff', color: '#475569' }}>{cohabSolid ? '實線' : '虛線'}</button>
+
+            {/* 第二排：特殊標記與同住 */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+              <button onClick={() => setMode(mode === 'disabled' ? null : 'disabled')}
+                      style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', fontSize: '13px', borderRadius: '6px', border: `1px solid ${mode === 'disabled' ? '#8b5cf6' : '#cbd5e1'}`, background: mode === 'disabled' ? '#f5f3ff' : 'white', color: mode === 'disabled' ? '#7c3aed' : '#64748b', cursor: 'pointer', fontWeight: 'bold' }}>
+                <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6" fill="none" stroke="currentColor" strokeWidth="2"/><path d="M 7 1 A 6 6 0 0 0 7 13 Z" fill="currentColor"/></svg>
+                身障 [W]
+              </button>
+
+              <button onClick={() => setMode(mode === 'deceased' ? null : 'deceased')}
+                      style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', fontSize: '13px', borderRadius: '6px', border: `1px solid ${mode === 'deceased' ? '#ef4444' : '#cbd5e1'}`, background: mode === 'deceased' ? '#fef2f2' : 'white', color: mode === 'deceased' ? '#dc2626' : '#64748b', cursor: 'pointer', fontWeight: 'bold' }}>
+                <svg width="14" height="14" viewBox="0 0 14 14"><path d="M2,2 L12,12 M12,2 L2,12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+                死亡 [E]
+              </button>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: mode === 'cohab' ? '#fffbeb' : '#f8fafc', border: `1px solid ${mode === 'cohab' ? '#f59e0b' : '#cbd5e1'}`, padding: '4px 6px', borderRadius: '6px' }}>
+                <button onClick={() => setMode(mode === 'cohab' ? null : 'cohab')}
+                        style={{ display: 'flex', alignItems: 'center', gap: '6px', background: mode === 'cohab' ? '#f59e0b' : 'transparent', border: 'none', borderRadius: '4px', color: mode === 'cohab' ? 'white' : '#64748b', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px', padding: '4px 8px' }}>
+                  <svg width="16" height="14" viewBox="0 0 16 14"><rect x="1" y="1" width="14" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray="3,2" rx="2"/></svg>
+                  同住 [R]
+                </button>
+                <span className="status-badge" data-status={cohabMode === 'auto' ? 'none' : 'cohab'} onClick={() => setCohabMode(cohabMode === 'auto' ? 'poly' : 'auto')} ref={el => wheelRef(el, ['auto', 'poly'], cohabMode, setCohabMode)} style={{ fontSize: '11px', padding: '2px 8px', margin: 0 }}>
+                  {cohabMode === 'auto' ? '自動' : '點繪'}
+                </span>
+                <span className="status-badge" data-status={cohabSolid ? 'married' : 'none'} onClick={() => setCohabSolid(!cohabSolid)} ref={el => wheelRef(el, [false, true], cohabSolid, setCohabSolid)} style={{ fontSize: '11px', padding: '2px 8px', margin: 0 }}>
+                  {cohabSolid ? '實線' : '虛線'}
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -646,7 +686,7 @@ const GenogramTab = ({
             ...freeNodes.filter(fn => fn.type !== 'eco').map(fn => ({ id: fn.id, gender: fn.gender, x: fn.x, y: fn.y, stroke: extColorMode === 'blue' ? '#3b82f6' : '#333', dash: undefined, isFree: true }))
           ].map(nd => {
             const isIP = nd.id === indexId;
-            const isDouble = isIP && indexStyle === 'double';
+            const isDouble = isIP && ipStyle === 'double';
             const fill = isIP && !isDouble ? '#1e293b' : 'white';
             const txtC = isIP && !isDouble ? 'white' : '#333';
             const overlayDark = isIP && !isDouble ? 'white' : '#333';
