@@ -11,7 +11,6 @@ const CUSTOM_LINK_LABELS = { married: '已婚', divorced: '離婚' };
 const EXT_COLOR_MODES = ['black', 'blue'];
 const EXT_COLOR_LABELS = { black: '一般', blue: '編輯' };
 
-const DEFAULT_SHORTCUTS = { drag: 'q', index: 'w', cohab: 'e', deceased: 'r' };
 const ecoRx = (text) => Math.max(35, (text?.length || 1) * 9 + 15);
 const ECO_RY = 28;
 
@@ -20,6 +19,7 @@ const GenogramTab = ({
   indexId, setIndexId,
   cohabMembers, setCohabMembers,
   deceasedIds, setDeceasedIds,
+  disabledIds, setDisabledIds,
   g1Status, setG1Status,
   freeNodes, setFreeNodes,
   customLinks, setCustomLinks
@@ -27,8 +27,9 @@ const GenogramTab = ({
   /* --- 家系圖本地狀態 --- */
   const [positions, setPositions] = useState({});
   const [drag, setDrag] = useState(null);
-  const [mode, setMode] = useState('drag');
+  const [mode, setMode] = useState(null);
   const [cohabMode, setCohabMode] = useState('auto');
+  const [cohabSolid, setCohabSolid] = useState(false);
   const [polygons, setPolygons] = useState([]);
   const [draftPoly, setDraftPoly] = useState([]);
   const [selectedPolyId, setSelectedPolyId] = useState(null);
@@ -67,14 +68,6 @@ const GenogramTab = ({
     setEditingAgeId(null);
   };
 
-  /* --- 快捷鍵狀態 --- */
-  const [shortcuts, setShortcuts] = useState(() => {
-    try { const saved = localStorage.getItem('genogram-shortcuts'); if (saved) return { ...DEFAULT_SHORTCUTS, ...JSON.parse(saved) }; } catch {}
-    return DEFAULT_SHORTCUTS;
-  });
-  useEffect(() => { try { localStorage.setItem('genogram-shortcuts', JSON.stringify(shortcuts)); } catch {} }, [shortcuts]);
-  const updateShortcut = (modeName, key) => setShortcuts(prev => ({ ...prev, [modeName]: key }));
-
   /* ===== 畫布互動邏輯 ===== */
   const svgRef = useRef(null);
   const wheelRef = (el, list, current, setter) => {
@@ -86,10 +79,10 @@ const GenogramTab = ({
     const handleKeyDown = (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
       const key = e.key.toLowerCase();
-      if (key === shortcuts.drag) setMode('drag');
-      if (key === shortcuts.index) setMode('index');
-      if (key === shortcuts.cohab) setMode('cohab');
-      if (key === shortcuts.deceased) setMode('deceased');
+      if (key === 'q') setMode(p => p === 'index' ? null : 'index');
+      if (key === 'w') setMode(p => p === 'disabled' ? null : 'disabled');
+      if (key === 'e') setMode(p => p === 'deceased' ? null : 'deceased');
+      if (key === 'r') setMode(p => p === 'cohab' ? null : 'cohab');
       if (e.key === 'Enter' && mode === 'cohab' && cohabMode === 'poly' && draftPoly.length >= 3) {
         setPolygons(prev => [...prev, { id: 'pg_' + Date.now(), pts: draftPoly }]); setDraftPoly([]); setMousePos(null);
       }
@@ -97,7 +90,7 @@ const GenogramTab = ({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [shortcuts, draftPoly, mode, cohabMode]);
+  }, [draftPoly, mode, cohabMode]);
 
   const onGen2Change = (val) => {
     setGen2Str(val);
@@ -377,6 +370,7 @@ const GenogramTab = ({
     if (mode === 'index') setIndexId(p => p === id ? null : id);
     else if (mode === 'cohab' && cohabMode === 'auto') setCohabMembers(p => p.includes(id) ? p.filter(m => m !== id) : [...p, id]);
     else if (mode === 'deceased') setDeceasedIds(p => p.includes(id) ? p.filter(m => m !== id) : [...p, id]);
+    else if (mode === 'disabled') setDisabledIds(p => p.includes(id) ? p.filter(m => m !== id) : [...p, id]);
   };
 
   const cohabitationBox = useMemo(() => {
@@ -438,35 +432,23 @@ const GenogramTab = ({
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '14px', paddingBottom: '8px', borderBottom: '2px solid #3b82f6' }}>
           <h2 style={{ margin: 0, border: 'none', padding: 0 }}>資料輸入面板</h2>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', fontWeight: 'bold', color: showAgeMode ? '#10b981' : '#64748b', cursor: 'pointer', background: showAgeMode ? '#ecfdf5' : '#f1f5f9', padding: '4px 8px', borderRadius: '5px', border: '1px solid', borderColor: showAgeMode ? '#10b981' : '#cbd5e1' }}>
-              <input type="checkbox" checked={showAgeMode} onChange={e => setShowAgeMode(e.target.checked)} style={{ cursor: 'pointer', accentColor: '#10b981' }} />
-              年齡 {showAgeMode ? 'ON' : 'OFF'}
-            </label>
-            <button onClick={downloadJPG} style={{ padding: '5px 10px', fontSize: '12px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>下載</button>
-            <button onClick={() => { if(window.confirm('確定重置？')) { setGen2Str(''); setGen2Cfg([]); setIndexId(null); setCohabMembers([]); setDeceasedIds([]); setPolygons([]); setTexts([]); setAges({}); setFreeNodes([]); setCustomLinks([]); setPositions({}); } }} style={{ padding: '5px 10px', fontSize: '12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>重置</button>
+            <button onClick={downloadJPG} style={{ padding: '5px 10px', fontSize: '12px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>下載圖片</button>
+            <button onClick={() => { if(window.confirm('確定重置？')) { setGen2Str(''); setGen2Cfg([]); setIndexId(null); setCohabMembers([]); setDeceasedIds([]); setDisabledIds([]); setCohabSolid(false); setPolygons([]); setTexts([]); setAges({}); setFreeNodes([]); setCustomLinks([]); setPositions({}); } }} style={{ padding: '5px 10px', fontSize: '12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>重置</button>
           </div>
         </div>
 
         <div className="section">
-          <label> 畫布互動 (快捷鍵切換)</label>
-          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', fontSize: '13px', alignItems: 'center' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <input type="radio" checked={mode === 'drag'} onChange={() => setMode('drag')} /> 🤚 拖曳
-              [<input type="text" maxLength="1" value={shortcuts.drag} onChange={e => updateShortcut('drag', e.target.value)} style={{ width: '18px', padding: '0', textAlign: 'center', fontSize: '11px', background: 'transparent', border: 'none', borderBottom: '1px solid #3b82f6', outline: 'none' }} />]
-            </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <input type="radio" checked={mode === 'index'} onChange={() => setMode('index')} /> 🎯 案主
-              [<input type="text" maxLength="1" value={shortcuts.index} onChange={e => updateShortcut('index', e.target.value)} style={{ width: '18px', padding: '0', textAlign: 'center', fontSize: '11px', background: 'transparent', border: 'none', borderBottom: '1px solid #3b82f6', outline: 'none' }} />]
-            </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <input type="radio" checked={mode === 'cohab'} onChange={() => setMode('cohab')} /> 🏠 同住
-              [<input type="text" maxLength="1" value={shortcuts.cohab} onChange={e => updateShortcut('cohab', e.target.value)} style={{ width: '18px', padding: '0', textAlign: 'center', fontSize: '11px', background: 'transparent', border: 'none', borderBottom: '1px solid #3b82f6', outline: 'none' }} />]
-              <span className="status-badge" data-status="cohab" ref={el => wheelRef(el, ['auto', 'poly'], cohabMode, setCohabMode)} title="滾輪切換：自動 / 點繪">{cohabMode === 'auto' ? '自動' : '點繪'}</span>
-            </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <input type="radio" checked={mode === 'deceased'} onChange={() => setMode('deceased')} /> ✝️ 打叉
-              [<input type="text" maxLength="1" value={shortcuts.deceased} onChange={e => updateShortcut('deceased', e.target.value)} style={{ width: '18px', padding: '0', textAlign: 'center', fontSize: '11px', background: 'transparent', border: 'none', borderBottom: '1px solid #3b82f6', outline: 'none' }} />]
-            </label>
+          <label>快捷操作面板</label>
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+            <button onClick={() => setShowAgeMode(p => !p)} style={{ padding: '5px 10px', fontSize: '12px', fontWeight: 'bold', borderRadius: '5px', border: '1px solid', cursor: 'pointer', background: showAgeMode ? '#ecfdf5' : '#f1f5f9', color: showAgeMode ? '#10b981' : '#64748b', borderColor: showAgeMode ? '#10b981' : '#cbd5e1' }}>年齡 {showAgeMode ? 'ON' : 'OFF'}</button>
+            <button onClick={() => setMode(p => p === 'index' ? null : 'index')} style={{ padding: '5px 10px', fontSize: '12px', fontWeight: 'bold', borderRadius: '5px', border: '1px solid', cursor: 'pointer', background: mode === 'index' ? '#dbeafe' : '#f1f5f9', color: mode === 'index' ? '#1d4ed8' : '#64748b', borderColor: mode === 'index' ? '#1d4ed8' : '#cbd5e1' }}>🎯 案主 [Q]</button>
+            <button onClick={() => setMode(p => p === 'disabled' ? null : 'disabled')} style={{ padding: '5px 10px', fontSize: '12px', fontWeight: 'bold', borderRadius: '5px', border: '1px solid', cursor: 'pointer', background: mode === 'disabled' ? '#fef3c7' : '#f1f5f9', color: mode === 'disabled' ? '#b45309' : '#64748b', borderColor: mode === 'disabled' ? '#b45309' : '#cbd5e1' }}>♿ 身障 [W]</button>
+            <button onClick={() => setMode(p => p === 'deceased' ? null : 'deceased')} style={{ padding: '5px 10px', fontSize: '12px', fontWeight: 'bold', borderRadius: '5px', border: '1px solid', cursor: 'pointer', background: mode === 'deceased' ? '#fee2e2' : '#f1f5f9', color: mode === 'deceased' ? '#b91c1c' : '#64748b', borderColor: mode === 'deceased' ? '#b91c1c' : '#cbd5e1' }}>✝️ 死亡 [E]</button>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 6px', borderRadius: '5px', border: '1px solid #cbd5e1', background: '#f8fafc' }}>
+              <button onClick={() => setMode(p => p === 'cohab' ? null : 'cohab')} style={{ padding: '3px 8px', fontSize: '12px', fontWeight: 'bold', borderRadius: '4px', border: '1px solid', cursor: 'pointer', background: mode === 'cohab' ? '#fee2e2' : '#ffffff', color: mode === 'cohab' ? '#b91c1c' : '#64748b', borderColor: mode === 'cohab' ? '#b91c1c' : '#cbd5e1' }}>🏠 同住 [R]</button>
+              <button onClick={() => setCohabMode(p => p === 'auto' ? 'poly' : 'auto')} style={{ padding: '3px 8px', fontSize: '12px', fontWeight: 'bold', borderRadius: '4px', border: '1px solid #cbd5e1', cursor: 'pointer', background: '#ffffff', color: '#475569' }}>{cohabMode === 'auto' ? '自動' : '點繪'}</button>
+              <button onClick={() => setCohabSolid(p => !p)} style={{ padding: '3px 8px', fontSize: '12px', fontWeight: 'bold', borderRadius: '4px', border: '1px solid #cbd5e1', cursor: 'pointer', background: '#ffffff', color: '#475569' }}>{cohabSolid ? '實線' : '虛線'}</button>
+            </div>
           </div>
         </div>
 
@@ -584,6 +566,7 @@ const GenogramTab = ({
         <div className="section">
           <label>操作說明</label>
           <div className="info-box">
+            快捷鍵切換模式：[Q] 案主 / [W] 身障 / [E] 死亡 / [R] 同住<br/>
             ■ / ●：點擊節點切換案主；雙擊可輸入年齡。<br/>
             狀態切換：滑鼠停在狀態標籤上【上下滾動滾輪】即可切換。<br/>
             文字方塊：單擊選取/縮放；雙擊直接打字 (可 Enter 換行)。<br/>
@@ -603,12 +586,12 @@ const GenogramTab = ({
             <rect width="100%" height="100%" fill="transparent" style={{ cursor: 'crosshair' }} onClick={e => { e.stopPropagation(); const sp = svgPt(e); const pt = { x: sp.x, y: sp.y }; if (draftPoly.length >= 3 && Math.sqrt(Math.pow(pt.x - draftPoly[0].x,2) + Math.pow(pt.y - draftPoly[0].y,2)) < 15) { setPolygons(p => [...p, { id: 'pg_' + Date.now(), pts: draftPoly }]); setDraftPoly([]); setMousePos(null); return; } setDraftPoly(p => [...p, pt]); }} />
           )}
 
-          {cohabitationBox && cohabitationBox.type === 'single' && <rect x={cohabitationBox.x} y={cohabitationBox.y} width={cohabitationBox.w} height={cohabitationBox.h} fill="none" stroke="#ef4444" strokeWidth="2.5" strokeDasharray="8,6" rx="15" />}
-          {cohabitationBox && cohabitationBox.type === 'poly' && <path d={getSmoothPath(cohabitationBox.points, true)} fill="none" stroke="#ef4444" strokeWidth="2.5" strokeDasharray="8,6" strokeLinejoin="round" />}
+          {cohabitationBox && cohabitationBox.type === 'single' && <rect x={cohabitationBox.x} y={cohabitationBox.y} width={cohabitationBox.w} height={cohabitationBox.h} fill="none" stroke="#ef4444" strokeWidth="2.5" strokeDasharray={cohabSolid ? "0" : "8,6"} rx="15" />}
+          {cohabitationBox && cohabitationBox.type === 'poly' && <path d={getSmoothPath(cohabitationBox.points, true)} fill="none" stroke="#ef4444" strokeWidth="2.5" strokeDasharray={cohabSolid ? "0" : "8,6"} strokeLinejoin="round" />}
 
           {polygons.map(pg => (
             <g key={pg.id}>
-              <path d={getSmoothPath(pg.pts, true)} fill="rgba(239, 68, 68, 0.05)" stroke="#ef4444" strokeWidth="2.5" strokeDasharray="8,6" strokeLinejoin="round" style={{ cursor: mode === 'drag' ? 'pointer' : undefined }} onClick={e => { if (mode === 'drag') { e.stopPropagation(); setSelectedPolyId(pg.id); } }} onDoubleClick={e => { e.stopPropagation(); setPolygons(p => p.filter(x => x.id !== pg.id)); setSelectedPolyId(null); }} />
+              <path d={getSmoothPath(pg.pts, true)} fill="rgba(239, 68, 68, 0.05)" stroke="#ef4444" strokeWidth="2.5" strokeDasharray={cohabSolid ? "0" : "8,6"} strokeLinejoin="round" style={{ cursor: !mode ? 'pointer' : undefined }} onClick={e => { if (!mode) { e.stopPropagation(); setSelectedPolyId(pg.id); } }} onDoubleClick={e => { e.stopPropagation(); setPolygons(p => p.filter(x => x.id !== pg.id)); setSelectedPolyId(null); }} />
               {selectedPolyId === pg.id && pg.pts.map((pt, idx) => <circle key={`v${idx}`} cx={pt.x} cy={pt.y} r={6} fill="#3b82f6" stroke="white" strokeWidth="1.5" style={{ cursor: 'crosshair' }} onMouseDown={e => { e.stopPropagation(); const sp = svgPt(e); setDragVertex({ polyId: pg.id, index: idx, ox: sp.x - pt.x, oy: sp.y - pt.y }); }} />)}
             </g>
           ))}
@@ -677,6 +660,9 @@ const GenogramTab = ({
                 {nd.gender === 'M'
                   ? <rect x={-R} y={-R} width={SZ} height={SZ} fill={fill} stroke={nd.stroke} strokeWidth="2.5" rx="2" strokeDasharray={nd.dash} />
                   : <circle cx="0" cy="0" r={R} fill={fill} stroke={nd.stroke} strokeWidth="2.5" strokeDasharray={nd.dash} />}
+                {disabledIds.includes(nd.id) && (nd.gender === 'M'
+                  ? <path d={`M 0,${-R} L ${-R+2},${-R} A 2,2 0 0,0 ${-R},${-R+2} L ${-R},${R-2} A 2,2 0 0,0 ${-R+2},${R} L 0,${R} Z`} fill={isIP ? 'white' : '#333'} pointerEvents="none" />
+                  : <path d={`M 0,${-R} A ${R},${R} 0 0,0 0,${R} Z`} fill={isIP ? 'white' : '#333'} pointerEvents="none" />)}
                 {isEditAge ? (
                   <foreignObject x={-R} y={-10} width={SZ} height={20}>
                     <input autoFocus defaultValue={ageVal}
