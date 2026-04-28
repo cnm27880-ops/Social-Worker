@@ -17,6 +17,122 @@ body { font-family: 'Segoe UI', 'Microsoft JhengHei', sans-serif; background: #f
 }
 .panel h2 { font-size: 17px; color: #1e293b; margin-bottom: 14px; padding-bottom: 8px; border-bottom: 2px solid #3b82f6; }
 
+/* ===== 面板頂列：標題 + 顯示年齡切換 + 操作按鈕 ===== */
+.panel-header {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 12px; margin-bottom: 14px; padding-bottom: 10px;
+  border-bottom: 1px solid #e2e8f0; position: relative;
+}
+.panel-header::after {
+  content: ''; position: absolute; left: 0; bottom: -1px; height: 2px; width: 56px;
+  background: linear-gradient(90deg, #3b82f6, #8b5cf6); border-radius: 2px;
+}
+.panel-header-left { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.panel-header-left h2 {
+  margin: 0; padding: 0; border: none;
+  font-size: 16px; font-weight: 700;
+  letter-spacing: 0.5px; color: #0f172a;
+}
+.panel-header-actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+
+/* ===== 現代風 ON/OFF 切換 ===== */
+.toggle-switch {
+  display: inline-flex; align-items: center; gap: 8px;
+  cursor: pointer; user-select: none;
+}
+.toggle-switch .toggle-text {
+  font-size: 12px; font-weight: 600; color: #64748b; letter-spacing: 0.3px;
+}
+.toggle-switch input { position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none; }
+.toggle-switch .toggle-track {
+  position: relative;
+  width: 38px; height: 20px;
+  background: #e2e8f0; border-radius: 999px;
+  transition: background 0.25s ease;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.08);
+  flex-shrink: 0;
+}
+.toggle-switch .toggle-track::before {
+  content: ''; position: absolute; top: 2px; left: 2px;
+  width: 16px; height: 16px;
+  background: white; border-radius: 50%;
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+.toggle-switch input:checked + .toggle-track {
+  background: linear-gradient(135deg, #3b82f6, #6366f1);
+}
+.toggle-switch input:checked + .toggle-track::before { transform: translateX(18px); }
+.toggle-switch:hover .toggle-track { box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.12); }
+.toggle-switch input:focus-visible + .toggle-track {
+  outline: 2px solid rgba(59, 130, 246, 0.4); outline-offset: 2px;
+}
+
+/* ===== 操作按鈕（下載 / 重置） ===== */
+.btn-action {
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 30px; padding: 0 14px;
+  font-size: 12.5px; font-weight: 600; letter-spacing: 0.5px;
+  border: none; border-radius: 8px; cursor: pointer;
+  color: white; transition: transform 0.15s ease, box-shadow 0.2s ease, filter 0.2s ease;
+  white-space: nowrap; line-height: 1;
+}
+.btn-action:hover { transform: translateY(-1px); filter: brightness(1.05); }
+.btn-action:active { transform: translateY(0); filter: brightness(0.95); }
+.btn-action.btn-primary {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.35);
+}
+.btn-action.btn-danger {
+  background: linear-gradient(135deg, #f87171, #ef4444);
+  box-shadow: 0 2px 6px rgba(239, 68, 68, 0.3);
+}
+
+/* ===== 快捷操作工具列 ===== */
+.quick-tool-panel {
+  margin-bottom: 14px;
+  padding: 14px;
+  background: linear-gradient(135deg, #eef2ff 0%, #f1f5f9 100%);
+  border: 1px solid #c7d2fe;
+  border-radius: 12px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.6), 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+.quick-tool-header {
+  display: flex; flex-direction: column; gap: 3px; margin-bottom: 10px;
+}
+.quick-tool-title {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 13px; font-weight: 700; color: #1e293b;
+}
+.quick-tool-title::before {
+  content: ''; width: 4px; height: 14px; border-radius: 2px;
+  background: linear-gradient(180deg, #6366f1, #3b82f6);
+}
+.quick-tool-hint { font-size: 11px; color: #64748b; line-height: 1.5; }
+.quick-tool-rows { display: flex; flex-direction: column; gap: 8px; }
+.quick-tool-row-group { display: flex; gap: 8px; flex-wrap: wrap; }
+.quick-tool-row {
+  background: white;
+  padding: 4px;
+  border-radius: 999px;
+  display: inline-flex; align-items: center; gap: 4px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+.quick-tool-btn {
+  border: none; cursor: pointer;
+  padding: 5px 14px; font-size: 13px; font-weight: 600;
+  border-radius: 999px; background: transparent; color: #475569;
+  transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+  letter-spacing: 0.3px; white-space: nowrap;
+}
+.quick-tool-btn:hover { background: #f1f5f9; color: #1e293b; }
+.quick-tool-btn.active { color: white; box-shadow: 0 2px 5px rgba(15, 23, 42, 0.18); }
+.quick-tool-btn.active.tone-blue   { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+.quick-tool-btn.active.tone-purple { background: linear-gradient(135deg, #a78bfa, #8b5cf6); }
+.quick-tool-btn.active.tone-red    { background: linear-gradient(135deg, #f87171, #ef4444); }
+.quick-tool-btn.active.tone-amber  { background: linear-gradient(135deg, #fbbf24, #f59e0b); }
+
 .section { margin-bottom: 14px; padding: 10px 12px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; }
 .section > label { display: block; font-size: 13px; font-weight: 700; color: #334155; margin-bottom: 8px; }
 
