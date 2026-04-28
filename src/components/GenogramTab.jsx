@@ -430,73 +430,78 @@ const GenogramTab = ({
     <div className="app-layout">
       {/* 左側面板 */}
       <div className="panel">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '10px', paddingBottom: '8px', borderBottom: '2px solid #3b82f6' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <h2 style={{ margin: 0, border: 'none', padding: 0 }}>資料輸入面板</h2>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', cursor: 'pointer', color: '#475569', fontWeight: 'bold' }}>
-              <input type="checkbox" checked={showAgeMode} onChange={() => setShowAgeMode(!showAgeMode)} style={{ cursor: 'pointer' }} />
-              顯示年齡
+        <div className="panel-header">
+          <div className="panel-header-left">
+            <h2>資料輸入面板</h2>
+            <label className="toggle-switch" title="切換是否在節點上顯示年齡">
+              <span className="toggle-text">顯示年齡</span>
+              <input type="checkbox" checked={showAgeMode} onChange={() => setShowAgeMode(!showAgeMode)} />
+              <span className="toggle-track" aria-hidden="true"></span>
             </label>
           </div>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <button onClick={downloadJPG} style={{ padding: '4px 12px', fontSize: '12px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>📥 下載</button>
-            <button onClick={() => { if(window.confirm('確定重置？')) { setGen2Str(''); setGen2Cfg([]); setIndexId(null); setCohabMembers([]); setDeceasedIds([]); setDisabledIds([]); setCohabSolid(false); setPolygons([]); setTexts([]); setAges({}); setFreeNodes([]); setCustomLinks([]); setPositions({}); setIpStyle('filled'); } }} style={{ padding: '4px 12px', fontSize: '12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>重置</button>
+          <div className="panel-header-actions">
+            <button className="btn-action btn-primary" onClick={downloadJPG}>下載</button>
+            <button className="btn-action btn-danger" onClick={() => { if(window.confirm('確定重置？')) { setGen2Str(''); setGen2Cfg([]); setIndexId(null); setCohabMembers([]); setDeceasedIds([]); setDisabledIds([]); setCohabSolid(false); setPolygons([]); setTexts([]); setAges({}); setFreeNodes([]); setCustomLinks([]); setPositions({}); setIpStyle('filled'); } }}>重置</button>
           </div>
         </div>
 
-        <div className="section" style={{ padding: '12px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-          <label style={{ marginBottom: '8px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-            <span style={{ fontWeight: 'bold', color: '#334155', fontSize: '14px' }}>快捷操作工具列</span>
-            <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 'normal' }}>點擊或按 [Q/W/E/R] 切換。右側附屬標籤支援滑鼠滾輪切換。</span>
-          </label>
+        <div className="quick-tool-panel">
+          <div className="quick-tool-header">
+            <span className="quick-tool-title">快捷操作工具列</span>
+            <span className="quick-tool-hint">點擊或按 [Q / W / E / R] 切換。右側附屬標籤支援滑鼠滾輪切換。</span>
+          </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          <div className="quick-tool-rows">
 
             {/* 排 1: 案主 [Q] */}
-            <div style={{ background: '#f1f5f9', padding: '4px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '6px', width: 'fit-content' }}>
-              <button onClick={() => setMode(mode === 'index' ? null : 'index')}
-                      style={{ border: 'none', padding: '4px 12px', fontSize: '13px', borderRadius: '6px', background: mode === 'index' ? '#3b82f6' : 'transparent', color: mode === 'index' ? 'white' : '#475569', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.2s' }}>
-                案主 [Q]
-              </button>
-              <span className="status-badge" onClick={() => setIpStyle(ipStyle === 'filled' ? 'double' : 'filled')} ref={el => wheelRef(el, ['filled', 'double'], ipStyle, setIpStyle)}
-                    style={{ fontSize: '12px', padding: '2px 8px', margin: 0, cursor: 'pointer', borderRadius: '12px', userSelect: 'none', transition: 'all 0.2s',
-                             background: ipStyle === 'filled' ? '#dbeafe' : '#e0e7ff', color: ipStyle === 'filled' ? '#1e40af' : '#3730a3', border: `1px solid ${ipStyle === 'filled' ? '#bfdbfe' : '#c7d2fe'}` }}>
-                {ipStyle === 'filled' ? '填滿' : '雙線'}
-              </span>
+            <div className="quick-tool-row-group">
+              <div className="quick-tool-row">
+                <button className={`quick-tool-btn tone-blue ${mode === 'index' ? 'active' : ''}`}
+                        onClick={() => setMode(mode === 'index' ? null : 'index')}>
+                  案主 [Q]
+                </button>
+                <span className="status-badge" onClick={() => setIpStyle(ipStyle === 'filled' ? 'double' : 'filled')} ref={el => wheelRef(el, ['filled', 'double'], ipStyle, setIpStyle)}
+                      style={{ fontSize: '12px', padding: '2px 10px', margin: 0, cursor: 'pointer', borderRadius: '999px', userSelect: 'none', transition: 'all 0.2s',
+                               background: ipStyle === 'filled' ? '#dbeafe' : '#e0e7ff', color: ipStyle === 'filled' ? '#1e40af' : '#3730a3', border: `1px solid ${ipStyle === 'filled' ? '#bfdbfe' : '#c7d2fe'}` }}>
+                  {ipStyle === 'filled' ? '填滿' : '雙線'}
+                </span>
+              </div>
             </div>
 
             {/* 排 2: 身障 [W] & 死亡 [E] 並排 */}
-            <div style={{ display: 'flex', gap: '6px' }}>
-              <div style={{ background: '#f1f5f9', padding: '4px', borderRadius: '8px', display: 'flex', alignItems: 'center' }}>
-                <button onClick={() => setMode(mode === 'disabled' ? null : 'disabled')}
-                        style={{ border: 'none', padding: '4px 12px', fontSize: '13px', borderRadius: '6px', background: mode === 'disabled' ? '#8b5cf6' : 'transparent', color: mode === 'disabled' ? 'white' : '#475569', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.2s' }}>
+            <div className="quick-tool-row-group">
+              <div className="quick-tool-row">
+                <button className={`quick-tool-btn tone-purple ${mode === 'disabled' ? 'active' : ''}`}
+                        onClick={() => setMode(mode === 'disabled' ? null : 'disabled')}>
                   身障 [W]
                 </button>
               </div>
-              <div style={{ background: '#f1f5f9', padding: '4px', borderRadius: '8px', display: 'flex', alignItems: 'center' }}>
-                <button onClick={() => setMode(mode === 'deceased' ? null : 'deceased')}
-                        style={{ border: 'none', padding: '4px 12px', fontSize: '13px', borderRadius: '6px', background: mode === 'deceased' ? '#ef4444' : 'transparent', color: mode === 'deceased' ? 'white' : '#475569', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.2s' }}>
+              <div className="quick-tool-row">
+                <button className={`quick-tool-btn tone-red ${mode === 'deceased' ? 'active' : ''}`}
+                        onClick={() => setMode(mode === 'deceased' ? null : 'deceased')}>
                   死亡 [E]
                 </button>
               </div>
             </div>
 
             {/* 排 3: 同住 [R] */}
-            <div style={{ background: '#f1f5f9', padding: '4px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '6px', width: 'fit-content' }}>
-              <button onClick={() => setMode(mode === 'cohab' ? null : 'cohab')}
-                      style={{ border: 'none', padding: '4px 12px', fontSize: '13px', borderRadius: '6px', background: mode === 'cohab' ? '#f59e0b' : 'transparent', color: mode === 'cohab' ? 'white' : '#475569', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.2s' }}>
-                同住 [R]
-              </button>
-              <span className="status-badge" onClick={() => setCohabMode(cohabMode === 'auto' ? 'poly' : 'auto')} ref={el => wheelRef(el, ['auto', 'poly'], cohabMode, setCohabMode)}
-                    style={{ fontSize: '12px', padding: '2px 8px', margin: 0, cursor: 'pointer', borderRadius: '12px', userSelect: 'none', transition: 'all 0.2s',
-                             background: cohabMode === 'auto' ? '#fef3c7' : '#ffedd5', color: cohabMode === 'auto' ? '#b45309' : '#c2410c', border: `1px solid ${cohabMode === 'auto' ? '#fde68a' : '#fed7aa'}` }}>
-                {cohabMode === 'auto' ? '自動' : '點繪'}
-              </span>
-              <span className="status-badge" onClick={() => setCohabSolid(!cohabSolid)} ref={el => wheelRef(el, [false, true], cohabSolid, setCohabSolid)}
-                    style={{ fontSize: '12px', padding: '2px 8px', margin: 0, cursor: 'pointer', borderRadius: '12px', userSelect: 'none', transition: 'all 0.2s',
-                             background: cohabSolid ? '#e0f2fe' : '#f3f4f6', color: cohabSolid ? '#0369a1' : '#4b5563', border: `1px solid ${cohabSolid ? '#bae6fd' : '#e5e7eb'}` }}>
-                {cohabSolid ? '實線' : '虛線'}
-              </span>
+            <div className="quick-tool-row-group">
+              <div className="quick-tool-row">
+                <button className={`quick-tool-btn tone-amber ${mode === 'cohab' ? 'active' : ''}`}
+                        onClick={() => setMode(mode === 'cohab' ? null : 'cohab')}>
+                  同住 [R]
+                </button>
+                <span className="status-badge" onClick={() => setCohabMode(cohabMode === 'auto' ? 'poly' : 'auto')} ref={el => wheelRef(el, ['auto', 'poly'], cohabMode, setCohabMode)}
+                      style={{ fontSize: '12px', padding: '2px 10px', margin: 0, cursor: 'pointer', borderRadius: '999px', userSelect: 'none', transition: 'all 0.2s',
+                               background: cohabMode === 'auto' ? '#fef3c7' : '#ffedd5', color: cohabMode === 'auto' ? '#b45309' : '#c2410c', border: `1px solid ${cohabMode === 'auto' ? '#fde68a' : '#fed7aa'}` }}>
+                  {cohabMode === 'auto' ? '自動' : '點繪'}
+                </span>
+                <span className="status-badge" onClick={() => setCohabSolid(!cohabSolid)} ref={el => wheelRef(el, [false, true], cohabSolid, setCohabSolid)}
+                      style={{ fontSize: '12px', padding: '2px 10px', margin: 0, cursor: 'pointer', borderRadius: '999px', userSelect: 'none', transition: 'all 0.2s',
+                               background: cohabSolid ? '#e0f2fe' : '#f3f4f6', color: cohabSolid ? '#0369a1' : '#4b5563', border: `1px solid ${cohabSolid ? '#bae6fd' : '#e5e7eb'}` }}>
+                  {cohabSolid ? '實線' : '虛線'}
+                </span>
+              </div>
             </div>
 
           </div>
