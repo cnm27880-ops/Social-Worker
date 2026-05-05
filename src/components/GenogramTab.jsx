@@ -434,7 +434,7 @@ const GenogramTab = ({
           <div className="panel-header-left">
             <h2>資料輸入面板</h2>
             <label className="toggle-switch" title="切換是否在節點上顯示年齡">
-              <span className="toggle-text">顯示年齡</span>
+              <span className="toggle-text">年齡</span>
               <input type="checkbox" checked={showAgeMode} onChange={() => setShowAgeMode(!showAgeMode)} />
               <span className="toggle-track" aria-hidden="true"></span>
             </label>
@@ -448,12 +448,12 @@ const GenogramTab = ({
         <div className="quick-tool-panel">
           <div className="quick-tool-header">
             <span className="quick-tool-title">快捷操作工具列</span>
-            <span className="quick-tool-hint">點擊或按 [Q / W / E / R] 切換。右側附屬標籤支援滑鼠滾輪切換。</span>
+            <span className="quick-tool-hint">點擊或按 [Q / W / E / R] 切換。</span>
           </div>
 
           <div className="quick-tool-rows">
 
-            {/* 排 1: 案主 [Q] */}
+            {/* 排 1: 案主 [Q] + 身障 [W] */}
             <div className="quick-tool-row-group">
               <div className="quick-tool-row">
                 <button className={`quick-tool-btn tone-blue ${mode === 'index' ? 'active' : ''}`}
@@ -466,26 +466,22 @@ const GenogramTab = ({
                   {ipStyle === 'filled' ? '填滿' : '雙線'}
                 </span>
               </div>
-            </div>
-
-            {/* 排 2: 身障 [W] & 死亡 [E] 並排 */}
-            <div className="quick-tool-row-group">
               <div className="quick-tool-row">
                 <button className={`quick-tool-btn tone-purple ${mode === 'disabled' ? 'active' : ''}`}
                         onClick={() => setMode(mode === 'disabled' ? null : 'disabled')}>
                   身障 [W]
                 </button>
               </div>
+            </div>
+
+            {/* 排 2: 死亡 [E] + 同住 [R] */}
+            <div className="quick-tool-row-group">
               <div className="quick-tool-row">
                 <button className={`quick-tool-btn tone-red ${mode === 'deceased' ? 'active' : ''}`}
                         onClick={() => setMode(mode === 'deceased' ? null : 'deceased')}>
                   死亡 [E]
                 </button>
               </div>
-            </div>
-
-            {/* 排 3: 同住 [R] */}
-            <div className="quick-tool-row-group">
               <div className="quick-tool-row">
                 <button className={`quick-tool-btn tone-amber ${mode === 'cohab' ? 'active' : ''}`}
                         onClick={() => setMode(mode === 'cohab' ? null : 'cohab')}>
@@ -735,7 +731,7 @@ const GenogramTab = ({
                 ) : (
                   <>
                     {isIP && (!showAgeMode || !ageVal) && <text x="0" y="4" textAnchor="middle" fontSize="11" fontWeight="bold" fill={isDouble ? '#ef4444' : txtC} stroke="white" strokeWidth="3" paintOrder="stroke" strokeLinejoin="round" style={{fontFamily: TEXT_FONT, pointerEvents: 'none'}}>案主</text>}
-                    {showAgeMode && ageVal && <text x="0" y="4" textAnchor="middle" fontSize="13" fontWeight="bold" fill={txtC} stroke="white" strokeWidth="3" paintOrder="stroke" strokeLinejoin="round" style={{fontFamily: TEXT_FONT, pointerEvents: 'none'}}>{ageVal}</text>}
+                    {showAgeMode && ageVal && <text x="0" y="4" textAnchor="middle" fontSize="13" fontWeight="bold" fill={txtC} stroke={isIP && !isDouble ? '#1e293b' : 'white'} strokeWidth={isIP && !isDouble ? 0 : 3} paintOrder="stroke" strokeLinejoin="round" style={{fontFamily: TEXT_FONT, pointerEvents: 'none'}}>{ageVal}</text>}
                   </>
                 )}
                 {deceasedIds.includes(nd.id) && <g pointerEvents="none">
