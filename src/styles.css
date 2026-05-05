@@ -111,21 +111,23 @@ body { font-family: 'Segoe UI', 'Microsoft JhengHei', sans-serif; background: #f
 }
 .quick-tool-hint { font-size: 11px; color: #64748b; line-height: 1.5; }
 .quick-tool-rows { display: flex; flex-direction: column; gap: 8px; }
-.quick-tool-row-group { display: flex; gap: 8px; flex-wrap: wrap; }
+.quick-tool-row-group { display: flex; gap: 6px; flex-wrap: nowrap; align-items: center; }
 .quick-tool-row {
   background: white;
-  padding: 4px;
+  padding: 3px;
   border-radius: 999px;
-  display: inline-flex; align-items: center; gap: 4px;
+  display: inline-flex; align-items: center; gap: 3px;
   border: 1px solid #e2e8f0;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  min-width: 0;
 }
+.quick-tool-row .status-badge { padding: 2px 8px !important; font-size: 11.5px !important; }
 .quick-tool-btn {
   border: none; cursor: pointer;
-  padding: 5px 14px; font-size: 13px; font-weight: 600;
+  padding: 4px 11px; font-size: 12.5px; font-weight: 600;
   border-radius: 999px; background: transparent; color: #475569;
   transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
-  letter-spacing: 0.3px; white-space: nowrap;
+  letter-spacing: 0.2px; white-space: nowrap;
 }
 .quick-tool-btn:hover { background: #f1f5f9; color: #1e293b; }
 .quick-tool-btn.active { color: white; box-shadow: 0 2px 5px rgba(15, 23, 42, 0.18); }

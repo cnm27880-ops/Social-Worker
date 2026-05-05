@@ -82,8 +82,8 @@ const GenogramTab = ({
       const key = e.key.toLowerCase();
       if (key === 'q') setMode(p => p === 'index' ? null : 'index');
       if (key === 'w') setMode(p => p === 'disabled' ? null : 'disabled');
-      if (key === 'e') setMode(p => p === 'deceased' ? null : 'deceased');
-      if (key === 'r') setMode(p => p === 'cohab' ? null : 'cohab');
+      if (key === 'e') setMode(p => p === 'cohab' ? null : 'cohab');
+      if (key === 'r') setMode(p => p === 'deceased' ? null : 'deceased');
       if (e.key === 'Enter' && mode === 'cohab' && cohabMode === 'poly' && draftPoly.length >= 3) {
         setPolygons(prev => [...prev, { id: 'pg_' + Date.now(), pts: draftPoly }]); setDraftPoly([]); setMousePos(null);
       }
@@ -474,18 +474,12 @@ const GenogramTab = ({
               </div>
             </div>
 
-            {/* 排 2: 死亡 [E] + 同住 [R] */}
+            {/* 排 2: 同住 [E] + 死亡 [R] */}
             <div className="quick-tool-row-group">
-              <div className="quick-tool-row">
-                <button className={`quick-tool-btn tone-red ${mode === 'deceased' ? 'active' : ''}`}
-                        onClick={() => setMode(mode === 'deceased' ? null : 'deceased')}>
-                  死亡 [E]
-                </button>
-              </div>
               <div className="quick-tool-row">
                 <button className={`quick-tool-btn tone-amber ${mode === 'cohab' ? 'active' : ''}`}
                         onClick={() => setMode(mode === 'cohab' ? null : 'cohab')}>
-                  同住 [R]
+                  同住 [E]
                 </button>
                 <span className="status-badge" onClick={() => setCohabMode(cohabMode === 'auto' ? 'poly' : 'auto')} ref={el => wheelRef(el, ['auto', 'poly'], cohabMode, setCohabMode)}
                       style={{ fontSize: '12px', padding: '2px 10px', margin: 0, cursor: 'pointer', borderRadius: '999px', userSelect: 'none', transition: 'all 0.2s',
@@ -497,6 +491,12 @@ const GenogramTab = ({
                                background: cohabSolid ? '#e0f2fe' : '#f3f4f6', color: cohabSolid ? '#0369a1' : '#4b5563', border: `1px solid ${cohabSolid ? '#bae6fd' : '#e5e7eb'}` }}>
                   {cohabSolid ? '實線' : '虛線'}
                 </span>
+              </div>
+              <div className="quick-tool-row">
+                <button className={`quick-tool-btn tone-red ${mode === 'deceased' ? 'active' : ''}`}
+                        onClick={() => setMode(mode === 'deceased' ? null : 'deceased')}>
+                  死亡 [R]
+                </button>
               </div>
             </div>
 
@@ -617,7 +617,7 @@ const GenogramTab = ({
         <div className="section">
           <label>操作說明</label>
           <div className="info-box">
-            快捷鍵切換模式：[Q] 案主 / [W] 身障 / [E] 死亡 / [R] 同住<br/>
+            快捷鍵切換模式：[Q] 案主 / [W] 身障 / [E] 同住 / [R] 死亡<br/>
             ■ / ●：點擊節點切換案主；雙擊可輸入年齡。<br/>
             狀態切換：滑鼠停在狀態標籤上【上下滾動滾輪】即可切換。<br/>
             文字方塊：單擊選取/縮放；雙擊直接打字 (可 Enter 換行)。<br/>
@@ -730,7 +730,7 @@ const GenogramTab = ({
                   </foreignObject>
                 ) : (
                   <>
-                    {isIP && (!showAgeMode || !ageVal) && <text x="0" y="4" textAnchor="middle" fontSize="11" fontWeight="bold" fill={isDouble ? '#ef4444' : txtC} stroke="white" strokeWidth="3" paintOrder="stroke" strokeLinejoin="round" style={{fontFamily: TEXT_FONT, pointerEvents: 'none'}}>案主</text>}
+                    {isIP && (!showAgeMode || !ageVal) && <text x="0" y="4" textAnchor="middle" fontSize="11" fontWeight={isIP && !isDouble ? 'normal' : 'bold'} fill={isDouble ? '#ef4444' : txtC} stroke={isIP && !isDouble ? '#1e293b' : 'white'} strokeWidth={isIP && !isDouble ? 0 : 3} paintOrder="stroke" strokeLinejoin="round" style={{fontFamily: TEXT_FONT, pointerEvents: 'none'}}>案主</text>}
                     {showAgeMode && ageVal && <text x="0" y="4" textAnchor="middle" fontSize="13" fontWeight="bold" fill={txtC} stroke={isIP && !isDouble ? '#1e293b' : 'white'} strokeWidth={isIP && !isDouble ? 0 : 3} paintOrder="stroke" strokeLinejoin="round" style={{fontFamily: TEXT_FONT, pointerEvents: 'none'}}>{ageVal}</text>}
                   </>
                 )}
