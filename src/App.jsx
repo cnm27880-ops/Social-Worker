@@ -11,8 +11,10 @@ const App = () => {
 
   /* --- 案件文件：自動存檔 + 復原/重做的單一資料來源 --- */
   const {
-    doc, setField, patchDoc, replaceDoc, attrListSetter,
+    doc, setField, patchDoc, attrListSetter,
     undo, redo, canUndo, canRedo, savedAt, restored, dismissRestored,
+    cases, activeCaseId, activeCase,
+    switchCase, createCase, renameCase, deleteCase, exportCase, importCase,
   } = useCaseDoc();
 
   /* 節點標記以 nodeAttrs 為單一真相；這兩個陣列是給既有元件用的衍生值 */
@@ -33,9 +35,12 @@ const App = () => {
           doc={doc}
           setField={setField}
           patchDoc={patchDoc}
-          replaceDoc={replaceDoc}
           undo={undo} redo={redo} canUndo={canUndo} canRedo={canRedo}
           savedAt={savedAt} restored={restored} dismissRestored={dismissRestored}
+
+          cases={cases} activeCaseId={activeCaseId} activeCase={activeCase}
+          switchCase={switchCase} createCase={createCase} renameCase={renameCase}
+          deleteCase={deleteCase} exportCase={exportCase} importCase={importCase}
 
           gen2Str={doc.gen2Str} setGen2Str={setField('gen2Str')}
           gen2Cfg={doc.gen2Cfg} setGen2Cfg={setField('gen2Cfg')}

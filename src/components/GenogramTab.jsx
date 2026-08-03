@@ -5,6 +5,7 @@ import {
   TEXT_DIRS, TEXT_DIR_LABELS,
   parseGenders, getSmoothPath, getRelativeTitle
 } from '../utils/helpers';
+import CaseBar from './CaseBar';
 
 const CUSTOM_LINK_STATUSES = ['married', 'divorced'];
 const CUSTOM_LINK_LABELS = { married: '已婚', divorced: '離婚' };
@@ -17,6 +18,8 @@ const ECO_RY = 28;
 const GenogramTab = ({
   doc, setField, patchDoc,
   undo, redo, canUndo, canRedo, savedAt, restored, dismissRestored,
+  cases, activeCaseId, activeCase,
+  switchCase, createCase, renameCase, deleteCase, exportCase, importCase,
   gen2Str, setGen2Str, gen2Cfg, setGen2Cfg,
   indexId, setIndexId,
   cohabMembers, setCohabMembers,
@@ -437,6 +440,12 @@ const GenogramTab = ({
     <div className="app-layout">
       {/* 左側面板 */}
       <div className="panel">
+        <CaseBar
+          cases={cases} activeCaseId={activeCaseId} activeCase={activeCase}
+          switchCase={switchCase} createCase={createCase} renameCase={renameCase}
+          deleteCase={deleteCase} exportCase={exportCase} importCase={importCase}
+        />
+
         <div className="panel-header">
           <div className="panel-header-left">
             <h2>資料輸入面板</h2>

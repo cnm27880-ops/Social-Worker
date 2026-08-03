@@ -13,6 +13,7 @@
 /** 文件格式版本。日後改變資料形狀時 +1，並在 migrateDoc 補上轉換。 */
 export const DOC_VERSION = 1;
 
+/** 舊版的單一存檔鍵。保留給 caseStore 做一次性轉換用。 */
 export const STORAGE_KEY = 'genogram-doc';
 
 export const INITIAL_DOC = {
@@ -121,33 +122,6 @@ export const migrateDoc = (raw) => {
   }
 
   return doc;
-};
-
-export const loadDoc = () => {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    return migrateDoc(JSON.parse(raw));
-  } catch {
-    // 存檔壞掉不該讓使用者連畫面都打不開，安靜地當作沒有存檔
-    return null;
-  }
-};
-
-export const saveDoc = (doc) => {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(doc));
-    return true;
-  } catch {
-    // 容量滿或隱私模式停用 localStorage
-    return false;
-  }
-};
-
-export const clearSavedDoc = () => {
-  try {
-    localStorage.removeItem(STORAGE_KEY);
-  } catch { /* 忽略 */ }
 };
 
 /** 文件是否還是全新未編輯的狀態（用來決定要不要提示「有未儲存的內容」）。 */
