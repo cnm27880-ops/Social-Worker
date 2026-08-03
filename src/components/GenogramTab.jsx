@@ -6,6 +6,8 @@ import {
   parseGenders, getSmoothPath, getRelativeTitle
 } from '../utils/helpers';
 import CaseBar from './CaseBar';
+import SymbolToolbox, { SymbolPreview, loadRecent, pushRecent } from './SymbolToolbox';
+import { SYMBOL_MAP, halfPath, healthHalvesFor, kinshipDashFor, HATCH_ID } from '../utils/symbols';
 
 const CUSTOM_LINK_STATUSES = ['married', 'divorced'];
 const CUSTOM_LINK_LABELS = { married: '已婚', divorced: '離婚' };
@@ -16,7 +18,7 @@ const ecoRx = (text) => Math.max(35, (text?.length || 1) * 9 + 15);
 const ECO_RY = 28;
 
 const GenogramTab = ({
-  doc, setField, patchDoc,
+  doc, setField, patchDoc, toggleNodeAttr,
   undo, redo, canUndo, canRedo, savedAt, restored, dismissRestored,
   cases, activeCaseId, activeCase,
   switchCase, createCase, renameCase, deleteCase, exportCase, importCase,
@@ -41,6 +43,7 @@ const GenogramTab = ({
 
   /* --- 純 UI 暫態：不進復原、不存檔 --- */
   const [drag, setDrag] = useState(null);
+  const [recent, setRecent] = useState(loadRecent);
   const [mode, setMode] = useState(null);
   const [draftPoly, setDraftPoly] = useState([]);
   const [selectedPolyId, setSelectedPolyId] = useState(null);
@@ -254,6 +257,79 @@ const GenogramTab = ({
     return { x: 0, y: 0 };
   }, [positions, nodes, freeNodes]);
   const svgPt = useCallback((e) => { const p = svgRef.current.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; return p.matrixTransform(svgRef.current.getScreenCTM().inverse()); }, []);
+
+  /* =========================================================================
+   * 積木工具箱的拖曳貼附
+   *
+   * 與畫布上既有的「拖曳碰撞即連線」刻意分開處理：
+   *   - 途中經過的節點只會高亮，不會被貼上
+   *   - 只有「放開」那一刻的座標算數，命中誰就貼給誰
+   *   - 放開在空白處＝取消，什麼都不做
+   * 貼附本身是切換：對已經有該標記的人再拖一次就是取消。
+   * ======================================================================= */
+  const [symbolDrag, setSymbolDrag] = useState(null);   // { key, x, y, hoverId }
+
+  const allNodeIds = useMemo(
+    () => [...nodes.map(n => n.id), ...freeNodes.filter(f => f.type !== 'eco').map(f => f.id)],
+    [nodes, freeNodes]
+  );
+
+  /** 找出座標命中的節點；沒命中回傳 null */
+  const hitTestNode = useCallback((pt) => {
+    for (const id of allNodeIds) {
+      const p = pos(id);
+      if (Math.abs(pt.x - p.x) <= R + 4 && Math.abs(pt.y - p.y) <= R + 4) return id;
+    }
+    return null;
+  }, [allNodeIds, pos]);
+
+  const startSymbolDrag = useCallback((e, key) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setSymbolDrag({ key, x: e.clientX, y: e.clientY, hoverId: null });
+  }, []);
+
+  useEffect(() => {
+    if (!symbolDrag) return;
+
+    const onMove = (ev) => {
+      // 拖曳中只更新游標位置與高亮目標，不做任何資料異動
+      let hoverId = null;
+      if (svgRef.current) {
+        const p = svgRef.current.createSVGPoint();
+        p.x = ev.clientX; p.y = ev.clientY;
+        const ctm = svgRef.current.getScreenCTM();
+        if (ctm) hoverId = hitTestNode(p.matrixTransform(ctm.inverse()));
+      }
+      setSymbolDrag(d => (d ? { ...d, x: ev.clientX, y: ev.clientY, hoverId } : d));
+    };
+
+    const onUp = (ev) => {
+      const { key } = symbolDrag;
+      let targetId = null;
+      if (svgRef.current) {
+        const p = svgRef.current.createSVGPoint();
+        p.x = ev.clientX; p.y = ev.clientY;
+        const ctm = svgRef.current.getScreenCTM();
+        if (ctm) targetId = hitTestNode(p.matrixTransform(ctm.inverse()));
+      }
+      setSymbolDrag(null);
+      if (!targetId) return;                       // 放開在空白處：取消
+      toggleNodeAttr(targetId, key);
+      setRecent(pushRecent(key));
+    };
+
+    const onKey = (ev) => { if (ev.key === 'Escape') setSymbolDrag(null); };
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [symbolDrag, hitTestNode, toggleNodeAttr]);
 
   const onDown = useCallback((e, id) => {
     e.stopPropagation(); const sp = svgPt(e); const p = pos(id);
@@ -660,23 +736,20 @@ const GenogramTab = ({
           </div>
         )}
 
-        <div className="section">
-          <label>操作說明</label>
-          <div className="info-box">
-            快捷鍵切換模式：[Q] 案主 / [W] 身障 / [E] 同住 / [R] 死亡<br/>
-            ■ / ●：點擊節點切換案主；雙擊可輸入年齡。<br/>
-            狀態切換：滑鼠停在狀態標籤上【上下滾動滾輪】即可切換。<br/>
-            文字方塊：單擊選取/縮放；雙擊直接打字 (可 Enter 換行)。<br/>
-            自由連線：拖曳【🧩擴充個體】去碰撞目標即可產生連線；雙擊關係線可刪除。<br/>
-            生態圖：新增後預設連結案主，雙擊圖形可編輯文字，清空文字即刪除；雙擊關係線可刪除連線並重新拖曳碰撞。
-          </div>
-        </div>
+        {/* 原本這裡是靜態的「操作說明」，改放工具箱；說明移到右上角的說明書 */}
+        <SymbolToolbox onPickUp={startSymbolDrag} recent={recent} activeKey={symbolDrag?.key} />
       </div>
 
       {/* SVG 畫布 */}
       <div className="canvas-wrap">
         <svg ref={svgRef} width={svgW} height={svgH} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp} onClick={() => { setSelectedTextId(null); setSelectedPolyId(null); }} style={{ background: '#fefefe', minWidth: '600px', cursor: mode === 'cohab' && cohabMode === 'poly' ? 'crosshair' : undefined }}>
-          <defs><pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="#f0f0f0" strokeWidth="0.5" /></pattern></defs>
+          <defs>
+            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="#f0f0f0" strokeWidth="0.5" /></pattern>
+            {/* 臨床標記用的斜線網底，與既有的實心填滿區分 */}
+            <pattern id={HATCH_ID} width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+              <line x1="0" y1="0" x2="0" y2="5" stroke="#334155" strokeWidth="2" />
+            </pattern>
+          </defs>
           <rect width="100%" height="100%" fill="url(#grid)" />
 
           {mode === 'cohab' && cohabMode === 'poly' && (
@@ -727,7 +800,7 @@ const GenogramTab = ({
               kidPos.forEach((kp, j) => {
                 const g = groups.find(x => x.includes(j));
                 if (g) els.push(<line key={`${ln.id}-m${j}`} x1={g.map(i=>kidPos[i].x).reduce((a,b)=>a+b,0)/g.length} y1={barY} x2={kp.x} y2={kp.y - R} stroke={lineColor} strokeWidth="2" />);
-                else els.push(<line key={`${ln.id}-k${j}`} x1={kp.x} y1={barY} x2={kp.x} y2={kp.y - R} stroke={lineColor} strokeWidth="2" />);
+                else els.push(<line key={`${ln.id}-k${j}`} x1={kp.x} y1={barY} x2={kp.x} y2={kp.y - R} stroke={lineColor} strokeWidth="2" strokeDasharray={kinshipDashFor(doc.nodeAttrs[ln.kids[j]])} />);
               });
               return <g key={ln.id}>{els}</g>;
             } return null;
@@ -764,6 +837,14 @@ const GenogramTab = ({
                 {nd.gender === 'M'
                   ? <rect x={-R} y={-R} width={SZ} height={SZ} fill={fill} stroke={nd.stroke} strokeWidth="2.5" rx="2" strokeDasharray={nd.dash} />
                   : <circle cx="0" cy="0" r={R} fill={fill} stroke={nd.stroke} strokeWidth="2.5" strokeDasharray={nd.dash} />}
+                {/* 健康狀況：半邊網底（左＝精神、右＝生理、下＝成癮，可並存） */}
+                {healthHalvesFor(doc.nodeAttrs[nd.id]).map(side => (
+                  <path key={side} d={halfPath(nd.gender, side, R)} fill={`url(#${HATCH_ID})`} pointerEvents="none" />
+                ))}
+                {/* 工具箱拖曳經過時的高亮：只是預覽，放開才會真的貼上 */}
+                {symbolDrag?.hoverId === nd.id && (nd.gender === 'M'
+                  ? <rect x={-(R+8)} y={-(R+8)} width={SZ+16} height={SZ+16} rx="5" fill="none" stroke="#3b82f6" strokeWidth="2.5" strokeDasharray="5,4" pointerEvents="none" />
+                  : <circle cx="0" cy="0" r={R+8} fill="none" stroke="#3b82f6" strokeWidth="2.5" strokeDasharray="5,4" pointerEvents="none" />)}
                 {disabledIds.includes(nd.id) && (nd.gender === 'M'
                   ? <path d={`M 0,${-R} L ${-R+2},${-R} A 2,2 0 0,0 ${-R},${-R+2} L ${-R},${R-2} A 2,2 0 0,0 ${-R+2},${R} L 0,${R} Z`} fill={overlayDark} pointerEvents="none" />
                   : <path d={`M 0,${-R} A ${R},${R} 0 0,0 0,${R} Z`} fill={overlayDark} pointerEvents="none" />)}
@@ -911,6 +992,14 @@ const GenogramTab = ({
           })}
         </svg>
       </div>
+
+      {/* 跟著游標的拖曳分身：讓使用者清楚知道手上拿著哪個符號 */}
+      {symbolDrag && (
+        <div className="sym-ghost" style={{ left: symbolDrag.x, top: symbolDrag.y }}>
+          <SymbolPreview symbol={SYMBOL_MAP[symbolDrag.key]} size={18} />
+          {SYMBOL_MAP[symbolDrag.key].label}
+        </div>
+      )}
     </div>
   );
 };

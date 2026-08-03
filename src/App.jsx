@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import GenogramTab from './components/GenogramTab';
+import HelpDrawer from './components/HelpDrawer';
 import RecordTab from './components/RecordTab';
 import { useCaseDoc } from './hooks/useCaseDoc';
 import { idsWithAttr } from './utils/caseDoc';
@@ -8,10 +9,22 @@ import './styles.css';
 const App = () => {
   /* --- 頁籤狀態（純 UI，不屬於案件文件） --- */
   const [activeTab, setActiveTab] = useState('genogram');
+  const [helpOpen, setHelpOpen] = useState(false);
+
+  /* 「?」開啟說明書；輸入框內不攔截 */
+  useEffect(() => {
+    const onKey = (e) => {
+      const tag = e.target.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target.isContentEditable) return;
+      if (e.key === '?') { e.preventDefault(); setHelpOpen(true); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   /* --- 案件文件：自動存檔 + 復原/重做的單一資料來源 --- */
   const {
-    doc, setField, patchDoc, attrListSetter,
+    doc, setField, patchDoc, attrListSetter, toggleNodeAttr,
     undo, redo, canUndo, canRedo, savedAt, restored, dismissRestored,
     cases, activeCaseId, activeCase,
     switchCase, createCase, renameCase, deleteCase, exportCase, importCase,
@@ -27,7 +40,17 @@ const App = () => {
       <div className="tab-nav">
         <button className={`tab-btn ${activeTab === 'genogram' ? 'active' : ''}`} onClick={() => setActiveTab('genogram')}>📊 家系圖繪製</button>
         <button className={`tab-btn ${activeTab === 'record' ? 'active' : ''}`} onClick={() => setActiveTab('record')}>📝 個案紀錄產生</button>
+
+        <span className="tab-nav-spacer" />
+        <button
+          className="help-btn"
+          onClick={() => setHelpOpen(true)}
+          title="使用說明（按 ? 也可開啟）"
+          aria-label="使用說明"
+        >?</button>
       </div>
+
+      <HelpDrawer open={helpOpen} onClose={() => setHelpOpen(false)} />
 
       {/* 頁籤一：家系圖（用 CSS display 控制，避免 unmount 丟失狀態） */}
       <div style={{ display: activeTab === 'genogram' ? 'block' : 'none' }}>
@@ -35,6 +58,7 @@ const App = () => {
           doc={doc}
           setField={setField}
           patchDoc={patchDoc}
+          toggleNodeAttr={toggleNodeAttr}
           undo={undo} redo={redo} canUndo={canUndo} canRedo={canRedo}
           savedAt={savedAt} restored={restored} dismissRestored={dismissRestored}
 

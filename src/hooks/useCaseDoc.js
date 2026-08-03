@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  INITIAL_DOC, idsWithAttr, setAttrIds, isEmptyDoc,
+  INITIAL_DOC, idsWithAttr, setAttrIds, toggleAttr, isEmptyDoc,
 } from '../utils/caseDoc';
 import {
   initLibrary, readCaseDoc, writeCaseDoc, writeIndex, touchCase,
@@ -188,6 +188,12 @@ export function useCaseDoc() {
     return setterCache.current[cacheKey];
   }, []);
 
+  /** 切換單一節點的單一標記（積木工具箱拖曳貼附用） */
+  const toggleNodeAttr = useCallback((id, attr) => {
+    pendingKey.current = `__toggle_${id}_${attr}`;
+    setDocRaw(prev => ({ ...prev, nodeAttrs: toggleAttr(prev.nodeAttrs, id, attr) }));
+  }, []);
+
   /* =========================================================================
    * 案件管理
    *
@@ -293,6 +299,7 @@ export function useCaseDoc() {
     setField,
     patchDoc,
     attrListSetter,
+    toggleNodeAttr,
 
     undo,
     redo,
