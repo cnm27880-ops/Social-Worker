@@ -10,7 +10,14 @@ import SymbolToolbox, { SymbolPreview, loadRecent, pushRecent } from './SymbolTo
 import {
   SYMBOL_MAP, halfPath, healthHalvesFor, divisionSegments, kinshipDashFor,
   CLINICAL_FILL, CLINICAL_STROKE, CLINICAL_STROKE_W,
+  trianglePath, triangleCrossLines, zigzagPoints, gapSegments, distToSegment, DISTANT_DASH,
 } from '../utils/symbols';
+
+/* 獨立個體（懷孕／流產／死產）用的三角形半徑：死產跟人物節點一樣大（R），
+ * 懷孕／流產縮小，視覺上跟「附加在別人身上的標記」區分開來。 */
+const STANDALONE_SMALL_R = 13;
+const STANDALONE_TYPES = ['pregnancy', 'miscarriage', 'stillbirth'];
+const standaloneRadius = (type) => (type === 'stillbirth' ? R : STANDALONE_SMALL_R);
 
 const CUSTOM_LINK_STATUSES = ['married', 'divorced'];
 const CUSTOM_LINK_LABELS = { married: '已婚', divorced: '離婚' };
@@ -21,7 +28,7 @@ const ecoRx = (text) => Math.max(35, (text?.length || 1) * 9 + 15);
 const ECO_RY = 28;
 
 const GenogramTab = ({
-  doc, setField, patchDoc, toggleNodeAttr,
+  doc, setField, patchDoc, toggleNodeAttr, toggleLineAttr,
   undo, redo, canUndo, canRedo, savedAt, restored, dismissRestored,
   cases, activeCaseId, activeCase,
   switchCase, createCase, renameCase, deleteCase, exportCase, importCase,
@@ -208,7 +215,7 @@ const GenogramTab = ({
 
     // === customLink kidsCfg → 整合為完全體節點 ===
     customLinks.forEach(lnk => {
-      if (lnk.type === 'eco') return; // 生態圖連線不參與節點生成
+      if (lnk.type === 'eco' || lnk.type === 'annotation') return; // 生態圖／獨立個體連線不參與節點生成
       if (!lnk.kidsCfg || lnk.kidsCfg.length === 0) return;
       const srcN = N.find(n => n.id === lnk.sourceId); const srcF = freeNodesRef.current.find(fn => fn.id === lnk.sourceId);
       const tgtN = N.find(n => n.id === lnk.targetId); const tgtF = freeNodesRef.current.find(fn => fn.id === lnk.targetId);
@@ -277,7 +284,10 @@ const GenogramTab = ({
   const [symbolDrag, setSymbolDrag] = useState(null);   // { key, x, y, hoverId }
 
   const allNodeIds = useMemo(
-    () => [...nodes.map(n => n.id), ...freeNodes.filter(f => f.type !== 'eco').map(f => f.id)],
+    () => [
+      ...nodes.map(n => n.id),
+      ...freeNodes.filter(f => f.type !== 'eco' && !STANDALONE_TYPES.includes(f.type)).map(f => f.id),
+    ],
     [nodes, freeNodes]
   );
 
@@ -290,6 +300,30 @@ const GenogramTab = ({
     return null;
   }, [allNodeIds, pos]);
 
+  /* 供關係品質符號拖曳命中判斷用的婚姻線清單：主線（父母／案主與配偶）
+   * 加上擴充關係裡「非生態圖、非獨立個體註記」的配偶線。 */
+  const marriageLineSegs = useMemo(() => {
+    const segs = lines
+      .filter(ln => ln.type === 'marry')
+      .map(ln => ({ id: ln.id, a: ln.a, b: ln.b }));
+    customLinks.forEach(lnk => {
+      if (lnk.type === 'eco' || lnk.type === 'annotation') return;
+      segs.push({ id: lnk.id, a: lnk.sourceId, b: lnk.targetId });
+    });
+    return segs;
+  }, [lines, customLinks]);
+
+  /** 找出座標命中的婚姻線；沒命中回傳 null。 */
+  const hitTestLine = useCallback((pt) => {
+    let best = null, bestDist = 14; // 14px 內才算命中，太寬會誤觸到旁邊的線
+    for (const seg of marriageLineSegs) {
+      const pa = pos(seg.a), pb = pos(seg.b);
+      const d = distToSegment(pt.x, pt.y, pa.x, pa.y, pb.x, pb.y);
+      if (d < bestDist) { bestDist = d; best = seg.id; }
+    }
+    return best;
+  }, [marriageLineSegs, pos]);
+
   const startSymbolDrag = useCallback((e, key) => {
     e.preventDefault();
     e.stopPropagation();
@@ -298,30 +332,50 @@ const GenogramTab = ({
 
   useEffect(() => {
     if (!symbolDrag) return;
+    const kind = SYMBOL_MAP[symbolDrag.key]?.kind;
+
+    const svgPointFor = (ev) => {
+      if (!svgRef.current) return null;
+      const p = svgRef.current.createSVGPoint();
+      p.x = ev.clientX; p.y = ev.clientY;
+      const ctm = svgRef.current.getScreenCTM();
+      return ctm ? p.matrixTransform(ctm.inverse()) : null;
+    };
 
     const onMove = (ev) => {
       // 拖曳中只更新游標位置與高亮目標，不做任何資料異動
-      let hoverId = null;
-      if (svgRef.current) {
-        const p = svgRef.current.createSVGPoint();
-        p.x = ev.clientX; p.y = ev.clientY;
-        const ctm = svgRef.current.getScreenCTM();
-        if (ctm) hoverId = hitTestNode(p.matrixTransform(ctm.inverse()));
+      const svgP = svgPointFor(ev);
+      let hoverId = null, hoverLineId = null;
+      if (svgP) {
+        if (kind === 'relLine') hoverLineId = hitTestLine(svgP);
+        else if (kind !== 'standalone') hoverId = hitTestNode(svgP);
       }
-      setSymbolDrag(d => (d ? { ...d, x: ev.clientX, y: ev.clientY, hoverId } : d));
+      setSymbolDrag(d => (d ? { ...d, x: ev.clientX, y: ev.clientY, hoverId, hoverLineId } : d));
     };
 
     const onUp = (ev) => {
       const { key } = symbolDrag;
-      let targetId = null;
-      if (svgRef.current) {
-        const p = svgRef.current.createSVGPoint();
-        p.x = ev.clientX; p.y = ev.clientY;
-        const ctm = svgRef.current.getScreenCTM();
-        if (ctm) targetId = hitTestNode(p.matrixTransform(ctm.inverse()));
-      }
+      const svgP = svgPointFor(ev);
       setSymbolDrag(null);
-      if (!targetId) return;                       // 放開在空白處：取消
+      if (!svgP) return;
+
+      if (kind === 'relLine') {
+        const lineId = hitTestLine(svgP);
+        if (!lineId) return;                         // 放開在空白處：取消
+        toggleLineAttr(lineId, key);
+        setRecent(pushRecent(key));
+        return;
+      }
+
+      if (kind === 'standalone') {
+        if (hitTestNode(svgP)) return;                // 放開在既有人物節點上：不做事
+        setFreeNodes(prev => [...prev, { id: 'f_' + Date.now(), type: key, x: svgP.x, y: svgP.y }]);
+        setRecent(pushRecent(key));
+        return;
+      }
+
+      const targetId = hitTestNode(svgP);
+      if (!targetId) return;                         // 放開在空白處：取消
       toggleNodeAttr(targetId, key);
       setRecent(pushRecent(key));
     };
@@ -336,7 +390,7 @@ const GenogramTab = ({
       window.removeEventListener('pointerup', onUp);
       window.removeEventListener('keydown', onKey);
     };
-  }, [symbolDrag, hitTestNode, toggleNodeAttr]);
+  }, [symbolDrag, hitTestNode, hitTestLine, toggleNodeAttr, toggleLineAttr, setFreeNodes]);
 
   const onDown = useCallback((e, id) => {
     e.stopPropagation(); nodeDragMoved.current = false; const sp = svgPt(e); const p = pos(id);
@@ -446,7 +500,8 @@ const GenogramTab = ({
           const alreadyLinked = customLinks.some(l => (l.sourceId === drag.id && l.targetId === closestId) || (l.sourceId === closestId && l.targetId === drag.id));
           if (!alreadyLinked) {
             const draggedIsEco = draggedNode.type === 'eco';
-            const newLinkType = draggedIsEco ? 'eco' : undefined;
+            const draggedIsAnnotation = STANDALONE_TYPES.includes(draggedNode.type);
+            const newLinkType = draggedIsEco ? 'eco' : draggedIsAnnotation ? 'annotation' : undefined;
             setCustomLinks(prev => [...prev, { id: 'l_' + Date.now(), sourceId: closestId, targetId: drag.id, ...(newLinkType ? { type: newLinkType } : {}), status: 'married', kidsStr: '', kidsCfg: [] }]);
             // Push freeNode away to prevent overlap
             const tp = pos(closestId);
@@ -696,18 +751,26 @@ const GenogramTab = ({
             <label>🔗 擴充連線設定</label>
             {customLinks.map(lnk => {
               const isEcoLink = lnk.type === 'eco';
+              const isAnnotationLink = lnk.type === 'annotation';
+              const isSpecialLink = isEcoLink || isAnnotationLink;
               const srcNode = nodes.find(n => n.id === lnk.sourceId) || freeNodes.find(n => n.id === lnk.sourceId);
               const tgtNode = nodes.find(n => n.id === lnk.targetId) || freeNodes.find(n => n.id === lnk.targetId);
-              const srcLabel = srcNode?.type === 'eco' ? (srcNode?.text || '生態圖') : (srcNode?.label || (srcNode?.gender === 'M' ? '■' : '●'));
-              const tgtLabel = tgtNode?.type === 'eco' ? (tgtNode?.text || '生態圖') : (tgtNode?.label || (tgtNode?.gender === 'M' ? '■' : '●'));
+              const linkNodeLabel = (node) => {
+                if (!node) return '?';
+                if (node.type === 'eco') return node.text || '生態圖';
+                if (STANDALONE_TYPES.includes(node.type)) return SYMBOL_MAP[node.type]?.label || node.type;
+                return node.label || (node.gender === 'M' ? '■' : '●');
+              };
+              const srcLabel = linkNodeLabel(srcNode);
+              const tgtLabel = linkNodeLabel(tgtNode);
               return (
-                <div key={lnk.id} style={{ background: isEcoLink ? '#eff6ff' : '#f8fafc', border: `1px solid ${isEcoLink ? '#bfdbfe' : '#e2e8f0'}`, borderRadius: '6px', padding: '8px', marginTop: '6px' }}>
+                <div key={lnk.id} style={{ background: isEcoLink ? '#eff6ff' : isAnnotationLink ? '#f5f3ff' : '#f8fafc', border: `1px solid ${isEcoLink ? '#bfdbfe' : isAnnotationLink ? '#ddd6fe' : '#e2e8f0'}`, borderRadius: '6px', padding: '8px', marginTop: '6px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}>
-                    <span>{isEcoLink ? '🌐 ' : ''}{srcLabel} ↔ {tgtLabel}</span>
-                    {!isEcoLink && <span className="status-badge" data-status={lnk.status} ref={el => wheelRef(el, CUSTOM_LINK_STATUSES, lnk.status, v => updateCustomLink(lnk.id, 'status', v))}>{CUSTOM_LINK_LABELS[lnk.status]}</span>}
+                    <span>{isEcoLink ? '🌐 ' : isAnnotationLink ? '📎 ' : ''}{srcLabel} ↔ {tgtLabel}</span>
+                    {!isSpecialLink && <span className="status-badge" data-status={lnk.status} ref={el => wheelRef(el, CUSTOM_LINK_STATUSES, lnk.status, v => updateCustomLink(lnk.id, 'status', v))}>{CUSTOM_LINK_LABELS[lnk.status]}</span>}
                     <button onClick={() => deleteCustomLink(lnk.id)} style={{ marginLeft: 'auto', padding: '2px 8px', fontSize: '11px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>刪除</button>
                   </div>
-                  {!isEcoLink && (
+                  {!isSpecialLink && (
                     <>
                       <div style={{ marginTop: '4px' }}>
                         <input type="text" value={lnk.kidsStr || ''} onChange={e => {
@@ -915,13 +978,37 @@ const GenogramTab = ({
             );
           })}
 
+          {/* === 獨立個體節點 (懷孕／流產／死產，三角形) === */}
+          {freeNodes.filter(fn => STANDALONE_TYPES.includes(fn.type)).map(fn => {
+            const r = standaloneRadius(fn.type);
+            const hasCross = fn.type !== 'pregnancy';
+            return (
+              <g key={fn.id} transform={`translate(${fn.x},${fn.y})`} style={{ cursor: drag?.id === fn.id ? 'grabbing' : 'grab' }}
+                 onMouseDown={e => onDown(e, fn.id)}
+                 onDoubleClick={e => {
+                   e.stopPropagation();
+                   if (window.confirm('確定要刪除這個標記嗎？(相關連線也會一併刪除)')) {
+                     setCustomLinks(prev => prev.filter(l => l.sourceId !== fn.id && l.targetId !== fn.id));
+                     setFreeNodes(prev => prev.filter(f => f.id !== fn.id));
+                   }
+                 }}>
+                <path d={trianglePath(r)} fill="white" stroke="#333" strokeWidth="2.5" />
+                {hasCross && triangleCrossLines(r).map(([x1, y1, x2, y2], i) => (
+                  <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#333" strokeWidth="1.5" pointerEvents="none" />
+                ))}
+                <title>{SYMBOL_MAP[fn.type]?.label}</title>
+              </g>
+            );
+          })}
+
           {/* === 自訂連線 (customLinks) === */}
           {customLinks.map(lnk => {
             const sp = pos(lnk.sourceId), tp = pos(lnk.targetId);
             const isEcoLink = lnk.type === 'eco';
+            const isAnnotationLink = lnk.type === 'annotation';
 
-            if (isEcoLink) {
-              // 生態圖連線：三角函數邊緣偵測，線條精準停在半徑邊緣
+            if (isEcoLink || isAnnotationLink) {
+              // 生態圖／獨立個體註記連線：三角函數邊緣偵測，線條精準停在半徑邊緣
               const srcNode = nodes.find(n => n.id === lnk.sourceId) || freeNodes.find(fn => fn.id === lnk.sourceId);
               const tgtNode = nodes.find(n => n.id === lnk.targetId) || freeNodes.find(fn => fn.id === lnk.targetId);
 
@@ -933,6 +1020,7 @@ const GenogramTab = ({
                   const rx = ecoRx(node.text);
                   return (rx * ECO_RY) / Math.sqrt(Math.pow(ECO_RY * Math.cos(ang), 2) + Math.pow(rx * Math.sin(ang), 2));
                 }
+                if (STANDALONE_TYPES.includes(node?.type)) return standaloneRadius(node.type);
                 if (node?.gender === 'M') {
                   const cosA = Math.abs(Math.cos(ang)), sinA = Math.abs(Math.sin(ang));
                   return cosA > sinA ? R / cosA : R / sinA;
@@ -946,10 +1034,10 @@ const GenogramTab = ({
               const x1 = sp.x + Math.cos(angle) * r1, y1 = sp.y + Math.sin(angle) * r1;
               const x2 = tp.x - Math.cos(angle) * r2, y2 = tp.y - Math.sin(angle) * r2;
 
-              const cStroke = '#2563eb';
+              const cStroke = isEcoLink ? '#2563eb' : '#8b5cf6';
               return (
                 <g key={lnk.id}>
-                  <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={cStroke} strokeWidth="2" />
+                  <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={cStroke} strokeWidth={isEcoLink ? '2' : '1.5'} strokeDasharray={isAnnotationLink ? '4,3' : undefined} />
                   <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent" strokeWidth="12" style={{ cursor: 'pointer' }} onDoubleClick={e => { e.stopPropagation(); deleteCustomLink(lnk.id); }} />
                 </g>
               );
@@ -970,6 +1058,49 @@ const GenogramTab = ({
                 <line x1={x1} y1={sp.y} x2={x2} y2={tp.y} stroke="transparent" strokeWidth="12" style={{ cursor: 'pointer' }} onDoubleClick={e => { e.stopPropagation(); deleteCustomLink(lnk.id); }} />
               </g>
             );
+          })}
+
+          {/* 工具箱拖曳「關係品質」符號經過時的高亮：只是預覽，放開才會真的貼上 */}
+          {symbolDrag?.hoverLineId && (() => {
+            const seg = marriageLineSegs.find(s => s.id === symbolDrag.hoverLineId);
+            if (!seg) return null;
+            const pa = pos(seg.a), pb = pos(seg.b);
+            return <line x1={pa.x} y1={pa.y} x2={pb.x} y2={pb.y} stroke="#3b82f6" strokeWidth="7" strokeDasharray="5,4" opacity="0.5" pointerEvents="none" />;
+          })()}
+
+          {/* === 關係品質標記 (疏離／衝突／斷絕／暴力，疊加在婚姻線上) === */}
+          {Object.entries(doc.lineAttrs).map(([lineId, key]) => {
+            const seg = marriageLineSegs.find(s => s.id === lineId);
+            if (!seg) return null;
+            const pa = pos(seg.a), pb = pos(seg.b);
+            const isLeft = pa.x <= pb.x;
+            const x1 = isLeft ? pa.x + R : pa.x - R, y1 = pa.y;
+            const x2 = isLeft ? pb.x - R : pb.x + R, y2 = pb.y;
+            const eraseW = 6;
+            if (key === 'distant') return (
+              <g key={`rel-${lineId}`} pointerEvents="none">
+                <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="white" strokeWidth={eraseW} />
+                <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#444" strokeWidth="2" strokeDasharray={DISTANT_DASH} />
+              </g>
+            );
+            if (key === 'conflict' || key === 'violence') {
+              const isViolence = key === 'violence';
+              return (
+                <g key={`rel-${lineId}`} pointerEvents="none">
+                  <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="white" strokeWidth={eraseW} />
+                  <polyline points={zigzagPoints(x1, y1, x2, y2, isViolence ? 6 : 5)} fill="none" stroke={isViolence ? '#dc2626' : '#444'} strokeWidth={isViolence ? '2.5' : '2'} />
+                </g>
+              );
+            }
+            if (key === 'cutoff') return (
+              <g key={`rel-${lineId}`} pointerEvents="none">
+                <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="white" strokeWidth={eraseW} />
+                {gapSegments(x1, y1, x2, y2).map(([sx1, sy1, sx2, sy2], i) => (
+                  <line key={i} x1={sx1} y1={sy1} x2={sx2} y2={sy2} stroke="#444" strokeWidth="2" />
+                ))}
+              </g>
+            );
+            return null;
           })}
 
           {texts.map(t => {

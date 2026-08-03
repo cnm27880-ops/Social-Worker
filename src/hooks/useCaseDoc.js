@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  INITIAL_DOC, idsWithAttr, setAttrIds, toggleAttr, isEmptyDoc,
+  INITIAL_DOC, idsWithAttr, setAttrIds, toggleAttr, toggleLineAttr, isEmptyDoc,
 } from '../utils/caseDoc';
 import {
   initLibrary, readCaseDoc, writeCaseDoc, writeIndex, touchCase,
@@ -194,6 +194,12 @@ export function useCaseDoc() {
     setDocRaw(prev => ({ ...prev, nodeAttrs: toggleAttr(prev.nodeAttrs, id, attr) }));
   }, []);
 
+  /** 切換一條線的關係品質標記（積木工具箱拖曳貼附到婚姻線用） */
+  const toggleLineAttrCb = useCallback((lineId, key) => {
+    pendingKey.current = `__lineAttr_${lineId}`;
+    setDocRaw(prev => ({ ...prev, lineAttrs: toggleLineAttr(prev.lineAttrs, lineId, key) }));
+  }, []);
+
   /* =========================================================================
    * 案件管理
    *
@@ -300,6 +306,7 @@ export function useCaseDoc() {
     patchDoc,
     attrListSetter,
     toggleNodeAttr,
+    toggleLineAttr: toggleLineAttrCb,
 
     undo,
     redo,

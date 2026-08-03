@@ -37,6 +37,14 @@ export const INITIAL_DOC = {
   freeNodes: [],
   customLinks: [],
 
+  /* --- 關係線標記 ---
+   * { [lineId]: 'conflict' | 'distant' | 'cutoff' | 'violence' }
+   * 單一值而非陣列：一條線一次只呈現一種關係品質，拖曳別的符號上去
+   * 是直接取代，不是疊加。lineId 是 GenogramTab 算出來的穩定字串
+   * （'ml-g1'、'ml-c0'…或 customLinks 自己的 id），同一份資料每次
+   * 重新算 nodes/lines 都會得到同樣的 id，所以可以放進案件文件裡。 */
+  lineAttrs: {},
+
   /* --- 畫布內容 --- */
   positions: {},
   polygons: [],
@@ -90,6 +98,17 @@ export const toggleAttr = (nodeAttrs, id, attr) => {
   return next;
 };
 
+/**
+ * 切換一條線的關係品質標記。跟 toggleAttr 不同的是這裡每條線只存單一值：
+ * 拖同一個符號到同一條線上是取消，拖別的符號上去是直接取代。
+ */
+export const toggleLineAttr = (lineAttrs, lineId, key) => {
+  const next = { ...lineAttrs };
+  if (next[lineId] === key) delete next[lineId];
+  else next[lineId] = key;
+  return next;
+};
+
 /* ===========================================================================
  * 序列化 / 還原
  * =========================================================================== */
@@ -131,4 +150,5 @@ export const isEmptyDoc = (doc) =>
   doc.freeNodes.length === 0 &&
   doc.texts.length === 0 &&
   doc.polygons.length === 0 &&
-  Object.keys(doc.nodeAttrs).length === 0;
+  Object.keys(doc.nodeAttrs).length === 0 &&
+  Object.keys(doc.lineAttrs).length === 0;

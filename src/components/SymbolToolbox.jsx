@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   CATEGORIES, SYMBOLS, halfPath, divisionSegments,
   CLINICAL_FILL, CLINICAL_STROKE,
+  trianglePath, triangleCrossLines, zigzagPoints, gapSegments, DISTANT_DASH,
 } from '../utils/symbols';
 
 const RECENT_KEY = 'genogram-recent-symbols';
@@ -30,6 +31,27 @@ export const SymbolPreview = ({ symbol, size = 24 }) => {
           <line x1="0" y1={-r - 1} x2="0" y2="0" stroke="#334155" strokeWidth="1.6"
                 strokeDasharray={symbol.dash} />
           <rect x={-r + 2} y="0" width={(r - 2) * 2} height={r - 2} fill="#fff" stroke="#334155" strokeWidth="1.6" />
+        </>
+      ) : symbol.kind === 'standalone' ? (
+        <>
+          <path d={trianglePath(r)} fill="#fff" stroke="#334155" strokeWidth="1.8" />
+          {symbol.cross && triangleCrossLines(r).map(([x1, y1, x2, y2], i) => (
+            <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#334155" strokeWidth="1.4" />
+          ))}
+        </>
+      ) : symbol.kind === 'relLine' ? (
+        <>
+          {symbol.lineStyle === 'dashed' && (
+            <line x1={-r} y1="0" x2={r} y2="0" stroke="#334155" strokeWidth="1.8" strokeDasharray={DISTANT_DASH} />
+          )}
+          {(symbol.lineStyle === 'zigzag' || symbol.lineStyle === 'zigzagRed') && (
+            <polyline
+              points={zigzagPoints(-r, 0, r, 0, symbol.lineStyle === 'zigzagRed' ? 4 : 3.5, 6)}
+              fill="none" stroke={symbol.lineStyle === 'zigzagRed' ? '#dc2626' : '#334155'} strokeWidth="1.8" />
+          )}
+          {symbol.lineStyle === 'gap' && gapSegments(-r, 0, r, 0).map(([x1, y1, x2, y2], i) => (
+            <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#334155" strokeWidth="1.8" />
+          ))}
         </>
       ) : (
         <>

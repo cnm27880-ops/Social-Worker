@@ -36,6 +36,8 @@ export const CATEGORIES = [
   { key: 'common', label: '常用' },
   { key: 'health', label: '健康狀況' },
   { key: 'kinship', label: '親子關係' },
+  { key: 'perinatal', label: '妊娠與失落' },
+  { key: 'relLine', label: '關係品質' },
 ];
 
 /** 臨床標記的填色。所有標記同色，病因靠位置區分。 */
@@ -138,12 +140,116 @@ export const SYMBOLS = [
     desc: '該子女與父母之間的親子線改為點線。',
     note: '兩份來源一致。',
   },
+
+  /* ===========================================================================
+   * 獨立個體：懷孕／流產／死產
+   *
+   * kind:'standalone' — 拖到空白畫布放開會生成一個新的自由節點；拖到
+   * 既有的人物節點上放開則不做任何事（這類符號本身就是獨立個體，不是
+   * 貼在別人身上的標記）。生成後可再用既有的「拖曳碰撞連線」把它接到
+   * 任何人身上（同一套機制，用於 男性／女性／生態圖 自由個體）。
+   *
+   * 三者都用三角形家族的形狀，不用性別方塊／圓形：
+   *   - 兩份來源都用三角形代表懷孕／流產／人工流產，只是流產多畫一條
+   *     對角線（GenoPro：「miscarriage...diagonal cross...drawn on top
+   *     of the triangle」）。
+   *   - 死產的畫法兩份來源不一致：一份說是「跟性別符號一樣，但是縮小」，
+   *     另一份說是「跟性別符號一樣大，對角線大小不變」——但兩份都沒有
+   *     指明死產性別未知時該用什麼形狀。為了不引入「拖曳時還要選性別」
+   *     的額外互動，也為了三個符號在視覺上仍是同一個家族、容易理解，
+   *     這裡讓死產沿用三角形，但畫成跟人物節點一樣大（半徑 R），對角線
+   *     粗細與流產一致——取「大小區分懷孕/流產 vs 死產、對角線區分
+   *     活產/死產」兩份來源的交集，缺口在說明書的圖例中如實註明。
+   * =========================================================================== */
+  {
+    key: 'pregnancy',
+    label: '懷孕',
+    category: 'perinatal',
+    kind: 'standalone',
+    shape: 'triangle',
+    desc: '拖到空白畫布放開即新增一個三角形節點。',
+    note: '兩份來源一致：三角形代表懷孕。',
+  },
+  {
+    key: 'miscarriage',
+    label: '流產／人工流產',
+    category: 'perinatal',
+    kind: 'standalone',
+    shape: 'triangle',
+    cross: true,
+    desc: '拖到空白畫布放開即新增一個帶對角線的小三角形節點。',
+    note: '兩份來源一致：三角形加一條對角線代表流產或人工流產，'
+        + '兩者本工具不另外區分，可用文字方塊補充說明。',
+  },
+  {
+    key: 'stillbirth',
+    label: '死產',
+    category: 'perinatal',
+    kind: 'standalone',
+    shape: 'triangle',
+    cross: true,
+    full: true,
+    desc: '拖到空白畫布放開即新增一個放大的帶對角線三角形節點。',
+    note: '兩份來源畫法不一致，且都沒說明性別未知時的畫法。本工具取'
+        + '兩者交集：沿用三角形（不強迫選性別），但放大到跟人物節點'
+        + '一樣大以區別於流產。',
+  },
+
+  /* ===========================================================================
+   * 關係品質：衝突／疏離／斷絕／暴力
+   *
+   * kind:'relLine' — 拖到一條婚姻線（案主父母、案主與配偶，或擴充關係
+   * 的配偶線）上放開，會在那條線上疊加對應的關係線樣式；再拖一次同一個
+   * 符號到同一條線上是取消。同一條線只會有一種關係品質（不疊加），拖
+   * 別的符號上去是直接取代。
+   *
+   * 只收錄社工實務最常需要標記的四種「需要留意」的關係，不收錄
+   * McGoldrick 標準中「親密／要好」等正向關係符號——那些對風險評估的
+   * 幫助有限，先不放進工具箱增加選擇負擔。
+   * =========================================================================== */
+  {
+    key: 'distant',
+    label: '疏離',
+    category: 'relLine',
+    kind: 'relLine',
+    lineStyle: 'dashed',
+    desc: '婚姻線改為虛線。',
+    note: '兩份來源一致：虛線代表關係疏遠、溝通有限。',
+  },
+  {
+    key: 'conflict',
+    label: '衝突',
+    category: 'relLine',
+    kind: 'relLine',
+    lineStyle: 'zigzag',
+    desc: '婚姻線改為鋸齒線。',
+    note: 'McGoldrick 標準畫法：鋸齒線代表關係中有衝突、爭執。',
+  },
+  {
+    key: 'cutoff',
+    label: '斷絕',
+    category: 'relLine',
+    kind: 'relLine',
+    lineStyle: 'gap',
+    desc: '婚姻線中間斷開一段缺口。',
+    note: 'McGoldrick 標準畫法：線段中間留白代表關係斷絕、無往來。',
+  },
+  {
+    key: 'violence',
+    label: '暴力',
+    category: 'relLine',
+    kind: 'relLine',
+    lineStyle: 'zigzagRed',
+    desc: '婚姻線改為紅色鋸齒線。',
+    note: '本工具在標準鋸齒線的基礎上改用紅色加粗，'
+        + '和「衝突」的一般鋸齒線做出區分，方便在列印或螢幕上快速辨識。',
+  },
 ];
 
 export const SYMBOL_MAP = Object.fromEntries(SYMBOLS.map(s => [s.key, s]));
 
-/** 會畫在親子連線上的標記（拖到子代節點，但線變樣式） */
-export const KINSHIP_KEYS = SYMBOLS.filter(s => s.kind === 'kinship').map(s => s.key);
+/** 會畫在親子連線上的標記（拖到子代節點，但線變樣式）。只在本檔案內使用。 */
+const KINSHIP_KEYS = SYMBOLS.filter(s => s.kind === 'kinship').map(s => s.key);
 
 /** 從一個節點的標記陣列中找出要套用的親子線樣式 */
 export const kinshipDashFor = (attrs) => {
@@ -193,4 +299,80 @@ export const divisionSegments = (halves, r) => {
   if (filled.tl !== filled.bl) segs.push([-r, 0, 0, 0]);  // 水平線．左半段
   if (filled.tr !== filled.br) segs.push([0, 0, r, 0]);   // 水平線．右半段
   return segs;
+};
+
+/* ===========================================================================
+ * 獨立個體（懷孕／流產／死產）的三角形幾何
+ * =========================================================================== */
+
+/** 三角形三個頂點，尖端朝上，r 為中心到頂點的距離。 */
+export const triangleVertices = (r) => [
+  [0, -r],
+  [-r * 0.95, r * 0.75],
+  [r * 0.95, r * 0.75],
+];
+
+export const trianglePath = (r) => {
+  const [[x0, y0], [x1, y1], [x2, y2]] = triangleVertices(r);
+  return `M ${x0},${y0} L ${x1},${y1} L ${x2},${y2} Z`;
+};
+
+/** 流產／死產的對角叉，畫在三角形的外框範圍內，跟死亡符號的 X 同一個畫法。 */
+export const triangleCrossLines = (r) => {
+  const halfW = r * 0.95, topY = -r, botY = r * 0.75;
+  return [
+    [-halfW, topY, halfW, botY],
+    [halfW, topY, -halfW, botY],
+  ];
+};
+
+/* ===========================================================================
+ * 關係品質線（疏離／衝突／斷絕／暴力）的幾何
+ *
+ * 三者都是「以兩人現有的婚姻線為基準，疊加一個樣式」，不取代原本的線
+ * （離婚斜線、分居符號等仍照舊畫），只是額外疊上去的裝飾。
+ * =========================================================================== */
+
+/** 疏離：長虛線的 dasharray。 */
+export const DISTANT_DASH = '9,6';
+
+/**
+ * 鋸齒線（衝突／暴力共用幾何）。
+ * 回傳可直接放進 <polyline points="..."> 的字串。
+ */
+export const zigzagPoints = (x1, y1, x2, y2, amplitude = 5, segments = 8) => {
+  const dx = x2 - x1, dy = y2 - y1;
+  const len = Math.sqrt(dx * dx + dy * dy) || 1;
+  const nx = -dy / len, ny = dx / len; // 垂直於基準線的單位向量
+  const pts = [];
+  for (let i = 0; i <= segments; i++) {
+    const t = i / segments;
+    const bx = x1 + dx * t, by = y1 + dy * t;
+    const off = (i === 0 || i === segments) ? 0 : (i % 2 === 1 ? amplitude : -amplitude);
+    pts.push(`${bx + nx * off},${by + ny * off}`);
+  }
+  return pts.join(' ');
+};
+
+/**
+ * 斷絕：線段中間留一段缺口。回傳兩段線的端點座標。
+ * 回傳 [[x1,y1,x2,y2], [x1,y1,x2,y2]]。
+ */
+export const gapSegments = (x1, y1, x2, y2, gapRatio = 0.24) => {
+  const dx = x2 - x1, dy = y2 - y1;
+  const midStart = 0.5 - gapRatio / 2, midEnd = 0.5 + gapRatio / 2;
+  return [
+    [x1, y1, x1 + dx * midStart, y1 + dy * midStart],
+    [x1 + dx * midEnd, y1 + dy * midEnd, x2, y2],
+  ];
+};
+
+/** 點到線段的最短距離，供拖曳關係線符號時判斷是否命中某條婚姻線。 */
+export const distToSegment = (px, py, x1, y1, x2, y2) => {
+  const dx = x2 - x1, dy = y2 - y1;
+  const lenSq = dx * dx + dy * dy;
+  let t = lenSq === 0 ? 0 : ((px - x1) * dx + (py - y1) * dy) / lenSq;
+  t = Math.max(0, Math.min(1, t));
+  const cx = x1 + dx * t, cy = y1 + dy * t;
+  return Math.hypot(px - cx, py - cy);
 };
