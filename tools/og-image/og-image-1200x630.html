@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { width:1200px; height:630px; }
+  body {
+    font-family:'Noto Sans TC','WenQuanYi Zen Hei',sans-serif;
+    background:#ffffff;
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+  .stage {
+    position:relative; width:1200px; height:630px;
+    background:
+      radial-gradient(900px 520px at 88% 12%, rgba(139,92,246,.13), transparent 62%),
+      radial-gradient(760px 520px at 4% 92%, rgba(59,130,246,.13), transparent 60%),
+      linear-gradient(160deg,#ffffff 0%,#f6f8fc 55%,#eef2f9 100%);
+    overflow:hidden;
+  }
+  .stage::before {
+    content:''; position:absolute; inset:0;
+    background-image:
+      linear-gradient(to right, rgba(15,23,42,.045) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(15,23,42,.045) 1px, transparent 1px);
+    background-size:40px 40px;
+    mask-image:linear-gradient(115deg, rgba(0,0,0,.9), rgba(0,0,0,.15) 60%, transparent);
+    -webkit-mask-image:linear-gradient(115deg, rgba(0,0,0,.9), rgba(0,0,0,.15) 60%, transparent);
+  }
+  .accent { position:absolute; top:0; left:0; right:0; height:9px;
+    background:linear-gradient(90deg,#3b82f6 0%,#6366f1 45%,#8b5cf6 75%,#ec4899 100%); }
+
+  .grid { position:absolute; inset:0; display:flex; align-items:center;
+    padding:0 64px; gap:44px; }
+
+  /* ---------- left column ---------- */
+  .left { width:600px; flex:0 0 600px; }
+
+  .brandline { display:flex; align-items:center; gap:14px; margin-bottom:26px; }
+  .logo { width:56px; height:56px; border-radius:14px; flex:0 0 56px;
+    box-shadow:0 6px 18px rgba(15,23,42,.16); }
+  .brandtext .name { font-size:27px; font-weight:900; color:#0f172a; letter-spacing:.5px; line-height:1.1; }
+  .brandtext .kicker { font-size:14.5px; font-weight:700; color:#64748b; letter-spacing:2.4px; margin-top:4px; }
+
+  h1 { font-size:63px; font-weight:900; color:#0f172a; line-height:1.14;
+       letter-spacing:-.5px; }
+  h1 .hl {
+    background:linear-gradient(90deg,#2563eb,#7c3aed);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+  .sub { margin-top:20px; font-size:23px; font-weight:500; color:#475569; line-height:1.55; }
+  .sub b { color:#1e293b; font-weight:800; }
+
+  .chips { display:flex; gap:10px; margin-top:30px; flex-wrap:wrap; }
+  .chip { display:flex; align-items:center; gap:7px;
+    padding:9px 16px; border-radius:999px; font-size:17px; font-weight:700;
+    background:#ffffff; color:#1e293b;
+    border:1.5px solid #dbe3ef; box-shadow:0 2px 8px rgba(15,23,42,.06); }
+  .chip .dot { width:9px; height:9px; border-radius:50%; }
+
+  .url { margin-top:34px; display:inline-flex; align-items:center; gap:10px;
+    font-size:18px; font-weight:800; color:#334155; letter-spacing:.3px; }
+  .url .pill { padding:5px 12px; border-radius:8px; font-size:15px; font-weight:900;
+    color:#fff; background:linear-gradient(135deg,#3b82f6,#6366f1); letter-spacing:1px; }
+
+  /* ---------- right column: product card ---------- */
+  .card { position:relative; width:428px; flex:0 0 428px; height:482px;
+    background:#fff; border-radius:22px;
+    border:1px solid #e4eaf3;
+    box-shadow:0 26px 60px -22px rgba(15,23,42,.36), 0 6px 16px rgba(15,23,42,.07);
+    overflow:hidden; display:flex; flex-direction:column; }
+  .card-bar { flex:0 0 42px; background:#f8fafc; border-bottom:1px solid #e8edf5;
+    display:flex; align-items:center; gap:9px; padding:0 16px; }
+  .card-bar i { width:11px; height:11px; border-radius:50%; display:block; }
+  .card-bar .t { margin-left:6px; font-size:13.5px; font-weight:700; color:#94a3b8; letter-spacing:.6px; }
+  .canvas { position:relative; flex:1 1 auto; min-height:0;
+    background-image:
+      linear-gradient(to right, #f1f2f4 1px, transparent 1px),
+      linear-gradient(to bottom, #f1f2f4 1px, transparent 1px);
+    background-size:34px 34px; background-color:#fff; }
+  .canvas svg { position:absolute; inset:0; width:100%; height:100%; }
+  .cardfoot { flex:0 0 auto; padding:13px 16px;
+    background:linear-gradient(135deg,#0f172a,#1e293b); color:#cbd5e1;
+    font-size:14px; font-weight:600; line-height:1.5; }
+  .cardfoot b { color:#fff; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="accent"></div>
+  <div class="grid">
+
+    <div class="left">
+      <div class="brandline">
+        <svg class="logo" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+          <rect width="256" height="256" rx="50" fill="#f8fafc"/>
+          <path d="M 80 100 L 176 100 M 128 100 L 128 160 M 80 160 L 176 160" stroke="#94a3b8" stroke-width="12" fill="none" stroke-linejoin="round"/>
+          <rect x="52" y="72" width="56" height="56" rx="8" fill="#1e293b"/>
+          <circle cx="176" cy="100" r="28" fill="#1e293b"/>
+          <circle cx="80" cy="160" r="28" fill="#ec4899"/>
+          <rect x="148" y="132" width="56" height="56" rx="8" fill="#3b82f6"/>
+        </svg>
+        <div class="brandtext">
+          <div class="name">Geno-Link</div>
+          <div class="kicker">免費 · 免下載 · 免註冊</div>
+        </div>
+      </div>
+
+      <h1>線上<span class="hl">家系圖</span><br>產生器</h1>
+
+      <div class="sub"><b>智慧磁吸排版</b>＋快捷操作工具列<br>30 秒畫完，同步匯出文字紀錄</div>
+
+      <div class="chips">
+        <div class="chip"><span class="dot" style="background:#3b82f6"></span>磁吸自動對齊</div>
+        <div class="chip"><span class="dot" style="background:#8b5cf6"></span>30 秒完成</div>
+        <div class="chip"><span class="dot" style="background:#ec4899"></span>一鍵匯出</div>
+      </div>
+
+      <div class="url"><span class="pill">WEB</span>cnm27880-ops.github.io/Social-Worker</div>
+    </div>
+
+    <div class="card">
+      <div class="card-bar">
+        <i style="background:#f87171"></i><i style="background:#fbbf24"></i><i style="background:#34d399"></i>
+        <span class="t">家系圖繪製畫布</span>
+      </div>
+      <div class="canvas">
+        <svg viewBox="0 0 428 372" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+          <g stroke="#334155" stroke-width="2.6" fill="none">
+            <!-- G1 couple -->
+            <line x1="146" y1="64" x2="282" y2="64"/>
+            <!-- descent from G1 -->
+            <line x1="214" y1="64" x2="214" y2="126"/>
+            <line x1="120" y1="126" x2="308" y2="126"/>
+            <line x1="120" y1="126" x2="120" y2="162"/>
+            <line x1="308" y1="126" x2="308" y2="162"/>
+            <!-- G2 couple (index person + partner) -->
+            <line x1="120" y1="192" x2="240" y2="192"/>
+            <!-- descent to G3 -->
+            <line x1="180" y1="192" x2="180" y2="258"/>
+            <line x1="126" y1="258" x2="234" y2="258"/>
+            <line x1="126" y1="258" x2="126" y2="292"/>
+            <line x1="234" y1="258" x2="234" y2="292"/>
+          </g>
+
+          <!-- cohabitation dashed boundary -->
+          <rect x="84" y="162" width="196" height="164" rx="20"
+                fill="rgba(239,68,68,.045)" stroke="#ef4444" stroke-width="2.4" stroke-dasharray="9,7"/>
+
+          <!-- G1: male square + female circle -->
+          <rect x="122" y="40" width="48" height="48" rx="3" fill="#fff" stroke="#334155" stroke-width="2.8"/>
+          <circle cx="282" cy="64" r="24" fill="#fff" stroke="#334155" stroke-width="2.8"/>
+
+          <!-- G2 left: index person (double square, blue) -->
+          <rect x="90" y="162" width="60" height="60" rx="4" fill="none" stroke="#2563eb" stroke-width="2.6"/>
+          <rect x="96" y="168" width="48" height="48" rx="3" fill="#fff" stroke="#2563eb" stroke-width="2.8"/>
+          <text x="120" y="198" text-anchor="middle" font-family="'Noto Sans TC',sans-serif"
+                font-size="15" font-weight="700" fill="#1e293b">案主</text>
+
+          <!-- G2 right: spouse -->
+          <circle cx="240" cy="192" r="24" fill="#fff" stroke="#334155" stroke-width="2.8"/>
+          <!-- G2 sibling (deceased, crossed) -->
+          <circle cx="308" cy="186" r="24" fill="#fff" stroke="#334155" stroke-width="2.8"/>
+          <line x1="291" y1="169" x2="325" y2="203" stroke="#334155" stroke-width="2.6"/>
+          <line x1="325" y1="169" x2="291" y2="203" stroke="#334155" stroke-width="2.6"/>
+
+          <!-- G3 children -->
+          <rect x="102" y="292" width="48" height="48" rx="3" fill="#fff" stroke="#334155" stroke-width="2.8"/>
+          <text x="126" y="322" text-anchor="middle" font-family="'Noto Sans TC',sans-serif"
+                font-size="15" font-weight="700" fill="#475569">12</text>
+          <circle cx="234" cy="316" r="24" fill="#fff" stroke="#334155" stroke-width="2.8"/>
+          <text x="234" y="322" text-anchor="middle" font-family="'Noto Sans TC',sans-serif"
+                font-size="15" font-weight="700" fill="#475569">8</text>
+
+          <!-- magnetic snapping guide -->
+          <line x1="40" y1="192" x2="392" y2="192" stroke="#3b82f6" stroke-width="1.6" stroke-dasharray="6,6" opacity=".55"/>
+          <circle cx="240" cy="192" r="33" fill="none" stroke="#3b82f6" stroke-width="1.8" opacity=".45"/>
+        </svg>
+      </div>
+      <div class="cardfoot">「案主再婚，與案妻育有<b>1 子 1 女</b>，案長子 12 歲……」<br>圖形完成即同步生成<b>家族結構文字紀錄</b></div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>

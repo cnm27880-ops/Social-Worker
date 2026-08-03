@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
+  <url>
+    <loc>https://cnm27880-ops.github.io/Social-Worker/</loc>
+    <lastmod>2026-08-03</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+    <image:image>
+      <image:loc>https://cnm27880-ops.github.io/Social-Worker/og-image.png</image:loc>
+      <image:title>Geno-Link 線上家系圖產生器</image:title>
+      <image:caption>免費免下載的專業線上家系圖產生器，內建智慧磁吸排版與快捷操作工具列，30 秒完成繪製並同步匯出家族結構文字紀錄。</image:caption>
+    </image:image>
+  </url>
+</urlset>
