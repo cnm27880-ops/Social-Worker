@@ -6,6 +6,9 @@ import {
   initLibrary, readCaseDoc, writeCaseDoc, writeIndex, touchCase,
   addCase, renameCaseIn, removeCase, downloadCaseFile, parseCaseFile,
 } from '../utils/caseStore';
+import {
+  listSnapshots, saveSnapshot, deleteSnapshot, readSnapshotDoc, clearSnapshots,
+} from '../utils/snapshotStore';
 
 /* 連續同一個欄位的修改，在這個時間窗內視為一次操作。
  * 沒有這個，拖曳一次節點會產生上百筆歷史，按復原要按到天荒地老。 */
@@ -253,6 +256,7 @@ export function useCaseDoc() {
   }, [commitIndex]);
 
   const deleteCase = useCallback((id) => {
+    clearSnapshots(id); // 案件不在了，屬於它的時間軸快照也沒有意義了
     const { index: next, needsNewCase } = removeCase(indexRef.current, id);
 
     // 刪到一份都不剩：直接開一份空的，不要讓使用者面對空畫面
@@ -271,6 +275,39 @@ export function useCaseDoc() {
   }, [commitIndex, loadIntoEditor]);
 
   const activeCase = index.list.find(c => c.id === index.activeId) || null;
+
+  /* =========================================================================
+   * 時間軸快照
+   *
+   * 跟復原/重做不同：快照是使用者主動按下才存的一份「留念」，重新整理
+   * 瀏覽器也還在，可以隨時跳回去看，但不是自動記錄的每一步。
+   * ======================================================================= */
+
+  const [snapshots, setSnapshots] = useState(() => listSnapshots(index.activeId));
+
+  // 切換案件後，快照清單也要換成那份案件自己的
+  useEffect(() => {
+    setSnapshots(listSnapshots(index.activeId));
+  }, [index.activeId]);
+
+  const takeSnapshot = useCallback((name) => {
+    const snap = saveSnapshot(activeIdRef.current, name, docRef.current);
+    setSnapshots(listSnapshots(activeIdRef.current));
+    return snap;
+  }, []);
+
+  const removeSnapshot = useCallback((snapshotId) => {
+    setSnapshots(deleteSnapshot(activeIdRef.current, snapshotId));
+  }, []);
+
+  /** 還原一份快照到目前編輯畫面：當成一次一般編輯，可以再用 Ctrl+Z 復原這次還原。 */
+  const restoreSnapshot = useCallback((snapshotId) => {
+    const snapDoc = readSnapshotDoc(activeIdRef.current, snapshotId);
+    if (!snapDoc) return false;
+    pendingKey.current = `__restoreSnapshot_${snapshotId}_${Date.now()}`;
+    setDocRaw(snapDoc);
+    return true;
+  }, []);
 
   const exportCase = useCallback(() => {
     const current = indexRef.current;
@@ -327,5 +364,10 @@ export function useCaseDoc() {
     deleteCase,
     exportCase,
     importCase,
+
+    snapshots,
+    takeSnapshot,
+    restoreSnapshot,
+    removeSnapshot,
   };
 }

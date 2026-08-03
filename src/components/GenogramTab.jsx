@@ -6,6 +6,7 @@ import {
   parseGenders, getSmoothPath, getRelativeTitle
 } from '../utils/helpers';
 import CaseBar from './CaseBar';
+import SnapshotPanel from './SnapshotPanel';
 import SymbolToolbox, { SymbolPreview, loadRecent, pushRecent } from './SymbolToolbox';
 import {
   SYMBOL_MAP, halfPath, healthHalvesFor, divisionSegments, kinshipDashFor,
@@ -32,6 +33,7 @@ const GenogramTab = ({
   undo, redo, canUndo, canRedo, savedAt, restored, dismissRestored,
   cases, activeCaseId, activeCase,
   switchCase, createCase, renameCase, deleteCase, exportCase, importCase,
+  snapshots, takeSnapshot, restoreSnapshot, removeSnapshot,
   gen2Str, setGen2Str, gen2Cfg, setGen2Cfg,
   indexId, setIndexId,
   cohabMembers, setCohabMembers,
@@ -602,7 +604,7 @@ const GenogramTab = ({
             <button className="btn-action btn-danger" onClick={() => {
               if (!window.confirm('確定重置？重置後可用「復原」還原。')) return;
               patchDoc({
-                gen2Str: '', gen2Cfg: [], indexId: null, cohabMembers: [], nodeAttrs: {},
+                gen2Str: '', gen2Cfg: [], indexId: null, cohabMembers: [], nodeAttrs: {}, lineAttrs: {},
                 cohabSolid: false, polygons: [], texts: [], ages: {},
                 freeNodes: [], customLinks: [], positions: {}, ipStyle: 'filled',
               }, '__reset');
@@ -631,6 +633,11 @@ const GenogramTab = ({
               : '自動儲存至本機瀏覽器'}
           </span>
         </div>
+
+        <SnapshotPanel
+          snapshots={snapshots} takeSnapshot={takeSnapshot}
+          restoreSnapshot={restoreSnapshot} removeSnapshot={removeSnapshot}
+        />
 
         <div className="quick-tool-panel">
           <div className="quick-tool-header">

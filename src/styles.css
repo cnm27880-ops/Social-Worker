@@ -259,6 +259,29 @@ input[type="text"]:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,
 
 .hint { font-size: 11px; color: #94a3b8; margin-top: 3px; }
 
+/* ===== 時間軸快照 ===== */
+.snap-list {
+  list-style: none; margin: 8px 0 0; padding: 0;
+  max-height: 220px; overflow-y: auto;
+}
+.snap-list li {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 6px; border-radius: 7px;
+}
+.snap-list li:hover { background: #eef2ff; }
+.snap-name {
+  flex: 1 1 auto; min-width: 0; font-size: 12.5px; font-weight: 600; color: #1e293b;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.snap-time { flex-shrink: 0; font-size: 11px; color: #94a3b8; }
+.snap-btn {
+  flex-shrink: 0; border: 1px solid #e2e8f0; background: #fff; cursor: pointer;
+  padding: 3px 8px; font-size: 11px; font-weight: 600; color: #6d28d9; border-radius: 5px;
+}
+.snap-btn:hover { background: #f5f3ff; border-color: #ddd6fe; }
+.snap-btn-del { color: #cbd5e1; padding: 3px 6px; }
+.snap-btn-del:hover { background: #fee2e2; color: #ef4444; border-color: #fecaca; }
+
 /* 紀錄產生器專用 UI */
 .record-layout { display: flex; flex-direction: column; gap: 16px; max-width: 1500px; margin: 0 auto; }
 @media (min-width: 768px) { .record-layout { flex-direction: row; align-items: stretch; } }
