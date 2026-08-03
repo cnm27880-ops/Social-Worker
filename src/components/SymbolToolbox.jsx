@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  CATEGORIES, SYMBOLS, halfPath,
+  CATEGORIES, SYMBOLS, halfPath, divisionSegments,
   CLINICAL_FILL, CLINICAL_STROKE,
 } from '../utils/symbols';
 
@@ -35,8 +35,12 @@ export const SymbolPreview = ({ symbol, size = 24 }) => {
         <>
           <rect x={-r} y={-r} width={r * 2} height={r * 2} fill="#fff" stroke="#334155" strokeWidth="1.8" />
           {symbol.half && (
-            <path d={halfPath('M', symbol.half, r)}
-                  fill={CLINICAL_FILL} stroke={CLINICAL_STROKE} strokeWidth="1.6" />
+            <>
+              <path d={halfPath('M', symbol.half, r)} fill={CLINICAL_FILL} />
+              {divisionSegments([symbol.half], r).map(([x1, y1, x2, y2], i) => (
+                <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke={CLINICAL_STROKE} strokeWidth="1.6" />
+              ))}
+            </>
           )}
           {symbol.key === 'disabled' && <path d={halfPath('M', 'left', r)} fill="#334155" />}
           {symbol.key === 'deceased' && (

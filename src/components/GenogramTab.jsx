@@ -8,7 +8,7 @@ import {
 import CaseBar from './CaseBar';
 import SymbolToolbox, { SymbolPreview, loadRecent, pushRecent } from './SymbolToolbox';
 import {
-  SYMBOL_MAP, halfPath, healthHalvesFor, kinshipDashFor,
+  SYMBOL_MAP, halfPath, healthHalvesFor, divisionSegments, kinshipDashFor,
   CLINICAL_FILL, CLINICAL_STROKE, CLINICAL_STROKE_W,
 } from '../utils/symbols';
 
@@ -837,13 +837,24 @@ const GenogramTab = ({
                   ? <rect x={-R} y={-R} width={SZ} height={SZ} fill={fill} stroke={nd.stroke} strokeWidth="2.5" rx="2" strokeDasharray={nd.dash} />
                   : <circle cx="0" cy="0" r={R} fill={fill} stroke={nd.stroke} strokeWidth="2.5" strokeDasharray={nd.dash} />}
                 {/* 健康狀況：半邊填色（左＝精神、右＝生理、下＝成癮，可並存）。
-                    同一節點內一律同色，病因靠位置區分；描邊讓各塊邊界明確，
-                    左半＋下半時右上角那塊留白才看得出來。 */}
-                {healthHalvesFor(doc.nodeAttrs[nd.id]).map(side => (
-                  <path key={side} d={halfPath(nd.gender, side, R)}
-                        fill={CLINICAL_FILL} stroke={CLINICAL_STROKE} strokeWidth={CLINICAL_STROKE_W}
-                        pointerEvents="none" />
-                ))}
+                    同一節點內一律同色，病因靠位置區分。分界線只畫在填色與
+                    留白的交界，兩塊填色之間不畫 —— 否則「左半＋下半」會在
+                    正中央被畫出一個十字（見 divisionSegments 的說明）。 */}
+                {(() => {
+                  const halves = healthHalvesFor(doc.nodeAttrs[nd.id]);
+                  if (!halves.length) return null;
+                  return (
+                    <g pointerEvents="none">
+                      {halves.map(side => (
+                        <path key={side} d={halfPath(nd.gender, side, R)} fill={CLINICAL_FILL} />
+                      ))}
+                      {divisionSegments(halves, R).map(([x1, y1, x2, y2], i) => (
+                        <line key={i} x1={x1} y1={y1} x2={x2} y2={y2}
+                              stroke={CLINICAL_STROKE} strokeWidth={CLINICAL_STROKE_W} />
+                      ))}
+                    </g>
+                  );
+                })()}
                 {/* 工具箱拖曳經過時的高亮：只是預覽，放開才會真的貼上 */}
                 {symbolDrag?.hoverId === nd.id && (nd.gender === 'M'
                   ? <rect x={-(R+8)} y={-(R+8)} width={SZ+16} height={SZ+16} rx="5" fill="none" stroke="#3b82f6" strokeWidth="2.5" strokeDasharray="5,4" pointerEvents="none" />
