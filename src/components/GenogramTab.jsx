@@ -64,6 +64,10 @@ const GenogramTab = ({
   const [textDrag, setTextDrag] = useState(null);
   const [textResize, setTextResize] = useState(null);
   const textDragMoved = useRef(false);
+  // 拖曳節點放開時瀏覽器仍會補發一次 click；沒有這個旗標，onClick 會把
+  // 「剛拖完放手」誤判成「案主／身障／同住／死亡等模式下的一般點擊」，
+  // 對剛搬移完位置的節點多蓋一個不該有的標記。
+  const nodeDragMoved = useRef(false);
   const [mousePos, setMousePos] = useState(null);
 
   /* --- 擴充區顏色模式 --- */
@@ -335,7 +339,7 @@ const GenogramTab = ({
   }, [symbolDrag, hitTestNode, toggleNodeAttr]);
 
   const onDown = useCallback((e, id) => {
-    e.stopPropagation(); const sp = svgPt(e); const p = pos(id);
+    e.stopPropagation(); nodeDragMoved.current = false; const sp = svgPt(e); const p = pos(id);
     const isFree = freeNodes.some(fn => fn.id === id);
     setDrag({ id, ox: sp.x - p.x, oy: sp.y - p.y, isFree });
   }, [svgPt, pos, freeNodes]);
@@ -362,6 +366,7 @@ const GenogramTab = ({
     if (textResize) { setTexts(p => p.map(t => t.id === textResize.id ? { ...t, fontSize: Math.max(10, Math.min(72, Math.round(textResize.startSize + (sp.y - textResize.startY) * 0.3))) } : t)); return; }
     if (textDrag) { textDragMoved.current = true; setTexts(p => p.map(t => t.id === textDrag.id ? { ...t, x: sp.x - textDrag.ox, y: sp.y - textDrag.oy } : t)); return; }
     if (!drag) return;
+    nodeDragMoved.current = true;
 
     // 收集畫面上「所有」節點的最新座標，作為全域磁吸的對象
     const allSnaps = [];
@@ -457,6 +462,8 @@ const GenogramTab = ({
 
   const onClick = (e, id) => {
     e.stopPropagation();
+    // 放手前如果真的拖動過，這是一次拖曳的收尾，不是要標記這個節點
+    if (nodeDragMoved.current) { nodeDragMoved.current = false; return; }
     if (mode === 'index') setIndexId(p => p === id ? null : id);
     else if (mode === 'cohab' && cohabMode === 'auto') setCohabMembers(p => p.includes(id) ? p.filter(m => m !== id) : [...p, id]);
     else if (mode === 'deceased') setDeceasedIds(p => p.includes(id) ? p.filter(m => m !== id) : [...p, id]);
