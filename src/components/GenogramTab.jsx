@@ -15,6 +15,8 @@ const ecoRx = (text) => Math.max(35, (text?.length || 1) * 9 + 15);
 const ECO_RY = 28;
 
 const GenogramTab = ({
+  doc, setField, patchDoc,
+  undo, redo, canUndo, canRedo, savedAt, restored, dismissRestored,
   gen2Str, setGen2Str, gen2Cfg, setGen2Cfg,
   indexId, setIndexId,
   cohabMembers, setCohabMembers,
@@ -24,14 +26,19 @@ const GenogramTab = ({
   freeNodes, setFreeNodes,
   customLinks, setCustomLinks
 }) => {
-  /* --- 家系圖本地狀態 --- */
-  const [positions, setPositions] = useState({});
+  /* --- 案件文件欄位 ---
+   * 這些以前是本地 useState，現在讀寫都經過案件文件，才能被復原與自動存檔
+   * 涵蓋。setField 回傳的 setter 與 useState 的 setter 同介面，所以下面所有
+   * 呼叫點都維持原樣。 */
+  const positions = doc.positions,      setPositions = setField('positions');
+  const cohabMode = doc.cohabMode,      setCohabMode = setField('cohabMode');
+  const cohabSolid = doc.cohabSolid,    setCohabSolid = setField('cohabSolid');
+  const ipStyle = doc.ipStyle,          setIpStyle = setField('ipStyle');
+  const polygons = doc.polygons,        setPolygons = setField('polygons');
+
+  /* --- 純 UI 暫態：不進復原、不存檔 --- */
   const [drag, setDrag] = useState(null);
   const [mode, setMode] = useState(null);
-  const [cohabMode, setCohabMode] = useState('auto');
-  const [cohabSolid, setCohabSolid] = useState(false);
-  const [ipStyle, setIpStyle] = useState('filled');
-  const [polygons, setPolygons] = useState([]);
   const [draftPoly, setDraftPoly] = useState([]);
   const [selectedPolyId, setSelectedPolyId] = useState(null);
   const [dragVertex, setDragVertex] = useState(null);
@@ -42,20 +49,20 @@ const GenogramTab = ({
   const positionsRef = useRef(positions);
   positionsRef.current = positions;
 
-  const [texts, setTexts] = useState([]);
+  const texts = doc.texts,                    setTexts = setField('texts');
+  const textDirection = doc.textDirection,    setTextDirection = setField('textDirection');
   const [selectedTextId, setSelectedTextId] = useState(null);
   const [textDrag, setTextDrag] = useState(null);
   const [textResize, setTextResize] = useState(null);
-  const [textDirection, setTextDirection] = useState('horizontal');
   const textDragMoved = useRef(false);
   const [mousePos, setMousePos] = useState(null);
 
   /* --- 擴充區顏色模式 --- */
-  const [extColorMode, setExtColorMode] = useState('black');
+  const extColorMode = doc.extColorMode,      setExtColorMode = setField('extColorMode');
 
   /* --- 年齡與文字編輯狀態 --- */
-  const [showAgeMode, setShowAgeMode] = useState(false);
-  const [ages, setAges] = useState({});
+  const showAgeMode = doc.showAgeMode,        setShowAgeMode = setField('showAgeMode');
+  const ages = doc.ages,                      setAges = setField('ages');
   const [editingAgeId, setEditingAgeId] = useState(null);
   const [editingTextId, setEditingTextId] = useState(null);
   const [editingEcoId, setEditingEcoId] = useState(null);
@@ -441,8 +448,38 @@ const GenogramTab = ({
           </div>
           <div className="panel-header-actions">
             <button className="btn-action btn-primary" onClick={downloadJPG}>下載</button>
-            <button className="btn-action btn-danger" onClick={() => { if(window.confirm('確定重置？')) { setGen2Str(''); setGen2Cfg([]); setIndexId(null); setCohabMembers([]); setDeceasedIds([]); setDisabledIds([]); setCohabSolid(false); setPolygons([]); setTexts([]); setAges({}); setFreeNodes([]); setCustomLinks([]); setPositions({}); setIpStyle('filled'); } }}>重置</button>
+            {/* 重置走 patchDoc，整批算一筆歷史，所以誤按可以用復原救回來 */}
+            <button className="btn-action btn-danger" onClick={() => {
+              if (!window.confirm('確定重置？重置後可用「復原」還原。')) return;
+              patchDoc({
+                gen2Str: '', gen2Cfg: [], indexId: null, cohabMembers: [], nodeAttrs: {},
+                cohabSolid: false, polygons: [], texts: [], ages: {},
+                freeNodes: [], customLinks: [], positions: {}, ipStyle: 'filled',
+              }, '__reset');
+            }}>重置</button>
           </div>
+        </div>
+
+        {/* 復原/重做 + 自動儲存狀態：都是「你的東西留得住」，放在同一列 */}
+        <div className="save-status">
+          <span className="history-actions">
+            <button className="btn-icon" onClick={undo} disabled={!canUndo}
+                    title="復原 (Ctrl+Z)" aria-label="復原">↶</button>
+            <button className="btn-icon" onClick={redo} disabled={!canRedo}
+                    title="重做 (Ctrl+Shift+Z)" aria-label="重做">↷</button>
+          </span>
+          {restored && (
+            <span className="restored-tag">
+              已還原上次進度
+              <button onClick={dismissRestored} title="關閉提示" aria-label="關閉提示">×</button>
+            </span>
+          )}
+          <span className="save-note">
+            <span className="dot" />
+            {savedAt
+              ? `已自動儲存 ${new Date(savedAt).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}．僅存在本機`
+              : '自動儲存至本機瀏覽器'}
+          </span>
         </div>
 
         <div className="quick-tool-panel">
