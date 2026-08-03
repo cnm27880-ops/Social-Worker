@@ -60,6 +60,15 @@ const GenogramTab = ({
   const [draftPoly, setDraftPoly] = useState([]);
   const [selectedPolyId, setSelectedPolyId] = useState(null);
   const [dragVertex, setDragVertex] = useState(null);
+  const [exportOpen, setExportOpen] = useState(false);
+  const exportMenuRef = useRef(null);
+
+  useEffect(() => {
+    if (!exportOpen) return;
+    const onDown = (e) => { if (!exportMenuRef.current?.contains(e.target)) setExportOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [exportOpen]);
 
   // 持續同步的 ref，讓 useMemo / useCallback 可讀取最新值，但不觸發多餘的 re-compute
   const freeNodesRef = useRef(freeNodes);
@@ -542,7 +551,8 @@ const GenogramTab = ({
     return { type: 'poly', points: lower.concat(upper) };
   }, [cohabMembers, nodes, pos]);
 
-  const downloadJPG = () => {
+  /** 算出目前畫面上所有內容的最小外框（含留白），下載圖片/列印共用。 */
+  const computeCropBox = useCallback(() => {
     const PAD = 40, allXs = [], allYs = [];
     nodes.forEach(n => { const p = pos(n.id); allXs.push(p.x - R, p.x + R); allYs.push(p.y - R, p.y + R); });
     freeNodes.forEach(fn => {
@@ -557,17 +567,71 @@ const GenogramTab = ({
     polygons.forEach(pg => pg.pts.forEach(pt => { allXs.push(pt.x); allYs.push(pt.y); }));
     if (cohabitationBox && cohabitationBox.type === 'single') { allXs.push(cohabitationBox.x, cohabitationBox.x + cohabitationBox.w); allYs.push(cohabitationBox.y, cohabitationBox.y + cohabitationBox.h); }
     else if (cohabitationBox && cohabitationBox.type === 'poly') { cohabitationBox.points.forEach(pt => { allXs.push(pt.x); allYs.push(pt.y); }); }
-    if (allXs.length === 0) return;
-    const minX = Math.min(...allXs) - PAD, minY = Math.min(...allYs) - PAD, cropW = Math.max(...allXs) + PAD - minX, cropH = Math.max(...allYs) + PAD - minY;
-    const cloned = svgRef.current.cloneNode(true); cloned.setAttribute('width', cropW); cloned.setAttribute('height', cropH); cloned.setAttribute('viewBox', `${minX} ${minY} ${cropW} ${cropH}`);
+    if (allXs.length === 0) return null;
+    const minX = Math.min(...allXs) - PAD, minY = Math.min(...allYs) - PAD;
+    const w = Math.max(...allXs) + PAD - minX, h = Math.max(...allYs) + PAD - minY;
+    return { minX, minY, w, h };
+  }, [nodes, freeNodes, texts, polygons, cohabitationBox, pos]);
+
+  /** 把畫布裁切後轉成點陣圖並下載。transparent=true 時不補白底（PNG 去背用）。 */
+  const rasterizeAndDownload = useCallback((box, { transparent, format, filename }) => {
+    const cloned = svgRef.current.cloneNode(true);
+    cloned.setAttribute('width', box.w); cloned.setAttribute('height', box.h);
+    cloned.setAttribute('viewBox', `${box.minX} ${box.minY} ${box.w} ${box.h}`);
     const url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(cloned)], { type: 'image/svg+xml;charset=utf-8' }));
     const img = new Image();
     img.onload = () => {
-      const canvas = document.createElement('canvas'); canvas.width = cropW * 3; canvas.height = cropH * 3;
-      const ctx = canvas.getContext('2d'); ctx.scale(3, 3); ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, cropW, cropH); ctx.drawImage(img, 0, 0, cropW, cropH);
-      URL.revokeObjectURL(url); canvas.toBlob(blob => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'genogram.jpg'; a.click(); URL.revokeObjectURL(a.href); }, 'image/jpeg', 1.0);
-    }; img.src = url;
-  };
+      const canvas = document.createElement('canvas'); canvas.width = box.w * 3; canvas.height = box.h * 3;
+      const ctx = canvas.getContext('2d'); ctx.scale(3, 3);
+      if (!transparent) { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, box.w, box.h); }
+      ctx.drawImage(img, 0, 0, box.w, box.h);
+      URL.revokeObjectURL(url);
+      canvas.toBlob(blob => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click(); URL.revokeObjectURL(a.href); }, format, 1.0);
+    };
+    img.src = url;
+  }, []);
+
+  const downloadJPG = useCallback(() => {
+    const box = computeCropBox();
+    if (!box) return;
+    rasterizeAndDownload(box, { transparent: false, format: 'image/jpeg', filename: 'genogram.jpg' });
+  }, [computeCropBox, rasterizeAndDownload]);
+
+  const downloadPNG = useCallback(() => {
+    const box = computeCropBox();
+    if (!box) return;
+    rasterizeAndDownload(box, { transparent: true, format: 'image/png', filename: 'genogram-去背.png' });
+  }, [computeCropBox, rasterizeAndDownload]);
+
+  /* 列印/存成 PDF：借瀏覽器內建的列印功能，不額外引入 PDF 產生套件。
+   * 做法是暫時在 <body> 底下插入一份只含裁切後 SVG 的列印專用容器，
+   * 搭配 @media print 把畫面其他部分藏起來，列印對話框關閉後就移除，
+   * 完全不影響使用者正在編輯的畫面。 */
+  const printA4 = useCallback(() => {
+    const box = computeCropBox();
+    if (!box) return;
+    const cloned = svgRef.current.cloneNode(true);
+    cloned.removeAttribute('width'); cloned.removeAttribute('height');
+    cloned.setAttribute('viewBox', `${box.minX} ${box.minY} ${box.w} ${box.h}`);
+    cloned.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+
+    const container = document.createElement('div');
+    container.id = 'print-a4-container';
+
+    const style = document.createElement('style');
+    style.textContent = `@page { size: A4 ${box.w >= box.h ? 'landscape' : 'portrait'}; margin: 10mm; }`;
+
+    const header = document.createElement('div');
+    header.className = 'print-a4-header';
+    header.textContent = `${activeCase?.name || '家系圖'}．列印於 ${new Date().toLocaleDateString('zh-TW')}`;
+
+    container.append(style, header, cloned);
+    document.body.appendChild(container);
+
+    const cleanup = () => { container.remove(); window.removeEventListener('afterprint', cleanup); };
+    window.addEventListener('afterprint', cleanup);
+    window.print();
+  }, [computeCropBox, activeCase]);
 
   /* ===== SVG 尺寸計算 ===== */
   const allX = nodes.map(n => positions[n.id]?.x ?? n.dx).concat(texts.map(t => t.x + 100), freeNodes.map(fn => {
@@ -599,7 +663,17 @@ const GenogramTab = ({
             </label>
           </div>
           <div className="panel-header-actions">
-            <button className="btn-action btn-primary" onClick={downloadJPG}>下載</button>
+            <div className="export-menu" ref={exportMenuRef}>
+              <button className="btn-action btn-primary" onClick={() => setExportOpen(o => !o)}
+                      aria-expanded={exportOpen} aria-haspopup="true">⬇ 下載／列印</button>
+              {exportOpen && (
+                <ul className="export-menu-list">
+                  <li><button onClick={() => { downloadJPG(); setExportOpen(false); }}>🖼️ JPG 圖片</button></li>
+                  <li><button onClick={() => { downloadPNG(); setExportOpen(false); }}>🪄 PNG（透明背景）</button></li>
+                  <li><button onClick={() => { printA4(); setExportOpen(false); }}>🖨️ 列印／存成 PDF（A4）</button></li>
+                </ul>
+              )}
+            </div>
             {/* 重置走 patchDoc，整批算一筆歷史，所以誤按可以用復原救回來 */}
             <button className="btn-action btn-danger" onClick={() => {
               if (!window.confirm('確定重置？重置後可用「復原」還原。')) return;
