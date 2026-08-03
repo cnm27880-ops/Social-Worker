@@ -7,7 +7,10 @@ import {
 } from '../utils/helpers';
 import CaseBar from './CaseBar';
 import SymbolToolbox, { SymbolPreview, loadRecent, pushRecent } from './SymbolToolbox';
-import { SYMBOL_MAP, halfPath, healthHalvesFor, kinshipDashFor, HATCH_ID } from '../utils/symbols';
+import {
+  SYMBOL_MAP, halfPath, healthHalvesFor, kinshipDashFor,
+  CLINICAL_FILL, CLINICAL_STROKE, CLINICAL_STROKE_W,
+} from '../utils/symbols';
 
 const CUSTOM_LINK_STATUSES = ['married', 'divorced'];
 const CUSTOM_LINK_LABELS = { married: '已婚', divorced: '離婚' };
@@ -745,10 +748,6 @@ const GenogramTab = ({
         <svg ref={svgRef} width={svgW} height={svgH} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp} onClick={() => { setSelectedTextId(null); setSelectedPolyId(null); }} style={{ background: '#fefefe', minWidth: '600px', cursor: mode === 'cohab' && cohabMode === 'poly' ? 'crosshair' : undefined }}>
           <defs>
             <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="#f0f0f0" strokeWidth="0.5" /></pattern>
-            {/* 臨床標記用的斜線網底，與既有的實心填滿區分 */}
-            <pattern id={HATCH_ID} width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-              <line x1="0" y1="0" x2="0" y2="5" stroke="#334155" strokeWidth="2" />
-            </pattern>
           </defs>
           <rect width="100%" height="100%" fill="url(#grid)" />
 
@@ -837,9 +836,13 @@ const GenogramTab = ({
                 {nd.gender === 'M'
                   ? <rect x={-R} y={-R} width={SZ} height={SZ} fill={fill} stroke={nd.stroke} strokeWidth="2.5" rx="2" strokeDasharray={nd.dash} />
                   : <circle cx="0" cy="0" r={R} fill={fill} stroke={nd.stroke} strokeWidth="2.5" strokeDasharray={nd.dash} />}
-                {/* 健康狀況：半邊網底（左＝精神、右＝生理、下＝成癮，可並存） */}
+                {/* 健康狀況：半邊填色（左＝精神、右＝生理、下＝成癮，可並存）。
+                    同一節點內一律同色，病因靠位置區分；描邊讓各塊邊界明確，
+                    左半＋下半時右上角那塊留白才看得出來。 */}
                 {healthHalvesFor(doc.nodeAttrs[nd.id]).map(side => (
-                  <path key={side} d={halfPath(nd.gender, side, R)} fill={`url(#${HATCH_ID})`} pointerEvents="none" />
+                  <path key={side} d={halfPath(nd.gender, side, R)}
+                        fill={CLINICAL_FILL} stroke={CLINICAL_STROKE} strokeWidth={CLINICAL_STROKE_W}
+                        pointerEvents="none" />
                 ))}
                 {/* 工具箱拖曳經過時的高亮：只是預覽，放開才會真的貼上 */}
                 {symbolDrag?.hoverId === nd.id && (nd.gender === 'M'

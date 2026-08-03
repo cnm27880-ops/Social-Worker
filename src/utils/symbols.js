@@ -14,10 +14,17 @@
  *    one author to another」。這裡採用兩份以上來源一致的畫法，有分歧的
  *    在該符號的 note 欄位註明。
  *
- * 2. 本檔案的臨床標記一律用「斜線網底」而非實心填滿。
- *    原因：本工具既有的「身障」標記已經佔用了「左半實心」，而 McGoldrick
- *    標準中「左半」代表精神疾病。為了不改變既有圖的判讀，臨床標記改用
- *    網底區分，位置仍遵循標準（左＝精神、右＝生理、下＝成癮）。
+ * 2. 臨床標記的畫法：半邊實色填色 ＋ 分界描邊，且同一個符號內一律同色。
+ *
+ *    位置遵循標準（左＝精神、右＝生理、下＝成癮），「意義」完全由位置承載，
+ *    顏色只表示「這裡有標記」—— 所以不需要、也刻意不用顏色區分病因，
+ *    同一個人身上有多個標記時才不會變成花的。
+ *
+ *    分界描邊是必要的：沒有它，左半＋下半（剩右上四分之一）會看起來像整格
+ *    填滿，四分之一的空白分不出來。描邊讓每一塊的邊界明確。
+ *
+ *    顏色選淡紫而非深色，是為了和既有的「身障」左半深色實心、以及案主的
+ *    深色實心區隔；灰階列印時它會變成淺灰，與那兩者仍可分辨。
  * =========================================================================== */
 
 export const CATEGORIES = [
@@ -26,8 +33,12 @@ export const CATEGORIES = [
   { key: 'kinship', label: '親子關係' },
 ];
 
-/** 網底樣式的 <defs> id，由 GenogramTab 注入一次 */
-export const HATCH_ID = 'sym-hatch';
+/** 臨床標記的填色。所有標記同色，病因靠位置區分。 */
+export const CLINICAL_FILL = '#c4b5fd';
+
+/** 分界描邊的顏色與粗細。 */
+export const CLINICAL_STROKE = '#334155';
+export const CLINICAL_STROKE_W = 2;
 
 /**
  * 把「半邊」轉成裁切路徑。
@@ -78,9 +89,9 @@ export const SYMBOLS = [
     category: 'health',
     kind: 'nodeAttr',
     half: 'left',
-    desc: '左半加網底。',
-    note: 'McGoldrick 標準以左半代表精神／情緒疾病。本工具改用網底，'
-        + '以免與既有的「身心障礙」左半實心混淆。',
+    desc: '左半填色。',
+    note: 'McGoldrick 標準以左半代表精神／情緒疾病。'
+        + '本工具用淡紫填色，以免與既有的「身心障礙」左半深色實心混淆。',
   },
   {
     key: 'physicalIllness',
@@ -88,7 +99,7 @@ export const SYMBOLS = [
     category: 'health',
     kind: 'nodeAttr',
     half: 'right',
-    desc: '右半加網底。',
+    desc: '右半填色。',
     note: 'McGoldrick 標準以右半代表生理疾病。',
   },
   {
@@ -97,9 +108,10 @@ export const SYMBOLS = [
     category: 'health',
     kind: 'nodeAttr',
     half: 'bottom',
-    desc: '下半加網底。',
+    desc: '下半填色。',
     note: 'McGoldrick 標準以下半代表酒精或藥物成癮。'
-        + '同時有精神疾病與成癮時，左半與下半會同時出現。',
+        + '同時有精神疾病與成癮時，左半與下半會同時填色，右上角留白；'
+        + '分界描邊讓那塊留白清楚可辨。',
   },
 
   {
@@ -137,7 +149,7 @@ export const kinshipDashFor = (attrs) => {
   return undefined;
 };
 
-/** 節點上要畫的半邊網底（可同時多個，例如精神疾病＋藥酒癮） */
+/** 節點上要填色的半邊（可同時多個，例如精神疾病＋藥酒癮） */
 export const healthHalvesFor = (attrs) =>
   (attrs || [])
     .map(k => SYMBOL_MAP[k])

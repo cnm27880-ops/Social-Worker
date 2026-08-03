@@ -1,5 +1,8 @@
 import { useState } from 'react';
-import { CATEGORIES, SYMBOLS, halfPath } from '../utils/symbols';
+import {
+  CATEGORIES, SYMBOLS, halfPath,
+  CLINICAL_FILL, CLINICAL_STROKE,
+} from '../utils/symbols';
 
 const RECENT_KEY = 'genogram-recent-symbols';
 const RECENT_MAX = 4;
@@ -20,15 +23,8 @@ export const pushRecent = (key) => {
 /* 工具箱裡的小預覽圖：一律用方形（男性）示意，24×24 */
 export const SymbolPreview = ({ symbol, size = 24 }) => {
   const r = size / 2 - 2;
-  const hatchId = `tb-hatch-${symbol.key}`;
   return (
     <svg width={size} height={size} viewBox={`${-size / 2} ${-size / 2} ${size} ${size}`} aria-hidden="true">
-      <defs>
-        <pattern id={hatchId} width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-          <line x1="0" y1="0" x2="0" y2="4" stroke="#334155" strokeWidth="1.6" />
-        </pattern>
-      </defs>
-
       {symbol.kind === 'kinship' ? (
         <>
           <line x1="0" y1={-r - 1} x2="0" y2="0" stroke="#334155" strokeWidth="1.6"
@@ -38,7 +34,10 @@ export const SymbolPreview = ({ symbol, size = 24 }) => {
       ) : (
         <>
           <rect x={-r} y={-r} width={r * 2} height={r * 2} fill="#fff" stroke="#334155" strokeWidth="1.8" />
-          {symbol.half && <path d={halfPath('M', symbol.half, r)} fill={`url(#${hatchId})`} />}
+          {symbol.half && (
+            <path d={halfPath('M', symbol.half, r)}
+                  fill={CLINICAL_FILL} stroke={CLINICAL_STROKE} strokeWidth="1.6" />
+          )}
           {symbol.key === 'disabled' && <path d={halfPath('M', 'left', r)} fill="#334155" />}
           {symbol.key === 'deceased' && (
             <>
