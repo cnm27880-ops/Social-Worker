@@ -5,6 +5,25 @@ import {
   TEXT_DIRS, TEXT_DIR_LABELS,
   parseGenders, getSmoothPath, getRelativeTitle
 } from '../utils/helpers';
+import CaseBar from './CaseBar';
+import ImagePatchPanel from './ImagePatchPanel';
+import InfoTip from './InfoTip';
+import { SymbolPreview, loadUsage, bumpUsage } from './SymbolPreview';
+import { BG_X, BG_Y, bgImageBox } from '../utils/bgImage';
+import {
+  SYMBOL_MAP, QUICK_KEYS, QUICK_SYMBOLS,
+  halfPath, healthHalvesFor, divisionSegments, kinshipDashFor,
+  quarterPath,
+  CLINICAL_FILL, CLINICAL_STROKE, CLINICAL_STROKE_W,
+  trianglePath, triangleCrossLines,
+  zigzagPoints, gapSegments, doubleLineSegments, hatchSegments, distToSegment, DISTANT_DASH,
+} from '../utils/symbols';
+
+/* 獨立個體（懷孕／流產／死產）用的三角形半徑：死產跟人物節點一樣大（R），
+ * 懷孕／流產縮小，視覺上跟「附加在別人身上的標記」區分開來。 */
+const STANDALONE_SMALL_R = 13;
+const STANDALONE_TYPES = ['pregnancy', 'miscarriage', 'stillbirth'];
+const standaloneRadius = (type) => (type === 'stillbirth' ? R : STANDALONE_SMALL_R);
 
 const CUSTOM_LINK_STATUSES = ['married', 'divorced'];
 const CUSTOM_LINK_LABELS = { married: '已婚', divorced: '離婚' };
@@ -15,26 +34,55 @@ const ecoRx = (text) => Math.max(35, (text?.length || 1) * 9 + 15);
 const ECO_RY = 28;
 
 const GenogramTab = ({
+  doc, setField, patchDoc, toggleNodeAttr, toggleLineAttr,
+  cases, activeCaseId, activeCase, isSaved,
+  switchCase, saveCase, renameCase, deleteCase, exportCase, importCase,
+  snapshots, takeSnapshot, restoreSnapshot, removeSnapshot,
   gen2Str, setGen2Str, gen2Cfg, setGen2Cfg,
   indexId, setIndexId,
   cohabMembers, setCohabMembers,
-  deceasedIds, setDeceasedIds,
-  disabledIds, setDisabledIds,
+  deceasedIds,
+  disabledIds,
   g1Status, setG1Status,
   freeNodes, setFreeNodes,
   customLinks, setCustomLinks
 }) => {
-  /* --- 家系圖本地狀態 --- */
-  const [positions, setPositions] = useState({});
+  /* --- 案件文件欄位 ---
+   * 這些以前是本地 useState，現在讀寫都經過案件文件，才能被復原與自動存檔
+   * 涵蓋。setField 回傳的 setter 與 useState 的 setter 同介面，所以下面所有
+   * 呼叫點都維持原樣。 */
+  const positions = doc.positions,      setPositions = setField('positions');
+  const cohabMode = doc.cohabMode,      setCohabMode = setField('cohabMode');
+  const cohabSolid = doc.cohabSolid,    setCohabSolid = setField('cohabSolid');
+  const ipStyle = doc.ipStyle,          setIpStyle = setField('ipStyle');
+  const polygons = doc.polygons,        setPolygons = setField('polygons');
+
+  /* --- 舊圖修補 --- */
+  const bgImage = doc.bgImage,          setBgImage = setField('bgImage');
+  const bgErase = doc.bgErase,          setBgErase = setField('bgErase');
+
+  /* --- 純 UI 暫態：不進復原、不存檔 --- */
+  const [eraseMode, setEraseMode] = useState(false);
+  const [eraseWidth, setEraseWidth] = useState(24);
+  const [eraseDraft, setEraseDraft] = useState(null);   // 正在畫的那一筆
   const [drag, setDrag] = useState(null);
+  const [usage, setUsage] = useState(loadUsage);   // 符號使用次數：決定快捷列表內的排序
   const [mode, setMode] = useState(null);
-  const [cohabMode, setCohabMode] = useState('auto');
-  const [cohabSolid, setCohabSolid] = useState(false);
-  const [ipStyle, setIpStyle] = useState('filled');
-  const [polygons, setPolygons] = useState([]);
+  /* 快捷列表目前選到第幾個（0-based，順序見 QUICK_KEYS）。Q 重新開啟時
+   * 從上次的位置繼續，不用每次都從頭數。 */
+  const [quickIdx, setQuickIdx] = useState(0);
   const [draftPoly, setDraftPoly] = useState([]);
   const [selectedPolyId, setSelectedPolyId] = useState(null);
   const [dragVertex, setDragVertex] = useState(null);
+  const [exportOpen, setExportOpen] = useState(false);
+  const exportMenuRef = useRef(null);
+
+  useEffect(() => {
+    if (!exportOpen) return;
+    const onDown = (e) => { if (!exportMenuRef.current?.contains(e.target)) setExportOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [exportOpen]);
 
   // 持續同步的 ref，讓 useMemo / useCallback 可讀取最新值，但不觸發多餘的 re-compute
   const freeNodesRef = useRef(freeNodes);
@@ -42,20 +90,24 @@ const GenogramTab = ({
   const positionsRef = useRef(positions);
   positionsRef.current = positions;
 
-  const [texts, setTexts] = useState([]);
+  const texts = doc.texts,                    setTexts = setField('texts');
+  const textDirection = doc.textDirection,    setTextDirection = setField('textDirection');
   const [selectedTextId, setSelectedTextId] = useState(null);
   const [textDrag, setTextDrag] = useState(null);
   const [textResize, setTextResize] = useState(null);
-  const [textDirection, setTextDirection] = useState('horizontal');
   const textDragMoved = useRef(false);
+  // 拖曳節點放開時瀏覽器仍會補發一次 click；沒有這個旗標，onClick 會把
+  // 「剛拖完放手」誤判成「案主／身障／同住／死亡等模式下的一般點擊」，
+  // 對剛搬移完位置的節點多蓋一個不該有的標記。
+  const nodeDragMoved = useRef(false);
   const [mousePos, setMousePos] = useState(null);
 
   /* --- 擴充區顏色模式 --- */
-  const [extColorMode, setExtColorMode] = useState('black');
+  const extColorMode = doc.extColorMode,      setExtColorMode = setField('extColorMode');
 
   /* --- 年齡與文字編輯狀態 --- */
-  const [showAgeMode, setShowAgeMode] = useState(false);
-  const [ages, setAges] = useState({});
+  const showAgeMode = doc.showAgeMode,        setShowAgeMode = setField('showAgeMode');
+  const ages = doc.ages,                      setAges = setField('ages');
   const [editingAgeId, setEditingAgeId] = useState(null);
   const [editingTextId, setEditingTextId] = useState(null);
   const [editingEcoId, setEditingEcoId] = useState(null);
@@ -75,15 +127,35 @@ const GenogramTab = ({
     if (!el) return;
     el.onwheel = (e) => { e.preventDefault(); e.stopPropagation(); const next = (list.indexOf(current) + (e.deltaY > 0 ? 1 : -1) + list.length) % list.length; setter(list[next]); };
   };
+  /** 點擊往前切到下一個狀態（跟滾輪往下同方向），滾輪仍可雙向切換。
+   * 這批狀態標籤原本只能滾輪操作——滑鼠沒有滾輪（觸控板手勢因人而異）或
+   * 不知道可以滾的人根本切不動，點擊是找得到的最低限度操作方式。 */
+  const cycleOnClick = (list, current, setter) => (e) => {
+    e.stopPropagation();
+    const next = (list.indexOf(current) + 1) % list.length;
+    setter(list[next]);
+  };
 
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
       const key = e.key.toLowerCase();
-      if (key === 'q') setMode(p => p === 'index' ? null : 'index');
-      if (key === 'w') setMode(p => p === 'disabled' ? null : 'disabled');
+      const quickActive = mode !== null && QUICK_KEYS.includes(mode);
+      /* A：開／關快捷列表選取狀態，從上次選到的位置繼續。
+       * S／D：只有選取狀態開著時才移動焦點——沒開著按了也不該有反應，
+       * 否則使用者搞不清楚現在到底選中了什麼。
+       * W／E：案主／同住模式切換，跟快捷列表選取是各自獨立的開關。 */
+      if (key === 'a') setMode(quickActive ? null : QUICK_KEYS[quickIdx]);
+      if (key === 's' && quickActive) {
+        const next = (quickIdx - 1 + QUICK_KEYS.length) % QUICK_KEYS.length;
+        setQuickIdx(next); setMode(QUICK_KEYS[next]);
+      }
+      if (key === 'd' && quickActive) {
+        const next = (quickIdx + 1) % QUICK_KEYS.length;
+        setQuickIdx(next); setMode(QUICK_KEYS[next]);
+      }
+      if (key === 'w') setMode(p => p === 'index' ? null : 'index');
       if (key === 'e') setMode(p => p === 'cohab' ? null : 'cohab');
-      if (key === 'r') setMode(p => p === 'deceased' ? null : 'deceased');
       if (e.key === 'Enter' && mode === 'cohab' && cohabMode === 'poly' && draftPoly.length >= 3) {
         setPolygons(prev => [...prev, { id: 'pg_' + Date.now(), pts: draftPoly }]); setDraftPoly([]); setMousePos(null);
       }
@@ -91,7 +163,7 @@ const GenogramTab = ({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [draftPoly, mode, cohabMode]);
+  }, [draftPoly, mode, cohabMode, quickIdx]);
 
   const onGen2Change = (val) => {
     setGen2Str(val);
@@ -188,7 +260,7 @@ const GenogramTab = ({
 
     // === customLink kidsCfg → 整合為完全體節點 ===
     customLinks.forEach(lnk => {
-      if (lnk.type === 'eco') return; // 生態圖連線不參與節點生成
+      if (lnk.type === 'eco' || lnk.type === 'annotation') return; // 生態圖／獨立個體連線不參與節點生成
       if (!lnk.kidsCfg || lnk.kidsCfg.length === 0) return;
       const srcN = N.find(n => n.id === lnk.sourceId); const srcF = freeNodesRef.current.find(fn => fn.id === lnk.sourceId);
       const tgtN = N.find(n => n.id === lnk.targetId); const tgtF = freeNodesRef.current.find(fn => fn.id === lnk.targetId);
@@ -245,8 +317,131 @@ const GenogramTab = ({
   }, [positions, nodes, freeNodes]);
   const svgPt = useCallback((e) => { const p = svgRef.current.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; return p.matrixTransform(svgRef.current.getScreenCTM().inverse()); }, []);
 
+  /* =========================================================================
+   * 積木工具箱的拖曳貼附
+   *
+   * 與畫布上既有的「拖曳碰撞即連線」刻意分開處理：
+   *   - 途中經過的節點只會高亮，不會被貼上
+   *   - 只有「放開」那一刻的座標算數，命中誰就貼給誰
+   *   - 放開在空白處＝取消，什麼都不做
+   * 貼附本身是切換：對已經有該標記的人再拖一次就是取消。
+   * ======================================================================= */
+  const [symbolDrag, setSymbolDrag] = useState(null);   // { key, x, y, hoverId }
+
+  const allNodeIds = useMemo(
+    () => [
+      ...nodes.map(n => n.id),
+      ...freeNodes.filter(f => f.type !== 'eco' && !STANDALONE_TYPES.includes(f.type)).map(f => f.id),
+    ],
+    [nodes, freeNodes]
+  );
+
+  /** 找出座標命中的節點；沒命中回傳 null */
+  const hitTestNode = useCallback((pt) => {
+    for (const id of allNodeIds) {
+      const p = pos(id);
+      if (Math.abs(pt.x - p.x) <= R + 4 && Math.abs(pt.y - p.y) <= R + 4) return id;
+    }
+    return null;
+  }, [allNodeIds, pos]);
+
+  /* 供關係品質符號拖曳命中判斷用的婚姻線清單：主線（父母／案主與配偶）
+   * 加上擴充關係裡「非生態圖、非獨立個體註記」的配偶線。 */
+  const marriageLineSegs = useMemo(() => {
+    const segs = lines
+      .filter(ln => ln.type === 'marry')
+      .map(ln => ({ id: ln.id, a: ln.a, b: ln.b }));
+    customLinks.forEach(lnk => {
+      if (lnk.type === 'eco' || lnk.type === 'annotation') return;
+      segs.push({ id: lnk.id, a: lnk.sourceId, b: lnk.targetId });
+    });
+    return segs;
+  }, [lines, customLinks]);
+
+  /** 找出座標命中的婚姻線；沒命中回傳 null。 */
+  const hitTestLine = useCallback((pt) => {
+    let best = null, bestDist = 14; // 14px 內才算命中，太寬會誤觸到旁邊的線
+    for (const seg of marriageLineSegs) {
+      const pa = pos(seg.a), pb = pos(seg.b);
+      const d = distToSegment(pt.x, pt.y, pa.x, pa.y, pb.x, pb.y);
+      if (d < bestDist) { bestDist = d; best = seg.id; }
+    }
+    return best;
+  }, [marriageLineSegs, pos]);
+
+  const startSymbolDrag = useCallback((e, key) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setSymbolDrag({ key, x: e.clientX, y: e.clientY, hoverId: null });
+  }, []);
+
+  /** 記錄用過一次某個符號，快捷列表依這個次數排序。拖曳與點擊套用共用。 */
+  const recordUse = useCallback((key) => setUsage(bumpUsage(key)), []);
+
+  useEffect(() => {
+    if (!symbolDrag) return;
+    const kind = SYMBOL_MAP[symbolDrag.key]?.kind;
+
+    const svgPointFor = (ev) => {
+      if (!svgRef.current) return null;
+      const p = svgRef.current.createSVGPoint();
+      p.x = ev.clientX; p.y = ev.clientY;
+      const ctm = svgRef.current.getScreenCTM();
+      return ctm ? p.matrixTransform(ctm.inverse()) : null;
+    };
+
+    const onMove = (ev) => {
+      // 拖曳中只更新游標位置與高亮目標，不做任何資料異動
+      const svgP = svgPointFor(ev);
+      let hoverId = null, hoverLineId = null;
+      if (svgP) {
+        if (kind === 'relLine') hoverLineId = hitTestLine(svgP);
+        else if (kind !== 'standalone') hoverId = hitTestNode(svgP);
+      }
+      setSymbolDrag(d => (d ? { ...d, x: ev.clientX, y: ev.clientY, hoverId, hoverLineId } : d));
+    };
+
+    const onUp = (ev) => {
+      const { key } = symbolDrag;
+      const svgP = svgPointFor(ev);
+      setSymbolDrag(null);
+      if (!svgP) return;
+
+      if (kind === 'relLine') {
+        const lineId = hitTestLine(svgP);
+        if (!lineId) return;                         // 放開在空白處：取消
+        toggleLineAttr(lineId, key);
+        recordUse(key);
+        return;
+      }
+
+      if (kind === 'standalone') {
+        if (hitTestNode(svgP)) return;                // 放開在既有人物節點上：不做事
+        setFreeNodes(prev => [...prev, { id: 'f_' + Date.now(), type: key, x: svgP.x, y: svgP.y }]);
+        recordUse(key);
+        return;
+      }
+
+      const targetId = hitTestNode(svgP);
+      if (!targetId) return;                         // 放開在空白處：取消
+      toggleNodeAttr(targetId, key);
+      recordUse(key);
+    };
+
+    const onKey = (ev) => { if (ev.key === 'Escape') setSymbolDrag(null); };
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [symbolDrag, hitTestNode, hitTestLine, toggleNodeAttr, toggleLineAttr, setFreeNodes, recordUse]);
+
   const onDown = useCallback((e, id) => {
-    e.stopPropagation(); const sp = svgPt(e); const p = pos(id);
+    e.stopPropagation(); nodeDragMoved.current = false; const sp = svgPt(e); const p = pos(id);
     const isFree = freeNodes.some(fn => fn.id === id);
     setDrag({ id, ox: sp.x - p.x, oy: sp.y - p.y, isFree });
   }, [svgPt, pos, freeNodes]);
@@ -273,6 +468,7 @@ const GenogramTab = ({
     if (textResize) { setTexts(p => p.map(t => t.id === textResize.id ? { ...t, fontSize: Math.max(10, Math.min(72, Math.round(textResize.startSize + (sp.y - textResize.startY) * 0.3))) } : t)); return; }
     if (textDrag) { textDragMoved.current = true; setTexts(p => p.map(t => t.id === textDrag.id ? { ...t, x: sp.x - textDrag.ox, y: sp.y - textDrag.oy } : t)); return; }
     if (!drag) return;
+    nodeDragMoved.current = true;
 
     // 收集畫面上「所有」節點的最新座標，作為全域磁吸的對象
     const allSnaps = [];
@@ -352,7 +548,8 @@ const GenogramTab = ({
           const alreadyLinked = customLinks.some(l => (l.sourceId === drag.id && l.targetId === closestId) || (l.sourceId === closestId && l.targetId === drag.id));
           if (!alreadyLinked) {
             const draggedIsEco = draggedNode.type === 'eco';
-            const newLinkType = draggedIsEco ? 'eco' : undefined;
+            const draggedIsAnnotation = STANDALONE_TYPES.includes(draggedNode.type);
+            const newLinkType = draggedIsEco ? 'eco' : draggedIsAnnotation ? 'annotation' : undefined;
             setCustomLinks(prev => [...prev, { id: 'l_' + Date.now(), sourceId: closestId, targetId: drag.id, ...(newLinkType ? { type: newLinkType } : {}), status: 'married', kidsStr: '', kidsCfg: [] }]);
             // Push freeNode away to prevent overlap
             const tp = pos(closestId);
@@ -368,10 +565,17 @@ const GenogramTab = ({
 
   const onClick = (e, id) => {
     e.stopPropagation();
-    if (mode === 'index') setIndexId(p => p === id ? null : id);
-    else if (mode === 'cohab' && cohabMode === 'auto') setCohabMembers(p => p.includes(id) ? p.filter(m => m !== id) : [...p, id]);
-    else if (mode === 'deceased') setDeceasedIds(p => p.includes(id) ? p.filter(m => m !== id) : [...p, id]);
-    else if (mode === 'disabled') setDisabledIds(p => p.includes(id) ? p.filter(m => m !== id) : [...p, id]);
+    // 放手前如果真的拖動過，這是一次拖曳的收尾，不是要標記這個節點
+    if (nodeDragMoved.current) { nodeDragMoved.current = false; return; }
+    if (mode === 'index') { setIndexId(p => p === id ? null : id); return; }
+    if (mode === 'cohab' && cohabMode === 'auto') { setCohabMembers(p => p.includes(id) ? p.filter(m => m !== id) : [...p, id]); return; }
+    // 快捷列表選中的符號若是「貼在人物身上」這一類，點節點即套用；
+    // 關係線／獨立個體這兩類不在這裡處理（見 <svg> 的 onClick，這裡的
+    // e.stopPropagation() 讓事件不會冒泡上去，剛好避免點到節點時誤觸那邊）。
+    if (mode && SYMBOL_MAP[mode]?.kind === 'nodeAttr') {
+      toggleNodeAttr(id, mode);
+      recordUse(mode);
+    }
   };
 
   const cohabitationBox = useMemo(() => {
@@ -389,7 +593,8 @@ const GenogramTab = ({
     return { type: 'poly', points: lower.concat(upper) };
   }, [cohabMembers, nodes, pos]);
 
-  const downloadJPG = () => {
+  /** 算出目前畫面上所有內容的最小外框（含留白），下載圖片/列印共用。 */
+  const computeCropBox = useCallback(() => {
     const PAD = 40, allXs = [], allYs = [];
     nodes.forEach(n => { const p = pos(n.id); allXs.push(p.x - R, p.x + R); allYs.push(p.y - R, p.y + R); });
     freeNodes.forEach(fn => {
@@ -402,19 +607,124 @@ const GenogramTab = ({
     });
     texts.forEach(t => { const w = t.vertical ? t.fontSize * 1.5 : t.text.length * t.fontSize * 0.7, h = t.vertical ? t.text.length * t.fontSize * 1.2 : t.fontSize * 1.5; allXs.push(t.x - 4, t.x + (t.vertical ? t.fontSize * 1.5 : w)); allYs.push(t.y - (t.vertical ? 4 : t.fontSize + 4), t.y + (t.vertical ? h : 8)); });
     polygons.forEach(pg => pg.pts.forEach(pt => { allXs.push(pt.x); allYs.push(pt.y); }));
+    // 底圖也要進裁切範圍，否則下載/列印會把修補好的舊圖切掉
+    const bgBox = bgImageBox(bgImage);
+    if (bgBox) { allXs.push(bgBox.x, bgBox.x + bgBox.w); allYs.push(bgBox.y, bgBox.y + bgBox.h); }
     if (cohabitationBox && cohabitationBox.type === 'single') { allXs.push(cohabitationBox.x, cohabitationBox.x + cohabitationBox.w); allYs.push(cohabitationBox.y, cohabitationBox.y + cohabitationBox.h); }
     else if (cohabitationBox && cohabitationBox.type === 'poly') { cohabitationBox.points.forEach(pt => { allXs.push(pt.x); allYs.push(pt.y); }); }
-    if (allXs.length === 0) return;
-    const minX = Math.min(...allXs) - PAD, minY = Math.min(...allYs) - PAD, cropW = Math.max(...allXs) + PAD - minX, cropH = Math.max(...allYs) + PAD - minY;
-    const cloned = svgRef.current.cloneNode(true); cloned.setAttribute('width', cropW); cloned.setAttribute('height', cropH); cloned.setAttribute('viewBox', `${minX} ${minY} ${cropW} ${cropH}`);
+    if (allXs.length === 0) return null;
+    const minX = Math.min(...allXs) - PAD, minY = Math.min(...allYs) - PAD;
+    const w = Math.max(...allXs) + PAD - minX, h = Math.max(...allYs) + PAD - minY;
+    return { minX, minY, w, h };
+  }, [nodes, freeNodes, texts, polygons, cohabitationBox, pos, bgImage]);
+
+  /** 把畫布裁切後轉成點陣圖並下載。transparent=true 時不補白底（PNG 去背用）。 */
+  const rasterizeAndDownload = useCallback((box, { transparent, format, filename }) => {
+    const cloned = svgRef.current.cloneNode(true);
+    cloned.setAttribute('width', box.w); cloned.setAttribute('height', box.h);
+    cloned.setAttribute('viewBox', `${box.minX} ${box.minY} ${box.w} ${box.h}`);
     const url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(cloned)], { type: 'image/svg+xml;charset=utf-8' }));
     const img = new Image();
     img.onload = () => {
-      const canvas = document.createElement('canvas'); canvas.width = cropW * 3; canvas.height = cropH * 3;
-      const ctx = canvas.getContext('2d'); ctx.scale(3, 3); ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, cropW, cropH); ctx.drawImage(img, 0, 0, cropW, cropH);
-      URL.revokeObjectURL(url); canvas.toBlob(blob => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'genogram.jpg'; a.click(); URL.revokeObjectURL(a.href); }, 'image/jpeg', 1.0);
-    }; img.src = url;
-  };
+      const canvas = document.createElement('canvas'); canvas.width = box.w * 3; canvas.height = box.h * 3;
+      const ctx = canvas.getContext('2d'); ctx.scale(3, 3);
+      if (!transparent) { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, box.w, box.h); }
+      ctx.drawImage(img, 0, 0, box.w, box.h);
+      URL.revokeObjectURL(url);
+      canvas.toBlob(blob => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click(); URL.revokeObjectURL(a.href); }, format, 1.0);
+    };
+    img.src = url;
+  }, []);
+
+  /** 檔名用案件名稱，未儲存的草稿就叫 genogram。 */
+  const exportBaseName = useCallback(
+    () => (activeCase?.name || 'genogram').replace(/[\\/:*?"<>|]/g, '_'),
+    [activeCase]
+  );
+
+  /* 主按鈕：一鍵下載高解析 PNG（3 倍圖、白底）。
+   * 白底而不是去背 —— 直接貼進 Word／LINE 都不會變成一片黑，去背留在進階選單。 */
+  const downloadPNG = useCallback(() => {
+    const box = computeCropBox();
+    if (!box) return;
+    rasterizeAndDownload(box, { transparent: false, format: 'image/png', filename: `${exportBaseName()}.png` });
+  }, [computeCropBox, rasterizeAndDownload, exportBaseName]);
+
+  const downloadJPG = useCallback(() => {
+    const box = computeCropBox();
+    if (!box) return;
+    rasterizeAndDownload(box, { transparent: false, format: 'image/jpeg', filename: `${exportBaseName()}.jpg` });
+  }, [computeCropBox, rasterizeAndDownload, exportBaseName]);
+
+  const downloadPNGTransparent = useCallback(() => {
+    const box = computeCropBox();
+    if (!box) return;
+    rasterizeAndDownload(box, { transparent: true, format: 'image/png', filename: `${exportBaseName()}-去背.png` });
+  }, [computeCropBox, rasterizeAndDownload, exportBaseName]);
+
+  /* 列印/存成 PDF：借瀏覽器內建的列印功能，不額外引入 PDF 產生套件。
+   * 做法是暫時在 <body> 底下插入一份只含裁切後 SVG 的列印專用容器，
+   * 搭配 @media print 把畫面其他部分藏起來，列印對話框關閉後就移除，
+   * 完全不影響使用者正在編輯的畫面。 */
+  const printA4 = useCallback(() => {
+    const box = computeCropBox();
+    if (!box) return;
+    const cloned = svgRef.current.cloneNode(true);
+    cloned.removeAttribute('width'); cloned.removeAttribute('height');
+    cloned.setAttribute('viewBox', `${box.minX} ${box.minY} ${box.w} ${box.h}`);
+    cloned.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+
+    const container = document.createElement('div');
+    container.id = 'print-a4-container';
+
+    const style = document.createElement('style');
+    style.textContent = `@page { size: A4 ${box.w >= box.h ? 'landscape' : 'portrait'}; margin: 10mm; }`;
+
+    const header = document.createElement('div');
+    header.className = 'print-a4-header';
+    header.textContent = `${activeCase?.name || '家系圖'}．列印於 ${new Date().toLocaleDateString('zh-TW')}`;
+
+    container.append(style, header, cloned);
+    document.body.appendChild(container);
+
+    const cleanup = () => { container.remove(); window.removeEventListener('afterprint', cleanup); };
+    window.addEventListener('afterprint', cleanup);
+    window.print();
+  }, [computeCropBox, activeCase]);
+
+  /* ===== 橡皮擦：在底圖上拖曳抹除 =====
+   * 一筆從 mousedown 開始、mouseup 結束，中途只更新本地暫態；
+   * 放開才寫進文件，所以一筆就是一筆歷史，Ctrl+Z 會整筆消失而不是一段一段。 */
+  const eraseStart = useCallback((e) => {
+    if (!bgImage) return;
+    e.stopPropagation();
+    const sp = svgPt(e);
+    setEraseDraft({ w: eraseWidth, pts: [[Math.round(sp.x), Math.round(sp.y)]] });
+  }, [bgImage, eraseWidth, svgPt]);
+
+  const eraseMoveTo = useCallback((e) => {
+    if (!eraseDraft) return;
+    const sp = svgPt(e);
+    setEraseDraft(d => {
+      if (!d) return d;
+      const last = d.pts[d.pts.length - 1];
+      // 每 3px 才記一點：省掉大量幾乎重疊的座標，存檔才不會膨脹
+      if (Math.abs(sp.x - last[0]) < 3 && Math.abs(sp.y - last[1]) < 3) return d;
+      return { ...d, pts: [...d.pts, [Math.round(sp.x), Math.round(sp.y)]] };
+    });
+  }, [eraseDraft, svgPt]);
+
+  const eraseEnd = useCallback(() => {
+    if (!eraseDraft) return;
+    const stroke = { id: 'er_' + Date.now(), ...eraseDraft };
+    setEraseDraft(null);
+    setBgErase(prev => [...prev, stroke]);
+  }, [eraseDraft, setBgErase]);
+
+  /* 沒有底圖就不該還停在橡皮擦模式（例如剛按了復原把底圖收回去） */
+  useEffect(() => { if (!bgImage && eraseMode) setEraseMode(false); }, [bgImage, eraseMode]);
+
+  const eraseStrokes = eraseDraft ? [...bgErase, eraseDraft] : bgErase;
 
   /* ===== SVG 尺寸計算 ===== */
   const allX = nodes.map(n => positions[n.id]?.x ?? n.dx).concat(texts.map(t => t.x + 100), freeNodes.map(fn => {
@@ -422,8 +732,9 @@ const GenogramTab = ({
     return fn.x + 100;
   }));
   const allY = nodes.map(n => positions[n.id]?.y ?? n.dy).concat(texts.map(t => t.y + 100), freeNodes.map(fn => fn.y + 100));
-  const svgW = Math.max(800, (allX.length ? Math.max(...allX) : 0) + 160);
-  const svgH = Math.max(520, (allY.length ? Math.max(...allY) : 0) + 80);
+  const bgBox = bgImageBox(bgImage);
+  const svgW = Math.max(800, (allX.length ? Math.max(...allX) : 0) + 160, bgBox ? bgBox.x + bgBox.w + 60 : 0);
+  const svgH = Math.max(520, (allY.length ? Math.max(...allY) : 0) + 80, bgBox ? bgBox.y + bgBox.h + 60 : 0);
 
   /* ===== 介面渲染 ===== */
   return (
@@ -433,88 +744,134 @@ const GenogramTab = ({
         <div className="panel-header">
           <div className="panel-header-left">
             <h2>資料輸入面板</h2>
-            <label className="toggle-switch" title="切換是否在節點上顯示年齡">
-              <span className="toggle-text">年齡</span>
-              <input type="checkbox" checked={showAgeMode} onChange={() => setShowAgeMode(!showAgeMode)} />
-              <span className="toggle-track" aria-hidden="true"></span>
-            </label>
           </div>
           <div className="panel-header-actions">
-            <button className="btn-action btn-primary" onClick={downloadJPG}>下載</button>
-            <button className="btn-action btn-danger" onClick={() => { if(window.confirm('確定重置？')) { setGen2Str(''); setGen2Cfg([]); setIndexId(null); setCohabMembers([]); setDeceasedIds([]); setDisabledIds([]); setCohabSolid(false); setPolygons([]); setTexts([]); setAges({}); setFreeNodes([]); setCustomLinks([]); setPositions({}); setIpStyle('filled'); } }}>重置</button>
+            {/* 一鍵速下載：點按鈕本體直接存高解析 PNG，其他格式收在箭頭底下 */}
+            <div className="export-menu split-btn" ref={exportMenuRef}>
+              <button className="btn-action btn-primary" onClick={downloadPNG}
+                      title="直接下載高解析 PNG（3 倍圖、白底）">⬇ 下載</button>
+              <button className="btn-action btn-primary split-caret"
+                      onClick={() => setExportOpen(o => !o)}
+                      aria-expanded={exportOpen} aria-haspopup="true"
+                      title="其他格式與列印" aria-label="其他下載與列印選項">▼</button>
+              {exportOpen && (
+                <ul className="export-menu-list">
+                  <li><button onClick={() => { downloadJPG(); setExportOpen(false); }}>🖼️ JPG 圖片</button></li>
+                  <li><button onClick={() => { downloadPNGTransparent(); setExportOpen(false); }}>🪄 PNG（透明背景）</button></li>
+                  <li><button onClick={() => { printA4(); setExportOpen(false); }}>🖨️ 列印／存成 PDF（A4）</button></li>
+                </ul>
+              )}
+            </div>
+            {/* 重置走 patchDoc，整批算一筆歷史，所以誤按可以用復原救回來 */}
+            <button className="btn-action btn-danger" onClick={() => {
+              if (!window.confirm('確定重置？重置後可用「復原」還原。')) return;
+              patchDoc({
+                gen2Str: '', gen2Cfg: [], indexId: null, cohabMembers: [], nodeAttrs: {}, lineAttrs: {},
+                cohabSolid: false, polygons: [], texts: [], ages: {},
+                freeNodes: [], customLinks: [], positions: {}, ipStyle: 'filled',
+                bgImage: null, bgErase: [],
+              }, '__reset');
+            }}>重置</button>
           </div>
         </div>
 
         <div className="quick-tool-panel">
           <div className="quick-tool-header">
-            <span className="quick-tool-title">快捷操作工具列</span>
-            <span className="quick-tool-hint">點擊或按 [Q / W / E / R] 切換。</span>
+            <span className="quick-tool-title">快捷列表</span>
+            <InfoTip text="案主 [W]／同住 [E]：點按鈕（或按快捷鍵）進入模式再點人物套用，跟以前一樣。下面的符號列可以直接拖到人物／婚姻線上放開套用，或按 [A] 進入選取、[S]／[D] 左右切換要套用的符號，選中後點畫布即可套用。" />
+            {/* 年齡是「畫布上要顯示什麼」的開關，跟這一區的標記模式同一類。
+                做成有凹凸感的按鈕：關閉時浮起、開啟時壓下去並填色，
+                原本的滑軌開關在暖色卡片上跟背景太接近，看不出開關狀態。 */}
+            <button
+              className={`btn-emboss ${showAgeMode ? 'on' : ''}`}
+              onClick={() => setShowAgeMode(!showAgeMode)}
+              aria-pressed={showAgeMode}
+              title="切換是否在節點上顯示年齡"
+            >年齡</button>
           </div>
 
           <div className="quick-tool-rows">
-
-            {/* 排 1: 案主 [Q] + 身障 [W] */}
+            {/* 案主／同住：沿用既有的「點按鈕進入模式→點人物套用」，快捷鍵
+                分別是 W／E，跟下面符號列的 A/S/D 是各自獨立的開關。
+                兩個放同一列——面板夠寬，分兩列只是白白多佔一行高度。 */}
             <div className="quick-tool-row-group">
               <div className="quick-tool-row">
                 <button className={`quick-tool-btn tone-blue ${mode === 'index' ? 'active' : ''}`}
                         onClick={() => setMode(mode === 'index' ? null : 'index')}>
-                  案主 [Q]
+                  案主 [W]
                 </button>
-                <span className="status-badge" onClick={() => setIpStyle(ipStyle === 'filled' ? 'double' : 'filled')} ref={el => wheelRef(el, ['filled', 'double'], ipStyle, setIpStyle)}
-                      style={{ fontSize: '12px', padding: '2px 10px', margin: 0, cursor: 'pointer', borderRadius: '999px', userSelect: 'none', transition: 'all 0.2s',
-                               background: ipStyle === 'filled' ? '#dbeafe' : '#e0e7ff', color: ipStyle === 'filled' ? '#1e40af' : '#3730a3', border: `1px solid ${ipStyle === 'filled' ? '#bfdbfe' : '#c7d2fe'}` }}>
+                <span className="status-badge" data-status={ipStyle}
+                      onClick={() => setIpStyle(ipStyle === 'filled' ? 'double' : 'filled')}
+                      ref={el => wheelRef(el, ['filled', 'double'], ipStyle, setIpStyle)}>
                   {ipStyle === 'filled' ? '填滿' : '雙線'}
                 </span>
               </div>
-              <div className="quick-tool-row">
-                <button className={`quick-tool-btn tone-purple ${mode === 'disabled' ? 'active' : ''}`}
-                        onClick={() => setMode(mode === 'disabled' ? null : 'disabled')}>
-                  身障 [W]
-                </button>
-              </div>
-            </div>
 
-            {/* 排 2: 同住 [E] + 死亡 [R] */}
-            <div className="quick-tool-row-group">
               <div className="quick-tool-row">
                 <button className={`quick-tool-btn tone-amber ${mode === 'cohab' ? 'active' : ''}`}
                         onClick={() => setMode(mode === 'cohab' ? null : 'cohab')}>
                   同住 [E]
                 </button>
-                <span className="status-badge" onClick={() => setCohabMode(cohabMode === 'auto' ? 'poly' : 'auto')} ref={el => wheelRef(el, ['auto', 'poly'], cohabMode, setCohabMode)}
-                      style={{ fontSize: '12px', padding: '2px 10px', margin: 0, cursor: 'pointer', borderRadius: '999px', userSelect: 'none', transition: 'all 0.2s',
-                               background: cohabMode === 'auto' ? '#fef3c7' : '#ffedd5', color: cohabMode === 'auto' ? '#b45309' : '#c2410c', border: `1px solid ${cohabMode === 'auto' ? '#fde68a' : '#fed7aa'}` }}>
+                <span className="status-badge" data-status={cohabMode}
+                      onClick={() => setCohabMode(cohabMode === 'auto' ? 'poly' : 'auto')}
+                      ref={el => wheelRef(el, ['auto', 'poly'], cohabMode, setCohabMode)}>
                   {cohabMode === 'auto' ? '自動' : '點繪'}
                 </span>
-                <span className="status-badge" onClick={() => setCohabSolid(!cohabSolid)} ref={el => wheelRef(el, [false, true], cohabSolid, setCohabSolid)}
-                      style={{ fontSize: '12px', padding: '2px 10px', margin: 0, cursor: 'pointer', borderRadius: '999px', userSelect: 'none', transition: 'all 0.2s',
-                               background: cohabSolid ? '#e0f2fe' : '#f3f4f6', color: cohabSolid ? '#0369a1' : '#4b5563', border: `1px solid ${cohabSolid ? '#bae6fd' : '#e5e7eb'}` }}>
+                <span className="status-badge" data-status={cohabSolid ? 'solid' : 'dashed'}
+                      onClick={() => setCohabSolid(!cohabSolid)}
+                      ref={el => wheelRef(el, [false, true], cohabSolid, setCohabSolid)}>
                   {cohabSolid ? '實線' : '虛線'}
                 </span>
               </div>
-              <div className="quick-tool-row">
-                <button className={`quick-tool-btn tone-red ${mode === 'deceased' ? 'active' : ''}`}
-                        onClick={() => setMode(mode === 'deceased' ? null : 'deceased')}>
-                  死亡 [R]
-                </button>
-              </div>
             </div>
+          </div>
 
+          {/* === 快捷標記（死亡／身障／慢性病／懷孕／正向親密／衝突／關係惡化） ===
+              拖曳到人物／婚姻線上放開即套用；或按 A 進入選取、S／D 左右切換，
+              選中後直接點畫布上的目標套用。點圖示本身也可以直接選中它。 */}
+          <div className="quick-mark-row">
+            {QUICK_SYMBOLS.map(s => (
+              <button
+                key={s.key}
+                className={`quick-mark-chip ${mode === s.key ? 'active' : ''} ${symbolDrag?.key === s.key ? 'dragging' : ''}`}
+                aria-label={`${s.label}：${s.desc}`}
+                aria-pressed={mode === s.key}
+                onPointerDown={e => startSymbolDrag(e, s.key)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const idx = QUICK_KEYS.indexOf(s.key);
+                  setQuickIdx(idx);
+                  setMode(m => m === s.key ? null : s.key);
+                }}
+              >
+                <SymbolPreview symbol={s} size={26} />
+                <span className="quick-mark-tip" aria-hidden="true">
+                  <b>{s.label}</b>{s.desc}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 第一代與第二代是同一條主線上的兩張卡，標題列結構刻意寫成一樣的
+            （section-title-row + label + ⓘ），字級與顏色才不會各走各的 */}
+        <div className="section">
+          <div className="section-title-row">
+            <label>第一代（父母）</label>
+            <InfoTip text="系統預設一對父母（■ 父、● 母）。右側標籤可點擊切換婚姻狀態，滑鼠停在上面滾動滾輪也可以。" />
+            <span className="status-badge" data-status={g1Status}
+                  onClick={cycleOnClick(G1_STATUSES, g1Status, setG1Status)}
+                  ref={el => wheelRef(el, G1_STATUSES, g1Status, setG1Status)}
+                  style={{ marginLeft: 'auto' }}>{G1_LABELS[g1Status]}</span>
           </div>
         </div>
 
         <div className="section">
-          <label>第一代（父母）</label>
-          <div className="sub" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span className="hint" style={{ margin: 0 }}>系統預設一對父母 ■ 父 ● 母</span>
-            <span className="status-badge" data-status={g1Status} ref={el => wheelRef(el, G1_STATUSES, g1Status, setG1Status)}>{G1_LABELS[g1Status]}</span>
+          <div className="section-title-row">
+            <label>第二代子女順序</label>
+            <InfoTip text="輸入「男/女」(中文)、「M/F」(英文) 或「1/2」(數字)，即時產生子代節點。" />
           </div>
-        </div>
-
-        <div className="section">
-          <label>第二代子女順序</label>
           <input type="text" value={gen2Str} onChange={e => onGen2Change(e.target.value)} placeholder="例：女女男男女 或 FFMMF 或 11221" />
-          <div className="hint" style={{marginTop: '6px'}}>輸入「男/女」(中文)、「M/F」(英文) 或「1/2」(數字)，即時產生子代節點。</div>
         </div>
 
         {gen2Cfg.length > 0 && (
@@ -527,7 +884,10 @@ const GenogramTab = ({
                   <span className={`child-name ${c.gender === 'M' ? 'm' : 'f'}`}>{getRelativeTitle(c.gender, i, gen2Cfg)}</span>
                   <div className="chk-wrap">
                     <label><input type="checkbox" checked={c.isMulti || false} onChange={() => toggleMulti(i)} /> 多胞胎</label>
-                    <span className="status-badge" data-status={c.partner || 'none'} ref={el => wheelRef(el, G2_STATUSES, c.partner || 'none', v => changePartner(i, v))} style={{marginLeft: '8px'}}>{G2_LABELS[c.partner || 'none']}</span>
+                    <span className="status-badge" data-status={c.partner || 'none'}
+                          onClick={cycleOnClick(G2_STATUSES, c.partner || 'none', v => changePartner(i, v))}
+                          ref={el => wheelRef(el, G2_STATUSES, c.partner || 'none', v => changePartner(i, v))}
+                          style={{ marginLeft: '8px' }}>{G2_LABELS[c.partner || 'none']}</span>
                   </div>
                 </div>
                 {c.partner !== 'none' && (
@@ -541,41 +901,82 @@ const GenogramTab = ({
           </div>
         )}
 
-        <div className="section" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px' }}>
+        <div className="section section-inline">
           <label style={{ margin: 0 }}>📝 文字方塊</label>
-          <span className="status-badge" data-status={textDirection} ref={el => wheelRef(el, TEXT_DIRS, textDirection, setTextDirection)} title="滾輪切換：橫式/直式">{TEXT_DIR_LABELS[textDirection]}</span>
-          <button onClick={addText} style={{ padding: '4px 10px', fontSize: '12px', background: '#10b981', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', marginLeft: 'auto' }}>➕ 新增</button>
-          <div className="hint" style={{ width: '100%', marginTop: '0' }}>單擊選取文字方塊（顯示框線）；雙擊可編輯內容；選取後可刪除或拖曳右下角縮放。</div>
+          <InfoTip text="單擊選取文字方塊（顯示框線）；雙擊可編輯內容；選取後可刪除或拖曳右下角縮放。" />
+          <span className="status-badge" data-status={textDirection}
+                onClick={cycleOnClick(TEXT_DIRS, textDirection, setTextDirection)}
+                ref={el => wheelRef(el, TEXT_DIRS, textDirection, setTextDirection)}
+                title="點擊或滾輪切換：橫式/直式">{TEXT_DIR_LABELS[textDirection]}</span>
+          <button className="btn-soft tone-sage" onClick={addText} style={{ marginLeft: 'auto' }}>新增</button>
         </div>
 
         <div className="section">
-          <label>🧩 自由擴充區</label>
-          <div style={{ display: 'flex', gap: '6px', marginTop: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
-            <button onClick={() => addFreeNode('M')} style={{ padding: '5px 10px', fontSize: '12px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>➕ 男性</button>
-            <button onClick={() => addFreeNode('F')} style={{ padding: '5px 10px', fontSize: '12px', background: '#ec4899', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>➕ 女性</button>
-            <button onClick={addEcoNode} style={{ padding: '5px 10px', fontSize: '12px', background: '#2563eb', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>➕ 生態圖</button>
-            <span className="status-badge" data-status={extColorMode === 'blue' ? 'horizontal' : 'none'} ref={el => wheelRef(el, EXT_COLOR_MODES, extColorMode, setExtColorMode)} title="滾輪切換：一般/編輯">{EXT_COLOR_LABELS[extColorMode]}</span>
+          <div className="section-title-row">
+            <label>🧩 自由擴充區</label>
+            <InfoTip text="拖曳擴充個體碰撞目標即可產生連線；生態圖新增後預設連結案主。「編輯」會把擴充個體改用藍色畫，方便跟原本的家系區分。" />
           </div>
-          <div className="hint" style={{ marginTop: '6px' }}>拖曳擴充個體碰撞目標即可產生連線；生態圖新增後預設連結案主。</div>
+          <div className="btn-row">
+            <button className="btn-soft tone-dust" onClick={() => addFreeNode('M')}>男性</button>
+            <button className="btn-soft tone-rose" onClick={() => addFreeNode('F')}>女性</button>
+            <button className="btn-soft tone-teal" onClick={addEcoNode}>生態圖</button>
+            {/* 原本是個只能用滾輪切換的標籤（看起來像 tag，也沒人知道可以滾）。
+                改成真的按鈕：點一下切換，滾輪仍然可用。 */}
+            <button
+              className={`btn-toggle ${extColorMode === 'blue' ? 'on' : ''}`}
+              onClick={() => setExtColorMode(extColorMode === 'blue' ? 'black' : 'blue')}
+              ref={el => wheelRef(el, EXT_COLOR_MODES, extColorMode, setExtColorMode)}
+              title="切換擴充個體的顏色：一般／編輯（滾輪亦可）"
+              aria-pressed={extColorMode === 'blue'}
+            >{EXT_COLOR_LABELS[extColorMode]}</button>
+          </div>
         </div>
+
+        <ImagePatchPanel
+          bgImage={bgImage} setBgImage={setBgImage}
+          bgErase={bgErase} setBgErase={setBgErase}
+          eraseMode={eraseMode} setEraseMode={setEraseMode}
+          eraseWidth={eraseWidth} setEraseWidth={setEraseWidth}
+        />
+
+        <CaseBar
+          cases={cases} activeCaseId={activeCaseId} activeCase={activeCase} isSaved={isSaved}
+          switchCase={switchCase} saveCase={saveCase} renameCase={renameCase}
+          deleteCase={deleteCase} exportCase={exportCase} importCase={importCase}
+          snapshots={snapshots} takeSnapshot={takeSnapshot}
+          restoreSnapshot={restoreSnapshot} removeSnapshot={removeSnapshot}
+        />
 
         {customLinks.length > 0 && (
           <div className="section">
             <label>🔗 擴充連線設定</label>
             {customLinks.map(lnk => {
               const isEcoLink = lnk.type === 'eco';
+              const isAnnotationLink = lnk.type === 'annotation';
+              const isSpecialLink = isEcoLink || isAnnotationLink;
               const srcNode = nodes.find(n => n.id === lnk.sourceId) || freeNodes.find(n => n.id === lnk.sourceId);
               const tgtNode = nodes.find(n => n.id === lnk.targetId) || freeNodes.find(n => n.id === lnk.targetId);
-              const srcLabel = srcNode?.type === 'eco' ? (srcNode?.text || '生態圖') : (srcNode?.label || (srcNode?.gender === 'M' ? '■' : '●'));
-              const tgtLabel = tgtNode?.type === 'eco' ? (tgtNode?.text || '生態圖') : (tgtNode?.label || (tgtNode?.gender === 'M' ? '■' : '●'));
+              const linkNodeLabel = (node) => {
+                if (!node) return '?';
+                if (node.type === 'eco') return node.text || '生態圖';
+                if (STANDALONE_TYPES.includes(node.type)) return SYMBOL_MAP[node.type]?.label || node.type;
+                return node.label || (node.gender === 'M' ? '■' : '●');
+              };
+              const srcLabel = linkNodeLabel(srcNode);
+              const tgtLabel = linkNodeLabel(tgtNode);
               return (
-                <div key={lnk.id} style={{ background: isEcoLink ? '#eff6ff' : '#f8fafc', border: `1px solid ${isEcoLink ? '#bfdbfe' : '#e2e8f0'}`, borderRadius: '6px', padding: '8px', marginTop: '6px' }}>
+                <div key={lnk.id} className={`link-card ${isEcoLink ? 'eco' : isAnnotationLink ? 'annotation' : ''}`}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}>
-                    <span>{isEcoLink ? '🌐 ' : ''}{srcLabel} ↔ {tgtLabel}</span>
-                    {!isEcoLink && <span className="status-badge" data-status={lnk.status} ref={el => wheelRef(el, CUSTOM_LINK_STATUSES, lnk.status, v => updateCustomLink(lnk.id, 'status', v))}>{CUSTOM_LINK_LABELS[lnk.status]}</span>}
-                    <button onClick={() => deleteCustomLink(lnk.id)} style={{ marginLeft: 'auto', padding: '2px 8px', fontSize: '11px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>刪除</button>
+                    <span>{isEcoLink ? '🌐 ' : isAnnotationLink ? '📎 ' : ''}{srcLabel} ↔ {tgtLabel}</span>
+                    {!isSpecialLink && (
+                      <span className="status-badge" data-status={lnk.status}
+                            onClick={cycleOnClick(CUSTOM_LINK_STATUSES, lnk.status, v => updateCustomLink(lnk.id, 'status', v))}
+                            ref={el => wheelRef(el, CUSTOM_LINK_STATUSES, lnk.status, v => updateCustomLink(lnk.id, 'status', v))}
+>{CUSTOM_LINK_LABELS[lnk.status]}</span>
+                    )}
+                    <button className="btn-soft tone-clay btn-soft-xs" onClick={() => deleteCustomLink(lnk.id)} style={{ marginLeft: 'auto' }}>刪除</button>
                   </div>
-                  {!isEcoLink && (
+                  {!isSpecialLink && (
                     <>
                       <div style={{ marginTop: '4px' }}>
                         <input type="text" value={lnk.kidsStr || ''} onChange={e => {
@@ -593,7 +994,10 @@ const GenogramTab = ({
                                 <span className={`child-icon ${kc.gender === 'M' ? 'm' : 'f'}`}>{kc.gender === 'M' ? '■' : '●'}</span>
                                 <span className={`child-name ${kc.gender === 'M' ? 'm' : 'f'}`}>{getRelativeTitle(kc.gender, ki, lnk.kidsCfg)}</span>
                                 <div className="chk-wrap">
-                                  <span className="status-badge" data-status={kc.partner || 'none'} ref={el => wheelRef(el, G2_STATUSES, kc.partner || 'none', v => setCustomLinks(prev => prev.map(l => l.id === lnk.id ? { ...l, kidsCfg: l.kidsCfg.map((k, idx) => idx === ki ? { ...k, partner: v, g3Str: v === 'none' ? '' : k.g3Str } : k) } : l)))}>{G2_LABELS[kc.partner || 'none']}</span>
+                                  <span className="status-badge" data-status={kc.partner || 'none'}
+                                        onClick={cycleOnClick(G2_STATUSES, kc.partner || 'none', v => setCustomLinks(prev => prev.map(l => l.id === lnk.id ? { ...l, kidsCfg: l.kidsCfg.map((k, idx) => idx === ki ? { ...k, partner: v, g3Str: v === 'none' ? '' : k.g3Str } : k) } : l)))}
+                                        ref={el => wheelRef(el, G2_STATUSES, kc.partner || 'none', v => setCustomLinks(prev => prev.map(l => l.id === lnk.id ? { ...l, kidsCfg: l.kidsCfg.map((k, idx) => idx === ki ? { ...k, partner: v, g3Str: v === 'none' ? '' : k.g3Str } : k) } : l)))}
+>{G2_LABELS[kc.partner || 'none']}</span>
                                 </div>
                               </div>
                               {kc.partner !== 'none' && (
@@ -614,24 +1018,61 @@ const GenogramTab = ({
           </div>
         )}
 
-        <div className="section">
-          <label>操作說明</label>
-          <div className="info-box">
-            快捷鍵切換模式：[Q] 案主 / [W] 身障 / [E] 同住 / [R] 死亡<br/>
-            ■ / ●：點擊節點切換案主；雙擊可輸入年齡。<br/>
-            狀態切換：滑鼠停在狀態標籤上【上下滾動滾輪】即可切換。<br/>
-            文字方塊：單擊選取/縮放；雙擊直接打字 (可 Enter 換行)。<br/>
-            自由連線：拖曳【🧩擴充個體】去碰撞目標即可產生連線；雙擊關係線可刪除。<br/>
-            生態圖：新增後預設連結案主，雙擊圖形可編輯文字，清空文字即刪除；雙擊關係線可刪除連線並重新拖曳碰撞。
-          </div>
-        </div>
       </div>
 
       {/* SVG 畫布 */}
       <div className="canvas-wrap">
-        <svg ref={svgRef} width={svgW} height={svgH} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp} onClick={() => { setSelectedTextId(null); setSelectedPolyId(null); }} style={{ background: '#fefefe', minWidth: '600px', cursor: mode === 'cohab' && cohabMode === 'poly' ? 'crosshair' : undefined }}>
-          <defs><pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="#f0f0f0" strokeWidth="0.5" /></pattern></defs>
+        <svg ref={svgRef} width={svgW} height={svgH} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp}
+             onClick={(e) => {
+               setSelectedTextId(null); setSelectedPolyId(null);
+               // 快捷列表選中「關係線」或「獨立個體」這兩類符號時，點畫布即套用
+               // ——點在節點上不會走到這裡（onClick(e,id) 已經 stopPropagation）。
+               const sym = mode && SYMBOL_MAP[mode];
+               if (!sym) return;
+               const sp = svgPt(e);
+               if (sym.kind === 'relLine') {
+                 const lineId = hitTestLine(sp);
+                 if (lineId) { toggleLineAttr(lineId, mode); recordUse(mode); }
+               } else if (sym.kind === 'standalone') {
+                 if (!hitTestNode(sp)) {
+                   setFreeNodes(prev => [...prev, { id: 'f_' + Date.now(), type: mode, x: sp.x, y: sp.y }]);
+                   recordUse(mode);
+                 }
+               }
+             }}
+             style={{ background: '#fefefe', minWidth: '600px', cursor: mode === 'cohab' && cohabMode === 'poly' ? 'crosshair' : undefined }}>
+          <defs>
+            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="#f0f0f0" strokeWidth="0.5" /></pattern>
+            {/* 橡皮擦遮罩：白＝留下、黑＝挖掉。用遮罩而不是在底圖上塗白色，
+                去背 PNG 匯出時擦過的地方才會是真的透明，而不是白色筆跡 */}
+            {bgImage && (
+              <mask id="bg-erase-mask" maskUnits="userSpaceOnUse"
+                    x={BG_X} y={BG_Y} width={bgBox.w} height={bgBox.h}>
+                <rect x={BG_X} y={BG_Y} width={bgBox.w} height={bgBox.h} fill="white" />
+                {eraseStrokes.map((st, i) => (
+                  <polyline
+                    key={st.id || `draft${i}`}
+                    points={st.pts.map(pt => pt.join(',')).join(' ')}
+                    fill="none" stroke="black" strokeWidth={st.w}
+                    strokeLinecap="round" strokeLinejoin="round"
+                  />
+                ))}
+              </mask>
+            )}
+          </defs>
           <rect width="100%" height="100%" fill="url(#grid)" />
+
+          {/* 舊圖底圖：畫在所有內容底下，新疊上去的符號才會蓋在舊圖上面 */}
+          {bgImage && (
+            <image
+              href={bgImage.src} x={BG_X} y={BG_Y}
+              width={bgBox.w} height={bgBox.h}
+              opacity={bgImage.opacity ?? 0.55}
+              mask="url(#bg-erase-mask)"
+              preserveAspectRatio="none"
+              style={{ pointerEvents: 'none' }}
+            />
+          )}
 
           {mode === 'cohab' && cohabMode === 'poly' && (
             <rect width="100%" height="100%" fill="transparent" style={{ cursor: 'crosshair' }} onClick={e => { e.stopPropagation(); const sp = svgPt(e); const pt = { x: sp.x, y: sp.y }; if (draftPoly.length >= 3 && Math.sqrt(Math.pow(pt.x - draftPoly[0].x,2) + Math.pow(pt.y - draftPoly[0].y,2)) < 15) { setPolygons(p => [...p, { id: 'pg_' + Date.now(), pts: draftPoly }]); setDraftPoly([]); setMousePos(null); return; } setDraftPoly(p => [...p, pt]); }} />
@@ -681,7 +1122,7 @@ const GenogramTab = ({
               kidPos.forEach((kp, j) => {
                 const g = groups.find(x => x.includes(j));
                 if (g) els.push(<line key={`${ln.id}-m${j}`} x1={g.map(i=>kidPos[i].x).reduce((a,b)=>a+b,0)/g.length} y1={barY} x2={kp.x} y2={kp.y - R} stroke={lineColor} strokeWidth="2" />);
-                else els.push(<line key={`${ln.id}-k${j}`} x1={kp.x} y1={barY} x2={kp.x} y2={kp.y - R} stroke={lineColor} strokeWidth="2" />);
+                else els.push(<line key={`${ln.id}-k${j}`} x1={kp.x} y1={barY} x2={kp.x} y2={kp.y - R} stroke={lineColor} strokeWidth="2" strokeDasharray={kinshipDashFor(doc.nodeAttrs[ln.kids[j]])} />);
               });
               return <g key={ln.id}>{els}</g>;
             } return null;
@@ -718,6 +1159,36 @@ const GenogramTab = ({
                 {nd.gender === 'M'
                   ? <rect x={-R} y={-R} width={SZ} height={SZ} fill={fill} stroke={nd.stroke} strokeWidth="2.5" rx="2" strokeDasharray={nd.dash} />
                   : <circle cx="0" cy="0" r={R} fill={fill} stroke={nd.stroke} strokeWidth="2.5" strokeDasharray={nd.dash} />}
+                {/* 健康狀況：半邊填色（左＝精神、右＝生理、下＝成癮，可並存）。
+                    同一節點內一律同色，病因靠位置區分。分界線只畫在填色與
+                    留白的交界，兩塊填色之間不畫 —— 否則「左半＋下半」會在
+                    正中央被畫出一個十字（見 divisionSegments 的說明）。 */}
+                {(() => {
+                  const halves = healthHalvesFor(doc.nodeAttrs[nd.id]);
+                  if (!halves.length) return null;
+                  return (
+                    <g pointerEvents="none">
+                      {halves.map(side => (
+                        <path key={side} d={halfPath(nd.gender, side, R)} fill={CLINICAL_FILL} />
+                      ))}
+                      {divisionSegments(halves, R).map(([x1, y1, x2, y2], i) => (
+                        <line key={i} x1={x1} y1={y1} x2={x2} y2={y2}
+                              stroke={CLINICAL_STROKE} strokeWidth={CLINICAL_STROKE_W} />
+                      ))}
+                    </g>
+                  );
+                })()}
+                {/* 慢性病：左上四分之一填色，跟「身心障礙」的半邊實心同色，
+                    不用淡紫色系以免被誤認成精神／生理疾病那組標記。
+                    跟上面的半邊系統各自獨立畫——只有一個象限，套不進
+                    「halves 組合」那套邏輯，也沒有必要畫額外的分界線。 */}
+                {doc.nodeAttrs[nd.id]?.includes('chronicIllness') && (
+                  <path d={quarterPath(nd.gender, R)} fill={overlayDark} pointerEvents="none" />
+                )}
+                {/* 工具箱拖曳經過時的高亮：只是預覽，放開才會真的貼上 */}
+                {symbolDrag?.hoverId === nd.id && (nd.gender === 'M'
+                  ? <rect x={-(R+8)} y={-(R+8)} width={SZ+16} height={SZ+16} rx="5" fill="none" stroke="#3b82f6" strokeWidth="2.5" strokeDasharray="5,4" pointerEvents="none" />
+                  : <circle cx="0" cy="0" r={R+8} fill="none" stroke="#3b82f6" strokeWidth="2.5" strokeDasharray="5,4" pointerEvents="none" />)}
                 {disabledIds.includes(nd.id) && (nd.gender === 'M'
                   ? <path d={`M 0,${-R} L ${-R+2},${-R} A 2,2 0 0,0 ${-R},${-R+2} L ${-R},${R-2} A 2,2 0 0,0 ${-R+2},${R} L 0,${R} Z`} fill={overlayDark} pointerEvents="none" />
                   : <path d={`M 0,${-R} A ${R},${R} 0 0,0 0,${R} Z`} fill={overlayDark} pointerEvents="none" />)}
@@ -767,13 +1238,37 @@ const GenogramTab = ({
             );
           })}
 
+          {/* === 獨立個體節點 (懷孕／流產／死產，三角形) === */}
+          {freeNodes.filter(fn => STANDALONE_TYPES.includes(fn.type)).map(fn => {
+            const r = standaloneRadius(fn.type);
+            const hasCross = fn.type !== 'pregnancy';
+            return (
+              <g key={fn.id} transform={`translate(${fn.x},${fn.y})`} style={{ cursor: drag?.id === fn.id ? 'grabbing' : 'grab' }}
+                 onMouseDown={e => onDown(e, fn.id)}
+                 onDoubleClick={e => {
+                   e.stopPropagation();
+                   if (window.confirm('確定要刪除這個標記嗎？(相關連線也會一併刪除)')) {
+                     setCustomLinks(prev => prev.filter(l => l.sourceId !== fn.id && l.targetId !== fn.id));
+                     setFreeNodes(prev => prev.filter(f => f.id !== fn.id));
+                   }
+                 }}>
+                <path d={trianglePath(r)} fill="white" stroke="#333" strokeWidth="2.5" />
+                {hasCross && triangleCrossLines(r).map(([x1, y1, x2, y2], i) => (
+                  <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#333" strokeWidth="1.5" pointerEvents="none" />
+                ))}
+                <title>{SYMBOL_MAP[fn.type]?.label}</title>
+              </g>
+            );
+          })}
+
           {/* === 自訂連線 (customLinks) === */}
           {customLinks.map(lnk => {
             const sp = pos(lnk.sourceId), tp = pos(lnk.targetId);
             const isEcoLink = lnk.type === 'eco';
+            const isAnnotationLink = lnk.type === 'annotation';
 
-            if (isEcoLink) {
-              // 生態圖連線：三角函數邊緣偵測，線條精準停在半徑邊緣
+            if (isEcoLink || isAnnotationLink) {
+              // 生態圖／獨立個體註記連線：三角函數邊緣偵測，線條精準停在半徑邊緣
               const srcNode = nodes.find(n => n.id === lnk.sourceId) || freeNodes.find(fn => fn.id === lnk.sourceId);
               const tgtNode = nodes.find(n => n.id === lnk.targetId) || freeNodes.find(fn => fn.id === lnk.targetId);
 
@@ -785,6 +1280,7 @@ const GenogramTab = ({
                   const rx = ecoRx(node.text);
                   return (rx * ECO_RY) / Math.sqrt(Math.pow(ECO_RY * Math.cos(ang), 2) + Math.pow(rx * Math.sin(ang), 2));
                 }
+                if (STANDALONE_TYPES.includes(node?.type)) return standaloneRadius(node.type);
                 if (node?.gender === 'M') {
                   const cosA = Math.abs(Math.cos(ang)), sinA = Math.abs(Math.sin(ang));
                   return cosA > sinA ? R / cosA : R / sinA;
@@ -798,10 +1294,10 @@ const GenogramTab = ({
               const x1 = sp.x + Math.cos(angle) * r1, y1 = sp.y + Math.sin(angle) * r1;
               const x2 = tp.x - Math.cos(angle) * r2, y2 = tp.y - Math.sin(angle) * r2;
 
-              const cStroke = '#2563eb';
+              const cStroke = isEcoLink ? '#2563eb' : '#8b5cf6';
               return (
                 <g key={lnk.id}>
-                  <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={cStroke} strokeWidth="2" />
+                  <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={cStroke} strokeWidth={isEcoLink ? '2' : '1.5'} strokeDasharray={isAnnotationLink ? '4,3' : undefined} />
                   <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent" strokeWidth="12" style={{ cursor: 'pointer' }} onDoubleClick={e => { e.stopPropagation(); deleteCustomLink(lnk.id); }} />
                 </g>
               );
@@ -822,6 +1318,66 @@ const GenogramTab = ({
                 <line x1={x1} y1={sp.y} x2={x2} y2={tp.y} stroke="transparent" strokeWidth="12" style={{ cursor: 'pointer' }} onDoubleClick={e => { e.stopPropagation(); deleteCustomLink(lnk.id); }} />
               </g>
             );
+          })}
+
+          {/* 工具箱拖曳「關係品質」符號經過時的高亮：只是預覽，放開才會真的貼上 */}
+          {symbolDrag?.hoverLineId && (() => {
+            const seg = marriageLineSegs.find(s => s.id === symbolDrag.hoverLineId);
+            if (!seg) return null;
+            const pa = pos(seg.a), pb = pos(seg.b);
+            return <line x1={pa.x} y1={pa.y} x2={pb.x} y2={pb.y} stroke="#3b82f6" strokeWidth="7" strokeDasharray="5,4" opacity="0.5" pointerEvents="none" />;
+          })()}
+
+          {/* === 關係品質標記 (疏離／衝突／斷絕／暴力，疊加在婚姻線上) === */}
+          {Object.entries(doc.lineAttrs).map(([lineId, key]) => {
+            const seg = marriageLineSegs.find(s => s.id === lineId);
+            if (!seg) return null;
+            const pa = pos(seg.a), pb = pos(seg.b);
+            const isLeft = pa.x <= pb.x;
+            const x1 = isLeft ? pa.x + R : pa.x - R, y1 = pa.y;
+            const x2 = isLeft ? pb.x - R : pb.x + R, y2 = pb.y;
+            const eraseW = 6;
+            if (key === 'distant') return (
+              <g key={`rel-${lineId}`} pointerEvents="none">
+                <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="white" strokeWidth={eraseW} />
+                <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#444" strokeWidth="2" strokeDasharray={DISTANT_DASH} />
+              </g>
+            );
+            if (key === 'conflict' || key === 'violence') {
+              const isViolence = key === 'violence';
+              return (
+                <g key={`rel-${lineId}`} pointerEvents="none">
+                  <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="white" strokeWidth={eraseW} />
+                  <polyline points={zigzagPoints(x1, y1, x2, y2, isViolence ? 6 : 5)} fill="none" stroke={isViolence ? '#dc2626' : '#444'} strokeWidth={isViolence ? '2.5' : '2'} />
+                </g>
+              );
+            }
+            if (key === 'cutoff') return (
+              <g key={`rel-${lineId}`} pointerEvents="none">
+                <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="white" strokeWidth={eraseW} />
+                {gapSegments(x1, y1, x2, y2).map(([sx1, sy1, sx2, sy2], i) => (
+                  <line key={i} x1={sx1} y1={sy1} x2={sx2} y2={sy2} stroke="#444" strokeWidth="2" />
+                ))}
+              </g>
+            );
+            if (key === 'closeRelationship') return (
+              <g key={`rel-${lineId}`} pointerEvents="none">
+                <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="white" strokeWidth={eraseW} />
+                {doubleLineSegments(x1, y1, x2, y2).map(([sx1, sy1, sx2, sy2], i) => (
+                  <line key={i} x1={sx1} y1={sy1} x2={sx2} y2={sy2} stroke="#444" strokeWidth="2" />
+                ))}
+              </g>
+            );
+            if (key === 'deteriorating') return (
+              <g key={`rel-${lineId}`} pointerEvents="none">
+                <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="white" strokeWidth={eraseW} />
+                <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#444" strokeWidth="2" />
+                {hatchSegments(x1, y1, x2, y2).map(([sx1, sy1, sx2, sy2], i) => (
+                  <line key={i} x1={sx1} y1={sy1} x2={sx2} y2={sy2} stroke="#444" strokeWidth="2" />
+                ))}
+              </g>
+            );
+            return null;
           })}
 
           {texts.map(t => {
@@ -863,8 +1419,30 @@ const GenogramTab = ({
               </g>
             );
           })}
+
+          {/* 橡皮擦模式的擷取層：蓋在最上面，讓節點與文字方塊在擦除時不會被誤拖。
+              fill 透明所以不影響匯出結果。 */}
+          {eraseMode && bgImage && (
+            <rect
+              width="100%" height="100%" fill="transparent"
+              style={{ cursor: 'crosshair' }}
+              onMouseDown={eraseStart}
+              onMouseMove={eraseMoveTo}
+              onMouseUp={eraseEnd}
+              onMouseLeave={eraseEnd}
+              onClick={e => e.stopPropagation()}
+            />
+          )}
         </svg>
       </div>
+
+      {/* 跟著游標的拖曳分身：讓使用者清楚知道手上拿著哪個符號 */}
+      {symbolDrag && (
+        <div className="sym-ghost" style={{ left: symbolDrag.x, top: symbolDrag.y }}>
+          <SymbolPreview symbol={SYMBOL_MAP[symbolDrag.key]} size={18} />
+          {SYMBOL_MAP[symbolDrag.key].label}
+        </div>
+      )}
     </div>
   );
 };

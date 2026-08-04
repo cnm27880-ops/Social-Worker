@@ -215,8 +215,8 @@ const RecordTab = ({
     <div className="record-layout">
       <div className="record-form panel">
         <h2 style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>案主基本資料 {indexId ? <span style={{fontSize: '12px', background:'#1e293b', color:'white', padding:'2px 8px', borderRadius:'10px', marginLeft: '6px', verticalAlign: 'middle'}}>已於家系圖指定案主</span> : <span style={{fontSize: '12px', color:'#ef4444', marginLeft: '6px', verticalAlign: 'middle'}}>尚未指定案主</span>}</div>
-          <button onClick={() => setIsEditingTags(!isEditingTags)} style={{ padding: '4px 8px', fontSize: '12px', background: isEditingTags ? '#ef4444' : '#64748b', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}>
+          <div>案主基本資料 {indexId ? <span className="ip-pill">已於家系圖指定案主</span> : <span className="ip-pill warn">尚未指定案主</span>}</div>
+          <button className={`btn-soft ${isEditingTags ? 'tone-clay' : 'tone-muted'}`} onClick={() => setIsEditingTags(!isEditingTags)}>
             {isEditingTags ? '✅ 完成編輯' : '✏️ 編輯標籤'}
           </button>
         </h2>
@@ -267,8 +267,8 @@ const RecordTab = ({
           return (
             <div key={i} className="fam-card" style={{ opacity: isDeceased ? 0.6 : 1 }}>
               <div className="fam-title">
-                <span>{title} {isDeceased && <span style={{color: '#ef4444'}}>(已歿)</span>}</span>
-                <label style={{fontSize: '12px', color: '#3b82f6', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer'}}>
+                <span>{title} {isDeceased && <span className="tag-warn">(已歿)</span>}</span>
+                <label className="primary-contact">
                   <input type="checkbox" checked={ext.isPrimary} onChange={e => handleFamExtra(i, 'isPrimary', e.target.checked)} disabled={isDeceased} /> 主要聯絡人
                 </label>
               </div>
@@ -317,10 +317,10 @@ const RecordTab = ({
               const isDeceased = deceasedIds.includes(kidKey);
               const ext = famExtras[kidKey] || { location: '', job: '', isPrimary: false, note: '' };
               allCards.push(
-                <div key={kidKey} className="fam-card" style={{ opacity: isDeceased ? 0.6 : 1, borderLeft: '3px solid #8b5cf6' }}>
+                <div key={kidKey} className="fam-card fam-card-g3" style={{ opacity: isDeceased ? 0.6 : 1 }}>
                   <div className="fam-title">
-                    <span>{title} {isDeceased && <span style={{color: '#ef4444'}}>(已歿)</span>}</span>
-                    <label style={{fontSize: '12px', color: '#3b82f6', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer'}}>
+                    <span>{title} {isDeceased && <span className="tag-warn">(已歿)</span>}</span>
+                    <label className="primary-contact">
                       <input type="checkbox" checked={ext.isPrimary || false} onChange={e => handleFamExtra(kidKey, 'isPrimary', e.target.checked)} disabled={isDeceased} /> 主要聯絡人
                     </label>
                   </div>
@@ -356,8 +356,8 @@ const RecordTab = ({
         <div className="section">
           <label>💾 系統資料備份與還原</label>
           <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-            <button onClick={exportBackup} style={{ flex: 1, padding: '8px', fontSize: '13px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>📥 匯出設定檔</button>
-            <label style={{ flex: 1, padding: '8px', fontSize: '13px', background: '#10b981', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', textAlign: 'center', margin: 0 }}>
+            <button onClick={exportBackup} className="btn-soft tone-dust btn-soft-wide">📥 匯出設定檔</button>
+            <label className="btn-soft tone-sage btn-soft-wide">
               📤 匯入設定檔
               <input type="file" accept=".json" onChange={importBackup} style={{ display: 'none' }} />
             </label>
@@ -369,15 +369,15 @@ const RecordTab = ({
 
       {/* 右側即時預覽區 */}
       <div className="record-preview">
-        <h2 style={{ margin: 0, border: 'none', padding: 0, color: '#1e293b', fontSize: '18px', marginBottom: '14px' }}>✨ 個案紀錄即時預覽</h2>
+        <h2 className="record-preview-title">✨ 個案紀錄即時預覽</h2>
         <textarea value={generatedText} readOnly style={{ minHeight: '250px' }} />
-        <button onClick={copyRecord} style={{ padding: '12px', fontSize: '16px', background: '#10b981', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 4px 6px -1px rgba(16, 185, 129, 0.4)' }}>
+        <button onClick={copyRecord} className="btn-copy">
           📋 一鍵複製至剪貼簿
         </button>
 
         {/* 自由保存區 */}
-        <div style={{ marginTop: '20px', padding: '16px', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-          <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', color: '#1e293b' }}>📝 自由保存區</h3>
+        <div className="free-note-box">
+          <h3 className="free-note-title">📝 自由保存區</h3>
           {savedNotes.map((note, idx) => (
             <div key={idx} style={{ display: 'flex', gap: '6px', marginBottom: '8px', alignItems: 'center' }}>
               <textarea
@@ -388,19 +388,19 @@ const RecordTab = ({
                   setSavedNotes(updated);
                 }}
                 placeholder={`備註 ${idx + 1}`}
-                style={{ flex: 1, minHeight: '40px', resize: 'vertical', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px', fontFamily: 'inherit' }}
+                className="free-note-input"
               />
               {savedNotes.length > 1 && (
                 <button
                   onClick={() => setSavedNotes(prev => prev.filter((_, i) => i !== idx))}
-                  style={{ padding: '4px 8px', fontSize: '12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                  className="btn-soft tone-clay"
                 >✕</button>
               )}
             </div>
           ))}
           <button
             onClick={() => setSavedNotes(prev => [...prev, ''])}
-            style={{ padding: '8px 16px', fontSize: '14px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
+            className="btn-soft tone-dust"
           >➕ 新增一行</button>
         </div>
       </div>
