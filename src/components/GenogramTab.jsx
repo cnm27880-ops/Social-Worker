@@ -6,7 +6,8 @@ import {
   parseGenders, getSmoothPath, getRelativeTitle
 } from '../utils/helpers';
 import CaseBar from './CaseBar';
-import SnapshotPanel from './SnapshotPanel';
+import Collapsible from './Collapsible';
+import InfoTip from './InfoTip';
 import SymbolToolbox, { SymbolPreview, loadRecent, pushRecent } from './SymbolToolbox';
 import {
   SYMBOL_MAP, halfPath, healthHalvesFor, divisionSegments, kinshipDashFor,
@@ -651,16 +652,13 @@ const GenogramTab = ({
           cases={cases} activeCaseId={activeCaseId} activeCase={activeCase}
           switchCase={switchCase} createCase={createCase} renameCase={renameCase}
           deleteCase={deleteCase} exportCase={exportCase} importCase={importCase}
+          snapshots={snapshots} takeSnapshot={takeSnapshot}
+          restoreSnapshot={restoreSnapshot} removeSnapshot={removeSnapshot}
         />
 
         <div className="panel-header">
           <div className="panel-header-left">
             <h2>資料輸入面板</h2>
-            <label className="toggle-switch" title="切換是否在節點上顯示年齡">
-              <span className="toggle-text">年齡</span>
-              <input type="checkbox" checked={showAgeMode} onChange={() => setShowAgeMode(!showAgeMode)} />
-              <span className="toggle-track" aria-hidden="true"></span>
-            </label>
           </div>
           <div className="panel-header-actions">
             <div className="export-menu" ref={exportMenuRef}>
@@ -708,15 +706,17 @@ const GenogramTab = ({
           </span>
         </div>
 
-        <SnapshotPanel
-          snapshots={snapshots} takeSnapshot={takeSnapshot}
-          restoreSnapshot={restoreSnapshot} removeSnapshot={removeSnapshot}
-        />
-
         <div className="quick-tool-panel">
           <div className="quick-tool-header">
             <span className="quick-tool-title">快捷操作工具列</span>
-            <span className="quick-tool-hint">點擊或按 [Q / W / E / R] 切換。</span>
+            <InfoTip text="點擊或按 [Q / W / E / R] 切換模式，再點畫布上的人物即可標記。狀態標籤可用滾輪切換。" />
+            {/* 年齡是「畫布上要顯示什麼」的開關，跟這一區的標記模式同一類；
+                放回面板頂列的話 350px 寬度容不下標題＋開關＋兩顆按鈕，會把「年齡」擠成兩行 */}
+            <label className="toggle-switch" title="切換是否在節點上顯示年齡">
+              <span className="toggle-text">年齡</span>
+              <input type="checkbox" checked={showAgeMode} onChange={() => setShowAgeMode(!showAgeMode)} />
+              <span className="toggle-track" aria-hidden="true"></span>
+            </label>
           </div>
 
           <div className="quick-tool-rows">
@@ -728,9 +728,9 @@ const GenogramTab = ({
                         onClick={() => setMode(mode === 'index' ? null : 'index')}>
                   案主 [Q]
                 </button>
-                <span className="status-badge" onClick={() => setIpStyle(ipStyle === 'filled' ? 'double' : 'filled')} ref={el => wheelRef(el, ['filled', 'double'], ipStyle, setIpStyle)}
-                      style={{ fontSize: '12px', padding: '2px 10px', margin: 0, cursor: 'pointer', borderRadius: '999px', userSelect: 'none', transition: 'all 0.2s',
-                               background: ipStyle === 'filled' ? '#dbeafe' : '#e0e7ff', color: ipStyle === 'filled' ? '#1e40af' : '#3730a3', border: `1px solid ${ipStyle === 'filled' ? '#bfdbfe' : '#c7d2fe'}` }}>
+                <span className="status-badge" data-status={ipStyle} style={{ cursor: 'pointer' }}
+                      onClick={() => setIpStyle(ipStyle === 'filled' ? 'double' : 'filled')}
+                      ref={el => wheelRef(el, ['filled', 'double'], ipStyle, setIpStyle)}>
                   {ipStyle === 'filled' ? '填滿' : '雙線'}
                 </span>
               </div>
@@ -749,14 +749,14 @@ const GenogramTab = ({
                         onClick={() => setMode(mode === 'cohab' ? null : 'cohab')}>
                   同住 [E]
                 </button>
-                <span className="status-badge" onClick={() => setCohabMode(cohabMode === 'auto' ? 'poly' : 'auto')} ref={el => wheelRef(el, ['auto', 'poly'], cohabMode, setCohabMode)}
-                      style={{ fontSize: '12px', padding: '2px 10px', margin: 0, cursor: 'pointer', borderRadius: '999px', userSelect: 'none', transition: 'all 0.2s',
-                               background: cohabMode === 'auto' ? '#fef3c7' : '#ffedd5', color: cohabMode === 'auto' ? '#b45309' : '#c2410c', border: `1px solid ${cohabMode === 'auto' ? '#fde68a' : '#fed7aa'}` }}>
+                <span className="status-badge" data-status={cohabMode} style={{ cursor: 'pointer' }}
+                      onClick={() => setCohabMode(cohabMode === 'auto' ? 'poly' : 'auto')}
+                      ref={el => wheelRef(el, ['auto', 'poly'], cohabMode, setCohabMode)}>
                   {cohabMode === 'auto' ? '自動' : '點繪'}
                 </span>
-                <span className="status-badge" onClick={() => setCohabSolid(!cohabSolid)} ref={el => wheelRef(el, [false, true], cohabSolid, setCohabSolid)}
-                      style={{ fontSize: '12px', padding: '2px 10px', margin: 0, cursor: 'pointer', borderRadius: '999px', userSelect: 'none', transition: 'all 0.2s',
-                               background: cohabSolid ? '#e0f2fe' : '#f3f4f6', color: cohabSolid ? '#0369a1' : '#4b5563', border: `1px solid ${cohabSolid ? '#bae6fd' : '#e5e7eb'}` }}>
+                <span className="status-badge" data-status={cohabSolid ? 'solid' : 'dashed'} style={{ cursor: 'pointer' }}
+                      onClick={() => setCohabSolid(!cohabSolid)}
+                      ref={el => wheelRef(el, [false, true], cohabSolid, setCohabSolid)}>
                   {cohabSolid ? '實線' : '虛線'}
                 </span>
               </div>
@@ -780,9 +780,11 @@ const GenogramTab = ({
         </div>
 
         <div className="section">
-          <label>第二代子女順序</label>
+          <div className="section-title-row">
+            <label>第二代子女順序</label>
+            <InfoTip text="輸入「男/女」(中文)、「M/F」(英文) 或「1/2」(數字)，即時產生子代節點。" />
+          </div>
           <input type="text" value={gen2Str} onChange={e => onGen2Change(e.target.value)} placeholder="例：女女男男女 或 FFMMF 或 11221" />
-          <div className="hint" style={{marginTop: '6px'}}>輸入「男/女」(中文)、「M/F」(英文) 或「1/2」(數字)，即時產生子代節點。</div>
         </div>
 
         {gen2Cfg.length > 0 && (
@@ -809,23 +811,25 @@ const GenogramTab = ({
           </div>
         )}
 
-        <div className="section" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px' }}>
+        <div className="section section-inline">
           <label style={{ margin: 0 }}>📝 文字方塊</label>
+          <InfoTip text="單擊選取文字方塊（顯示框線）；雙擊可編輯內容；選取後可刪除或拖曳右下角縮放。" />
           <span className="status-badge" data-status={textDirection} ref={el => wheelRef(el, TEXT_DIRS, textDirection, setTextDirection)} title="滾輪切換：橫式/直式">{TEXT_DIR_LABELS[textDirection]}</span>
-          <button onClick={addText} style={{ padding: '4px 10px', fontSize: '12px', background: '#10b981', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', marginLeft: 'auto' }}>➕ 新增</button>
-          <div className="hint" style={{ width: '100%', marginTop: '0' }}>單擊選取文字方塊（顯示框線）；雙擊可編輯內容；選取後可刪除或拖曳右下角縮放。</div>
+          <button className="btn-soft tone-sage" onClick={addText} style={{ marginLeft: 'auto' }}>➕ 新增</button>
         </div>
 
-        <div className="section">
-          <label>🧩 自由擴充區</label>
-          <div style={{ display: 'flex', gap: '6px', marginTop: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
-            <button onClick={() => addFreeNode('M')} style={{ padding: '5px 10px', fontSize: '12px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>➕ 男性</button>
-            <button onClick={() => addFreeNode('F')} style={{ padding: '5px 10px', fontSize: '12px', background: '#ec4899', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>➕ 女性</button>
-            <button onClick={addEcoNode} style={{ padding: '5px 10px', fontSize: '12px', background: '#2563eb', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>➕ 生態圖</button>
+        <Collapsible
+          title="🧩 自由擴充區"
+          tip="拖曳擴充個體碰撞目標即可產生連線；生態圖新增後預設連結案主。"
+          badge={freeNodes.length || null}
+        >
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <button className="btn-soft tone-dust" onClick={() => addFreeNode('M')}>➕ 男性</button>
+            <button className="btn-soft tone-rose" onClick={() => addFreeNode('F')}>➕ 女性</button>
+            <button className="btn-soft tone-teal" onClick={addEcoNode}>➕ 生態圖</button>
             <span className="status-badge" data-status={extColorMode === 'blue' ? 'horizontal' : 'none'} ref={el => wheelRef(el, EXT_COLOR_MODES, extColorMode, setExtColorMode)} title="滾輪切換：一般/編輯">{EXT_COLOR_LABELS[extColorMode]}</span>
           </div>
-          <div className="hint" style={{ marginTop: '6px' }}>拖曳擴充個體碰撞目標即可產生連線；生態圖新增後預設連結案主。</div>
-        </div>
+        </Collapsible>
 
         {customLinks.length > 0 && (
           <div className="section">
@@ -845,11 +849,11 @@ const GenogramTab = ({
               const srcLabel = linkNodeLabel(srcNode);
               const tgtLabel = linkNodeLabel(tgtNode);
               return (
-                <div key={lnk.id} style={{ background: isEcoLink ? '#eff6ff' : isAnnotationLink ? '#f5f3ff' : '#f8fafc', border: `1px solid ${isEcoLink ? '#bfdbfe' : isAnnotationLink ? '#ddd6fe' : '#e2e8f0'}`, borderRadius: '6px', padding: '8px', marginTop: '6px' }}>
+                <div key={lnk.id} className={`link-card ${isEcoLink ? 'eco' : isAnnotationLink ? 'annotation' : ''}`}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}>
                     <span>{isEcoLink ? '🌐 ' : isAnnotationLink ? '📎 ' : ''}{srcLabel} ↔ {tgtLabel}</span>
                     {!isSpecialLink && <span className="status-badge" data-status={lnk.status} ref={el => wheelRef(el, CUSTOM_LINK_STATUSES, lnk.status, v => updateCustomLink(lnk.id, 'status', v))}>{CUSTOM_LINK_LABELS[lnk.status]}</span>}
-                    <button onClick={() => deleteCustomLink(lnk.id)} style={{ marginLeft: 'auto', padding: '2px 8px', fontSize: '11px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>刪除</button>
+                    <button className="btn-soft tone-clay btn-soft-xs" onClick={() => deleteCustomLink(lnk.id)} style={{ marginLeft: 'auto' }}>刪除</button>
                   </div>
                   {!isSpecialLink && (
                     <>

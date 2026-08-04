@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import SnapshotMenu from './SnapshotMenu';
 
 const fmtTime = (ts) => {
   if (!ts) return '';
@@ -11,33 +12,42 @@ const fmtTime = (ts) => {
 };
 
 /**
- * 案件列：切換／新增／改名／刪除／匯出／匯入。
+ * 案件列：切換／新增／改名／刪除／匯出／匯入／時間軸快照。
  *
  * 案件名稱預設是化名（案主 A、案主 B…），點一下就能改。
+ * 快照收在這一列的 🕰️ 底下 —— 快照本來就是跟著案件走的資料。
  */
 const CaseBar = ({
   cases, activeCaseId, activeCase,
   switchCase, createCase, renameCase, deleteCase, exportCase, importCase,
+  snapshots, takeSnapshot, restoreSnapshot, removeSnapshot,
 }) => {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(false);          // 案件切換選單
+  const [snapOpen, setSnapOpen] = useState(false);  // 時間軸快照
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const [error, setError] = useState('');
   const wrapRef = useRef(null);
   const fileRef = useRef(null);
 
-  /* 點外面就收起選單 */
+  /* 點外面就把這一列開著的東西都收起來。兩個彈窗都放在案件列底下，
+   * 位置會重疊，所以由這裡統一管，開一個就關掉另一個。 */
   useEffect(() => {
-    if (!open) return;
-    const onDown = (e) => { if (!wrapRef.current?.contains(e.target)) setOpen(false); };
+    if (!open && !snapOpen) return;
+    const onDown = (e) => {
+      if (wrapRef.current?.contains(e.target)) return;
+      setOpen(false);
+      setSnapOpen(false);
+    };
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
-  }, [open]);
+  }, [open, snapOpen]);
 
   const startEdit = () => {
     setDraft(activeCase?.name || '');
     setEditing(true);
     setOpen(false);
+    setSnapOpen(false);
   };
 
   const commitEdit = () => {
@@ -90,7 +100,7 @@ const CaseBar = ({
 
         <button
           className={`case-caret ${open ? 'open' : ''}`}
-          onClick={() => setOpen(o => !o)}
+          onClick={() => { setOpen(o => !o); setSnapOpen(false); }}
           title="切換案件"
           aria-label="切換案件"
           aria-expanded={open}
@@ -98,6 +108,13 @@ const CaseBar = ({
 
         <span className="case-bar-spacer" />
 
+        <SnapshotMenu
+          snapshots={snapshots} takeSnapshot={takeSnapshot}
+          restoreSnapshot={restoreSnapshot} removeSnapshot={removeSnapshot}
+          open={snapOpen}
+          onToggle={() => { setSnapOpen(o => !o); setOpen(false); }}
+          onClose={() => setSnapOpen(false)}
+        />
         <button className="case-tool" onClick={createCase} title="新增案件">＋</button>
         <button className="case-tool" onClick={exportCase} title="匯出成 .json 檔">⤓</button>
         <button className="case-tool" onClick={() => fileRef.current?.click()} title="從 .json 檔匯入">⤒</button>

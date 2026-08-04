@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import Collapsible from './Collapsible';
 import {
   CATEGORIES, SYMBOLS, halfPath, divisionSegments,
   CLINICAL_FILL, CLINICAL_STROKE,
@@ -83,6 +84,8 @@ export const SymbolPreview = ({ symbol, size = 24 }) => {
  * 只負責「拿起」：按住某個符號後把它交給畫布，實際要不要貼上、貼到誰身上
  * 由畫布在放開的那一刻決定（見 GenogramTab 的 symbolDrag）。
  * 拖曳過程中經過的節點不會被觸發，只有放開的位置算數。
+ *
+ * 整個工具箱預設收合：冷門符號不該跟第一代／第二代這條主線搶垂直空間。
  */
 const SymbolToolbox = ({ onPickUp, recent, activeKey }) => {
   const [openCat, setOpenCat] = useState('common');
@@ -103,10 +106,11 @@ const SymbolToolbox = ({ onPickUp, recent, activeKey }) => {
   );
 
   return (
-    <div className="section sym-toolbox">
-      <label>積木工具箱</label>
-      <p className="sym-hint">拖曳符號到人物上放開即可標記；再拖一次可取消。</p>
-
+    <Collapsible
+      title="🧱 積木工具箱"
+      tip="拖曳符號到人物上放開即可標記；拖到婚姻線上是關係品質，拖到空白處新增獨立個體。再拖一次可取消。"
+      badge={SYMBOLS.length}
+    >
       {recentSymbols.length > 0 && (
         <div className="sym-recent">
           <span className="sym-recent-title">最近使用</span>
@@ -139,7 +143,7 @@ const SymbolToolbox = ({ onPickUp, recent, activeKey }) => {
           </div>
         );
       })}
-    </div>
+    </Collapsible>
   );
 };
 
