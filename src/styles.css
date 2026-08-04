@@ -114,35 +114,29 @@ body {
 .infotip:hover .infotip-bubble,
 .infotip:focus-visible .infotip-bubble { opacity: 1; visibility: visible; transform: translateY(0); }
 
-/* ===== 現代風 ON/OFF 切換 ===== */
-.toggle-switch {
-  display: inline-flex; align-items: center; gap: 8px;
-  cursor: pointer; user-select: none;
-}
-.toggle-switch .toggle-text {
-  font-size: 12px; font-weight: 600; color: var(--ink-mid); letter-spacing: 0.3px;
-  white-space: nowrap;
-}
-.toggle-switch input { position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none; }
-.toggle-switch .toggle-track {
-  position: relative;
-  width: 38px; height: 20px;
-  background: var(--wash-warm); border: 1px solid var(--line); border-radius: 999px;
-  transition: background 0.25s ease, border-color 0.25s ease;
+/* ===== 凹凸感切換按鈕（年齡） =====
+ * 關閉時浮起（上緣高光＋下緣陰影），開啟時整顆壓進去（內陰影＋填色）。
+ * 原本用滑軌開關，但它在暖色卡片上跟背景太接近，看不出目前是開還是關。 */
+.btn-emboss {
   flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 26px; padding: 0 14px; cursor: pointer;
+  border: 1px solid var(--line); border-radius: var(--r-xs);
+  background: linear-gradient(180deg, #fff, var(--wash-warm));
+  color: var(--ink); font-family: inherit;
+  font-size: 12px; font-weight: 700; letter-spacing: 0.5px; line-height: 1;
+  box-shadow: inset 0 1px 0 #fff, 0 1px 1.5px rgba(74, 69, 61, 0.18);
+  transition: background 0.15s ease, color 0.15s ease,
+              border-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
 }
-.toggle-switch .toggle-track::before {
-  content: ''; position: absolute; top: 2px; left: 2px;
-  width: 14px; height: 14px;
-  background: #fff; border-radius: 50%;
-  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
-  box-shadow: 0 1px 3px rgba(74, 69, 61, 0.22);
+.btn-emboss:hover { border-color: var(--ink-faint); }
+.btn-emboss:active { transform: translateY(1px); box-shadow: inset 0 2px 4px rgba(74, 69, 61, 0.28); }
+.btn-emboss.on {
+  background: var(--sage); border-color: var(--sage-d); color: #fff;
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.32), inset 0 -1px 0 rgba(255, 255, 255, 0.18);
 }
-.toggle-switch input:checked + .toggle-track { background: var(--sage); border-color: var(--sage-d); }
-.toggle-switch input:checked + .toggle-track::before { transform: translateX(18px); }
-.toggle-switch input:focus-visible + .toggle-track {
-  outline: 2px solid rgba(139, 158, 138, 0.4); outline-offset: 2px;
-}
+.btn-emboss.on:hover { background: var(--sage-d); border-color: var(--sage-d); }
+.btn-emboss:focus-visible { outline: 2px solid rgba(87, 103, 79, 0.45); outline-offset: 2px; }
 
 /* ===== 操作按鈕（下載 / 重置） ===== */
 .btn-action {
@@ -209,41 +203,25 @@ body {
 }
 .split-btn > .btn-action:hover { transform: none; }
 
-/* ===== 復原 / 重做 ===== */
-.btn-icon {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 26px; height: 26px; padding: 0; flex-shrink: 0;
-  font-size: 14px; line-height: 1;
-  border: 1px solid var(--line); border-radius: var(--r-xs);
-  background: var(--card); color: var(--ink-mid); cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
-}
-.btn-icon:hover:not(:disabled) { background: var(--dust-w); color: var(--dust-d); border-color: var(--dust-bd); }
-.btn-icon:active:not(:disabled) { background: var(--wash-warm); }
-.btn-icon:disabled { opacity: 0.35; cursor: default; }
-
-/* ===== 舊圖修補 ===== */
-.bg-slider { display: flex; align-items: center; gap: 8px; margin-top: 7px; font-size: 11.5px; color: var(--ink-mid); }
-.bg-slider > span { flex-shrink: 0; width: 36px; }
-.bg-slider > b { flex-shrink: 0; width: 40px; text-align: right; color: var(--ink); font-variant-numeric: tabular-nums; }
-.bg-slider input[type="range"] { flex: 1 1 auto; min-width: 0; accent-color: var(--dust); height: 18px; }
-.bg-tools { margin-top: 9px; }
-.bg-erase-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 9px; }
-
 /* ===== 案件列 ===== */
 .case-bar { position: relative; margin-bottom: 12px; }
 .case-bar-main {
-  display: flex; align-items: center; gap: 6px;
-  padding: 7px 9px; border-radius: var(--r-sm);
+  display: flex; align-items: center; gap: 5px;
+  padding: 6px 8px; border-radius: var(--r-sm);
   background: var(--wash); border: 1px solid var(--line);
 }
-.case-bar-icon { font-size: 14px; line-height: 1; flex-shrink: 0; }
-.case-bar-spacer { flex: 1 1 auto; }
+.case-bar-icon { display: inline-flex; flex-shrink: 0; color: var(--ink-soft); }
+.case-bar-spacer { flex: 1 1 auto; min-width: 0; }
+
+/* 這一列的圖示一律 inline SVG：⤓ ⤒ 這類冷門 Unicode 箭頭在不同系統的
+ * 字型覆蓋率差很多，缺字時會變成豆腐或被換成尺寸完全不同的字符，
+ * 把整列的高度與對齊擠歪。SVG 尺寸由自己決定，跨平台一致。 */
+.case-icon { width: 15px; height: 15px; display: block; }
 
 .case-name {
   border: none; background: none; cursor: pointer; padding: 2px 4px;
   font-size: 13.5px; font-weight: 700; color: var(--ink);
-  border-radius: var(--r-xs); max-width: 132px;
+  border-radius: var(--r-xs); max-width: 108px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .case-name:hover { background: var(--wash-warm); }
@@ -259,10 +237,11 @@ body {
   color: var(--sage-d); font-size: 11px; font-weight: 700; white-space: nowrap;
 }
 
-/* 儲存案件：還沒存過時是有底色的主要動作，存過後縮成一顆工具鈕 */
+/* 儲存：還沒存過時是有底色的主要動作，存過後降為一般工具鈕（量體不變，
+ * 位置才不會在按下儲存的瞬間整列跳動） */
 .case-save {
-  flex-shrink: 0; display: inline-flex; align-items: center; gap: 3px;
-  height: 24px; padding: 0 8px; cursor: pointer;
+  flex-shrink: 0; display: inline-flex; align-items: center; gap: 4px;
+  height: 24px; padding: 0 9px 0 7px; cursor: pointer;
   border: 1px solid var(--line); border-radius: var(--r-xs);
   background: var(--card); color: var(--ink-mid);
   font-family: inherit; font-size: 12px; font-weight: 700; line-height: 1;
@@ -272,7 +251,7 @@ body {
 .case-save.primary { background: var(--dust); border-color: var(--dust); color: #fff; }
 .case-save.primary:hover { background: var(--dust-d); border-color: var(--dust-d); color: #fff; }
 .case-name-input {
-  width: 132px; padding: 3px 7px; font-size: 13.5px; font-weight: 700;
+  width: 118px; padding: 3px 7px; font-size: 13.5px; font-weight: 700;
   border: 1px solid var(--dust); border-radius: var(--r-xs); outline: none; color: var(--ink);
 }
 .case-caret {
@@ -415,8 +394,7 @@ body {
 .quick-tool-header {
   display: flex; align-items: center; gap: 6px; margin-bottom: 10px;
 }
-.quick-tool-header .history-actions { display: inline-flex; gap: 4px; margin-left: 6px; flex-shrink: 0; }
-.quick-tool-header .toggle-switch { margin-left: auto; }
+.quick-tool-header .btn-emboss { margin-left: auto; }
 .quick-tool-title {
   display: inline-flex; align-items: center; gap: 6px;
   font-size: 13px; font-weight: 700; color: var(--ink);
@@ -582,34 +560,46 @@ svg { display: block; user-select: none; }
   background: var(--wash-warm); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px;
 }
 
-.sym-cat + .sym-cat { margin-top: 5px; }
-.sym-cat-head {
-  width: 100%; display: flex; align-items: center; gap: 7px;
-  padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--r-xs);
-  background: var(--card); cursor: pointer;
-  font-size: 12.5px; font-weight: 700; color: var(--ink);
-}
-.sym-cat-head:hover { background: var(--wash); border-color: #DDD7C7; }
-.sym-cat-head.open { background: var(--dust-w); border-color: var(--dust-bd); color: var(--dust-d); }
+/* 分類全部展開，標題只是個小標（不再是可點的收合按鈕） */
+.sym-cat { position: relative; }
+.sym-cat + .sym-cat { margin-top: 10px; }
+.sym-cat-head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.sym-cat-name { font-size: 11.5px; font-weight: 700; color: var(--ink-soft); letter-spacing: 0.3px; }
 .sym-cat-count {
-  margin-left: auto; font-size: 10.5px; font-weight: 700; color: var(--ink-soft);
-  background: var(--wash-warm); border-radius: 999px; padding: 1px 7px;
+  font-size: 10px; font-weight: 700; color: var(--ink-soft);
+  background: var(--wash-warm); border-radius: 999px; padding: 1px 6px;
 }
-.sym-cat-head.open .sym-cat-count { background: #fff; color: var(--dust-d); }
-.sym-cat-caret { font-size: 11px; color: var(--ink-faint); transition: transform 0.15s ease; }
-.sym-cat-head.open .sym-cat-caret { transform: rotate(180deg); }
 
-.sym-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin-top: 6px; }
+/* 只放符號，名稱滑過才浮出來，所以格子改成正方形小格、一排放得下更多 */
+.sym-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; }
 .sym-chip {
-  display: flex; align-items: center; gap: 7px;
-  padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--r-xs);
-  background: var(--card); cursor: grab; touch-action: none;
-  font-size: 12px; font-weight: 600; color: var(--ink); text-align: left;
+  /* 刻意不設 position：讓 .sym-tip 的定位基準往上落到 .sym-cat */
+  display: flex; align-items: center; justify-content: center;
+  aspect-ratio: 1; padding: 0;
+  border: 1px solid var(--line); border-radius: var(--r-xs);
+  background: var(--card); cursor: grab; touch-action: none; color: var(--ink);
+  transition: border-color 0.15s ease, background 0.15s ease;
 }
-.sym-chip:hover { border-color: var(--dust-bd); background: var(--dust-w); }
+.sym-chip:hover { border-color: var(--dust); background: var(--dust-w); }
 .sym-chip.dragging { opacity: 0.4; cursor: grabbing; }
 .sym-chip svg { flex-shrink: 0; }
-.sym-chip-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 符號名稱與用法的懸浮說明。
+ * 定位基準是 .sym-cat（left/right 都是 0）而不是 chip 本身 —— 面板只有
+ * 350px 寬又會裁切溢出內容，掛在 chip 上時最左／最右那顆一定會被切掉。 */
+.sym-tip {
+  position: absolute; z-index: 60; left: 0; right: 0; top: calc(100% + 6px);
+  padding: 7px 10px; border-radius: 10px 2px 10px 2px;
+  background: var(--ink); color: #FBF9F4;
+  font-size: 11.5px; font-weight: 500; line-height: 1.6; letter-spacing: 0.2px;
+  text-align: left; box-shadow: var(--shadow-pop);
+  opacity: 0; visibility: hidden; transform: translateY(-3px);
+  transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
+  pointer-events: none;
+}
+.sym-tip b { display: block; font-size: 12px; margin-bottom: 1px; }
+.sym-chip:hover .sym-tip,
+.sym-chip:focus-visible .sym-tip { opacity: 1; visibility: visible; transform: translateY(0); }
 
 /* 跟著游標走的拖曳分身 */
 .sym-ghost {

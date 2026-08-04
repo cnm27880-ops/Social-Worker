@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import InfoTip from './InfoTip';
 import {
   TOOLBOX_CATEGORIES, TOOLBOX_SYMBOLS, halfPath, divisionSegments,
@@ -107,28 +106,33 @@ export const SymbolPreview = ({ symbol, size = 24 }) => {
  * 由畫布在放開的那一刻決定（見 GenogramTab 的 symbolDrag）。
  * 拖曳過程中經過的節點不會被觸發，只有放開的位置算數。
  *
- * 工具箱本身常駐展開，只有分類是收合的 —— 外層再包一層抽屜的話，要點兩次
- * 才看得到符號。快捷工具列已經提供的「死亡／身心障礙」不收在這裡
- * （見 TOOLBOX_SYMBOLS）。
+ * 所有分類一律展開，不再收合：符號本來就只有 12 個，全部攤開一眼就看得到
+ * 哪裡有什麼，比每次點兩下（先展開分類、再拖符號）快。快捷工具列已經提供的
+ * 「死亡／身心障礙」不收在這裡（見 TOOLBOX_SYMBOLS）。
+ *
+ * 面板上只留符號本身，名稱與用法改成滑過才浮出來 —— 12 個名稱常駐等於
+ * 12 行文字，而使用者認得符號之後就不需要再讀名稱了。
  *
  * 分類內部依使用次數排序：常用的自己浮上來，不另設「最近使用」區重複顯示。
- * 排序只在每次 usage 變動時算一次，且 sort 是穩定的，沒用過的維持原順序
- * （同一分類內仍是符號表裡的順序，不會每次開啟都跳來跳去）。
+ * sort 是穩定的，沒用過的維持符號表原順序，不會每次開啟都跳來跳去。
  */
 const SymbolToolbox = ({ onPickUp, usage, activeKey }) => {
-  const [openCat, setOpenCat] = useState(TOOLBOX_CATEGORIES[0]?.key ?? null);
-
   const byUsage = (items) =>
     [...items].sort((a, b) => (usage[b.key] || 0) - (usage[a.key] || 0));
 
+  /* 提示氣泡掛在分類容器上（left/right 都是 0），不是掛在 chip 上：
+   * 面板只有 350px 寬又會裁切溢出內容，掛在 chip 上時最左／最右那顆的
+   * 氣泡一定會被切掉。 */
   const Chip = ({ s }) => (
     <button
       className={`sym-chip ${activeKey === s.key ? 'dragging' : ''}`}
-      title={`${s.label}：${s.desc}`}
+      aria-label={`${s.label}：${s.desc}`}
       onPointerDown={e => onPickUp(e, s.key)}
     >
       <SymbolPreview symbol={s} />
-      <span className="sym-chip-label">{s.label}</span>
+      <span className="sym-tip" aria-hidden="true">
+        <b>{s.label}</b>{s.desc}
+      </span>
     </button>
   );
 
@@ -136,30 +140,22 @@ const SymbolToolbox = ({ onPickUp, usage, activeKey }) => {
     <div className="sym-toolbox">
       <div className="section-title-row">
         <label>🧱 積木工具箱</label>
-        <InfoTip text="進階臨床標記。拖曳符號到人物上放開即可標記；拖到婚姻線上是關係品質，拖到空白處新增獨立個體。再拖一次可取消。案主／身障／死亡請用上方快捷工具列。" />
+        <InfoTip text="進階臨床標記。滑過符號可看名稱與用法。拖曳符號到人物上放開即可標記；拖到婚姻線上是關係品質，拖到空白處新增獨立個體。再拖一次可取消。案主／身障／死亡請用上方快捷工具列。" />
         <span className="sym-total">{TOOLBOX_SYMBOLS.length}</span>
       </div>
 
       {TOOLBOX_CATEGORIES.map(cat => {
         const items = byUsage(TOOLBOX_SYMBOLS.filter(s => s.category === cat.key));
         if (!items.length) return null;
-        const open = openCat === cat.key;
         return (
           <div className="sym-cat" key={cat.key}>
-            <button
-              className={`sym-cat-head ${open ? 'open' : ''}`}
-              onClick={() => setOpenCat(open ? null : cat.key)}
-              aria-expanded={open}
-            >
-              <span>{cat.label}</span>
+            <div className="sym-cat-head">
+              <span className="sym-cat-name">{cat.label}</span>
               <span className="sym-cat-count">{items.length}</span>
-              <span className="sym-cat-caret">▾</span>
-            </button>
-            {open && (
-              <div className="sym-grid">
-                {items.map(s => <Chip key={s.key} s={s} />)}
-              </div>
-            )}
+            </div>
+            <div className="sym-grid">
+              {items.map(s => <Chip key={s.key} s={s} />)}
+            </div>
           </div>
         );
       })}

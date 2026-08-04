@@ -10,7 +10,7 @@ const fmtTime = (ts) => {
 const TIP = '每次按「儲存案件」都會在這裡留一個節點；也可以自己命名再存一份。之後能隨時還原回那個時間點，重新整理也還在。';
 
 /**
- * 時間軸快照，收在案件列的 🕰️ 按鈕底下。
+ * 時間軸快照，收在案件列的時鐘按鈕底下。
  *
  * 原本是面板裡一張獨立卡片（輸入框＋說明＋清單），但快照本來就是
  * 「偶爾才用一次」的功能，常駐一張卡片把主線的第一代／第二代擠到更下面。
@@ -24,7 +24,7 @@ const TIP = '每次按「儲存案件」都會在這裡留一個節點；也可�
  */
 const SnapshotMenu = ({
   snapshots, takeSnapshot, restoreSnapshot, removeSnapshot, isSaved,
-  open, onToggle, onClose,
+  icon, open, onToggle, onClose,
 }) => {
   const [draft, setDraft] = useState('');
 
@@ -62,14 +62,14 @@ const SnapshotMenu = ({
         aria-label="時間軸快照"
         aria-expanded={open}
       >
-        🕰️
+        {icon}
         {snapshots.length > 0 && <span className="snap-count">{snapshots.length}</span>}
       </button>
 
       {open && (
         <div className="snap-pop" role="dialog" aria-label="時間軸快照">
           <div className="snap-pop-head">
-            <span className="snap-pop-title">🕰️ 時間軸快照</span>
+            <span className="snap-pop-title">時間軸快照</span>
             <InfoTip text={TIP} />
           </div>
 
@@ -82,7 +82,7 @@ const SnapshotMenu = ({
               onKeyDown={e => { if (e.key === 'Enter') handleTake(); }}
               placeholder="快照名稱（留空自動用時間命名）"
             />
-            <button className="btn-soft tone-mauve" onClick={handleTake}>📸 建立</button>
+            <button className="btn-soft tone-mauve" onClick={handleTake}>建立</button>
           </div>
 
           {snapshots.length > 0 ? (

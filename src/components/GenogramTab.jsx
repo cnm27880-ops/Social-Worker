@@ -32,7 +32,6 @@ const ECO_RY = 28;
 
 const GenogramTab = ({
   doc, setField, patchDoc, toggleNodeAttr, toggleLineAttr,
-  undo, redo, canUndo, canRedo,
   cases, activeCaseId, activeCase, isSaved,
   switchCase, saveCase, renameCase, deleteCase, exportCase, importCase,
   snapshots, takeSnapshot, restoreSnapshot, removeSnapshot,
@@ -761,24 +760,16 @@ const GenogramTab = ({
         <div className="quick-tool-panel">
           <div className="quick-tool-header">
             <span className="quick-tool-title">快捷操作工具列</span>
-            <InfoTip text="點擊或按 [Q / W / E / R] 切換模式，再點畫布上的人物即可標記。狀態標籤可點擊或用滾輪切換。復原／重做也可用 Ctrl+Z／Ctrl+Shift+Z。" />
-            {/* 復原／重做原本自己佔一列（旁邊還有「已自動儲存 ○○:○○」）。
-                狀態文字拿掉後那一列只剩兩顆小按鈕，不值得一列；移到這裡跟
-                標記模式放在一起，離實際會用到它們的按鈕最近。頂列放不下：
-                350px 容不下標題＋兩顆動作按鈕＋這兩顆。 */}
-            <span className="history-actions">
-              <button className="btn-icon" onClick={undo} disabled={!canUndo}
-                      title="復原 (Ctrl+Z)" aria-label="復原">↶</button>
-              <button className="btn-icon" onClick={redo} disabled={!canRedo}
-                      title="重做 (Ctrl+Shift+Z)" aria-label="重做">↷</button>
-            </span>
-            {/* 年齡是「畫布上要顯示什麼」的開關，跟這一區的標記模式同一類；
-                放回面板頂列的話 350px 寬度容不下標題＋開關＋兩顆按鈕，會把「年齡」擠成兩行 */}
-            <label className="toggle-switch" title="切換是否在節點上顯示年齡">
-              <span className="toggle-text">年齡</span>
-              <input type="checkbox" checked={showAgeMode} onChange={() => setShowAgeMode(!showAgeMode)} />
-              <span className="toggle-track" aria-hidden="true"></span>
-            </label>
+            <InfoTip text="點擊或按 [Q / W / E / R] 切換模式，再點畫布上的人物即可標記。狀態標籤可點擊或用滾輪切換。復原／重做請用 Ctrl+Z／Ctrl+Shift+Z。" />
+            {/* 年齡是「畫布上要顯示什麼」的開關，跟這一區的標記模式同一類。
+                做成有凹凸感的按鈕：關閉時浮起、開啟時壓下去並填色，
+                原本的滑軌開關在暖色卡片上跟背景太接近，看不出開關狀態。 */}
+            <button
+              className={`btn-emboss ${showAgeMode ? 'on' : ''}`}
+              onClick={() => setShowAgeMode(!showAgeMode)}
+              aria-pressed={showAgeMode}
+              title="切換是否在節點上顯示年齡"
+            >年齡</button>
           </div>
 
           <div className="quick-tool-rows">

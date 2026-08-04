@@ -2,6 +2,33 @@ import { useEffect, useRef, useState } from 'react';
 import SnapshotMenu from './SnapshotMenu';
 import { nextCaseName } from '../utils/caseStore';
 
+/* 這一列的圖示一律用 inline SVG，不用 emoji／Unicode 箭頭符號：
+ * ⤓ ⤒ 這類冷門符號在不同系統的字型覆蓋率差很多，缺字時會變成豆腐或
+ * 被替換成尺寸完全不同的字符，把整列的高度與對齊都擠歪。SVG 由自己
+ * 決定尺寸，跨平台一致。 */
+const Icon = ({ path, filled }) => (
+  <svg className="case-icon" viewBox="0 0 20 20" aria-hidden="true"
+       fill={filled ? 'currentColor' : 'none'} stroke="currentColor"
+       strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    {path}
+  </svg>
+);
+
+const ICON = {
+  /* 磁碟片（儲存） */
+  save: <><path d="M4 3h9l3 3v11H4z" /><path d="M7 3v5h6V3" /><path d="M7 12h6v5H7z" /></>,
+  /* 時鐘（時間軸） */
+  clock: <><circle cx="10" cy="10" r="7" /><path d="M10 6v4l3 2" /></>,
+  /* 匯出：往下進托盤 */
+  export: <><path d="M10 3v8" /><path d="M6.5 8 10 11.5 13.5 8" /><path d="M4 13v3h12v-3" /></>,
+  /* 匯入：從托盤往上出來 */
+  import: <><path d="M10 11.5V3.5" /><path d="M6.5 7 10 3.5 13.5 7" /><path d="M4 13v3h12v-3" /></>,
+  /* 資料夾（已儲存案件） */
+  folder: <><path d="M3 5.5h4.5l1.5 2H17v8H3z" /></>,
+  /* 文件（未儲存草稿） */
+  draft: <><path d="M5 3h6l4 4v10H5z" /><path d="M11 3v4h4" /></>,
+};
+
 const fmtTime = (ts) => {
   if (!ts) return '';
   const d = new Date(ts);
@@ -130,7 +157,9 @@ const CaseBar = ({
   return (
     <div className="case-bar" ref={wrapRef}>
       <div className="case-bar-main">
-        <span className="case-bar-icon" aria-hidden="true">{isSaved ? '🗂️' : '📄'}</span>
+        <span className="case-bar-icon" aria-hidden="true">
+          <Icon path={isSaved ? ICON.folder : ICON.draft} />
+        </span>
 
         {editing ? (
           <input
@@ -172,18 +201,26 @@ const CaseBar = ({
           className={`case-save ${isSaved ? '' : 'primary'}`}
           onClick={onSaveClick}
           title={isSaved ? '存檔並在時間軸留一個節點' : '建立案件：開始記錄時間軸與後續變更'}
-        >💾{isSaved ? '' : ' 儲存案件'}</button>
+        >
+          <Icon path={ICON.save} />
+          <span>儲存</span>
+        </button>
 
         <SnapshotMenu
           snapshots={snapshots} takeSnapshot={takeSnapshot}
           restoreSnapshot={restoreSnapshot} removeSnapshot={removeSnapshot}
           isSaved={isSaved}
+          icon={<Icon path={ICON.clock} />}
           open={snapOpen}
           onToggle={() => { setSnapOpen(o => !o); setOpen(false); }}
           onClose={() => setSnapOpen(false)}
         />
-        <button className="case-tool" onClick={exportCase} title="匯出成 .json 檔">⤓</button>
-        <button className="case-tool" onClick={() => fileRef.current?.click()} title="從 .json 檔匯入">⤒</button>
+        <button className="case-tool" onClick={exportCase} title="匯出成 .json 檔" aria-label="匯出成 .json 檔">
+          <Icon path={ICON.export} />
+        </button>
+        <button className="case-tool" onClick={() => fileRef.current?.click()} title="從 .json 檔匯入" aria-label="從 .json 檔匯入">
+          <Icon path={ICON.import} />
+        </button>
         <input
           ref={fileRef} type="file" accept="application/json,.json"
           onChange={onPickFile} style={{ display: 'none' }}

@@ -41,11 +41,11 @@ export function useCaseDoc() {
   const [doc, setDocRaw] = useState(() => ({ ...INITIAL_DOC }));
 
   /* --- 歷史堆疊 ---
-   * 放在 ref 避免每次 push 都觸發 render；按鈕的可用狀態另外用
-   * histVersion 這個計數器驅動重繪。 */
+   * 放在 ref 而不是 state：復原/重做只透過鍵盤觸發，沒有需要跟著堆疊
+   * 深度重繪的 UI（原本有一組按鈕要顯示 disabled，計數器是為它們存在的）。
+   * setDocRaw 本身就會觸發重繪，不需要額外的版本計數器。 */
   const past = useRef([]);
   const future = useRef([]);
-  const [histVersion, setHistVersion] = useState(0);
 
   const prevDoc = useRef(doc);
   const skipHistory = useRef(false);
@@ -84,7 +84,6 @@ export function useCaseDoc() {
       past.current.push(prevDoc.current);
       if (past.current.length > MAX_HISTORY) past.current.shift();
       future.current = [];
-      setHistVersion(v => v + 1);
     }
 
     lastCommit.current = { at: now, key };
@@ -144,7 +143,6 @@ export function useCaseDoc() {
     skipHistory.current = true;
     lastCommit.current = { at: 0, key: null };
     setDocRaw(prev);
-    setHistVersion(v => v + 1);
   }, []);
 
   const redo = useCallback(() => {
@@ -154,7 +152,6 @@ export function useCaseDoc() {
     skipHistory.current = true;
     lastCommit.current = { at: 0, key: null };
     setDocRaw(next);
-    setHistVersion(v => v + 1);
   }, []);
 
   /* --- Ctrl/⌘ + Z 復原、Ctrl/⌘ + Shift + Z（或 Ctrl+Y）重做 --- */
@@ -218,7 +215,6 @@ export function useCaseDoc() {
     past.current = [];
     future.current = [];
     lastCommit.current = { at: 0, key: null };
-    setHistVersion(v => v + 1);
   }, []);
 
   /** 把另一份文件載進編輯器：不記歷史，並清掉前一份案件的歷史 */
@@ -363,12 +359,6 @@ export function useCaseDoc() {
     attrListSetter,
     toggleNodeAttr,
     toggleLineAttr: toggleLineAttrCb,
-
-    undo,
-    redo,
-    canUndo: past.current.length > 0,
-    canRedo: future.current.length > 0,
-    histVersion,
 
 
     cases: index.list,
