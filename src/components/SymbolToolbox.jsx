@@ -1,25 +1,46 @@
 import { useState } from 'react';
-import Collapsible from './Collapsible';
+import InfoTip from './InfoTip';
 import {
   TOOLBOX_CATEGORIES, TOOLBOX_SYMBOLS, halfPath, divisionSegments,
   CLINICAL_FILL, CLINICAL_STROKE,
   trianglePath, triangleCrossLines, zigzagPoints, gapSegments, DISTANT_DASH,
 } from '../utils/symbols';
 
-const RECENT_KEY = 'genogram-recent-symbols';
-const RECENT_MAX = 4;
+const USAGE_KEY = 'genogram-symbol-usage';
+const LEGACY_RECENT_KEY = 'genogram-recent-symbols';
 
-export const loadRecent = () => {
+const inToolbox = (key) => TOOLBOX_SYMBOLS.some(s => s.key === key);
+
+/**
+ * 每個符號用過幾次：{ [key]: count }。
+ *
+ * 原本是「最近使用」清單，在分類上方再列四個 chip —— 但那等於同一個符號
+ * 在工具箱裡出現兩次。改成只記次數，用來決定各分類內部的排列順序：
+ * 常用的自然浮到前面，不必多一區重複顯示。
+ */
+export const loadUsage = () => {
   try {
-    const raw = JSON.parse(localStorage.getItem(RECENT_KEY));
-    // 對 TOOLBOX_SYMBOLS 過濾而不是 SYMBOLS：舊紀錄可能留著已移出工具箱的符號
-    return Array.isArray(raw) ? raw.filter(k => TOOLBOX_SYMBOLS.some(s => s.key === k)) : [];
-  } catch { return []; }
+    const raw = JSON.parse(localStorage.getItem(USAGE_KEY));
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+      return Object.fromEntries(
+        Object.entries(raw).filter(([k, v]) => inToolbox(k) && Number.isFinite(v))
+      );
+    }
+    // 舊版的「最近使用」是陣列，愈前面代表愈近期；換算成次數，別讓習慣歸零
+    const legacy = JSON.parse(localStorage.getItem(LEGACY_RECENT_KEY));
+    if (Array.isArray(legacy)) {
+      const seed = {};
+      legacy.filter(inToolbox).forEach((k, i) => { seed[k] = legacy.length - i; });
+      return seed;
+    }
+  } catch { /* 壞掉的紀錄就當沒有 */ }
+  return {};
 };
 
-export const pushRecent = (key) => {
-  const next = [key, ...loadRecent().filter(k => k !== key)].slice(0, RECENT_MAX);
-  try { localStorage.setItem(RECENT_KEY, JSON.stringify(next)); } catch { /* 忽略 */ }
+export const bumpUsage = (key) => {
+  const cur = loadUsage();
+  const next = { ...cur, [key]: (cur[key] || 0) + 1 };
+  try { localStorage.setItem(USAGE_KEY, JSON.stringify(next)); } catch { /* 忽略 */ }
   return next;
 };
 
@@ -86,15 +107,19 @@ export const SymbolPreview = ({ symbol, size = 24 }) => {
  * 由畫布在放開的那一刻決定（見 GenogramTab 的 symbolDrag）。
  * 拖曳過程中經過的節點不會被觸發，只有放開的位置算數。
  *
- * 整個工具箱預設收合：冷門符號不該跟第一代／第二代這條主線搶垂直空間。
- * 快捷工具列已經提供的「死亡／身心障礙」不收在這裡（見 TOOLBOX_SYMBOLS）。
+ * 工具箱本身常駐展開，只有分類是收合的 —— 外層再包一層抽屜的話，要點兩次
+ * 才看得到符號。快捷工具列已經提供的「死亡／身心障礙」不收在這裡
+ * （見 TOOLBOX_SYMBOLS）。
+ *
+ * 分類內部依使用次數排序：常用的自己浮上來，不另設「最近使用」區重複顯示。
+ * 排序只在每次 usage 變動時算一次，且 sort 是穩定的，沒用過的維持原順序
+ * （同一分類內仍是符號表裡的順序，不會每次開啟都跳來跳去）。
  */
-const SymbolToolbox = ({ onPickUp, recent, activeKey }) => {
+const SymbolToolbox = ({ onPickUp, usage, activeKey }) => {
   const [openCat, setOpenCat] = useState(TOOLBOX_CATEGORIES[0]?.key ?? null);
 
-  const recentSymbols = recent
-    .map(k => TOOLBOX_SYMBOLS.find(s => s.key === k))
-    .filter(Boolean);
+  const byUsage = (items) =>
+    [...items].sort((a, b) => (usage[b.key] || 0) - (usage[a.key] || 0));
 
   const Chip = ({ s }) => (
     <button
@@ -108,22 +133,15 @@ const SymbolToolbox = ({ onPickUp, recent, activeKey }) => {
   );
 
   return (
-    <Collapsible
-      title="🧱 積木工具箱"
-      tip="進階臨床標記。拖曳符號到人物上放開即可標記；拖到婚姻線上是關係品質，拖到空白處新增獨立個體。再拖一次可取消。案主／身障／死亡請用上方快捷工具列。"
-      badge={TOOLBOX_SYMBOLS.length}
-    >
-      {recentSymbols.length > 0 && (
-        <div className="sym-recent">
-          <span className="sym-recent-title">最近使用</span>
-          <div className="sym-grid">
-            {recentSymbols.map(s => <Chip key={s.key} s={s} />)}
-          </div>
-        </div>
-      )}
+    <div className="sym-toolbox">
+      <div className="section-title-row">
+        <label>🧱 積木工具箱</label>
+        <InfoTip text="進階臨床標記。拖曳符號到人物上放開即可標記；拖到婚姻線上是關係品質，拖到空白處新增獨立個體。再拖一次可取消。案主／身障／死亡請用上方快捷工具列。" />
+        <span className="sym-total">{TOOLBOX_SYMBOLS.length}</span>
+      </div>
 
       {TOOLBOX_CATEGORIES.map(cat => {
-        const items = TOOLBOX_SYMBOLS.filter(s => s.category === cat.key);
+        const items = byUsage(TOOLBOX_SYMBOLS.filter(s => s.category === cat.key));
         if (!items.length) return null;
         const open = openCat === cat.key;
         return (
@@ -145,7 +163,7 @@ const SymbolToolbox = ({ onPickUp, recent, activeKey }) => {
           </div>
         );
       })}
-    </Collapsible>
+    </div>
   );
 };
 

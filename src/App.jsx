@@ -25,7 +25,7 @@ const App = () => {
   /* --- 案件文件：自動存檔 + 復原/重做的單一資料來源 --- */
   const {
     doc, setField, patchDoc, attrListSetter, toggleNodeAttr, toggleLineAttr,
-    undo, redo, canUndo, canRedo, savedAt, restored, dismissRestored,
+    undo, redo, canUndo, canRedo,
     cases, activeCaseId, activeCase,
     switchCase, createCase, renameCase, deleteCase, exportCase, importCase,
     snapshots, takeSnapshot, restoreSnapshot, removeSnapshot,
@@ -62,7 +62,6 @@ const App = () => {
           toggleNodeAttr={toggleNodeAttr}
           toggleLineAttr={toggleLineAttr}
           undo={undo} redo={redo} canUndo={canUndo} canRedo={canRedo}
-          savedAt={savedAt} restored={restored} dismissRestored={dismissRestored}
 
           cases={cases} activeCaseId={activeCaseId} activeCase={activeCase}
           switchCase={switchCase} createCase={createCase} renameCase={renameCase}

@@ -142,13 +142,3 @@ export const migrateDoc = (raw) => {
 
   return doc;
 };
-
-/** 文件是否還是全新未編輯的狀態（用來決定要不要提示「有未儲存的內容」）。 */
-export const isEmptyDoc = (doc) =>
-  !doc.gen2Str &&
-  doc.gen2Cfg.length === 0 &&
-  doc.freeNodes.length === 0 &&
-  doc.texts.length === 0 &&
-  doc.polygons.length === 0 &&
-  Object.keys(doc.nodeAttrs).length === 0 &&
-  Object.keys(doc.lineAttrs).length === 0;

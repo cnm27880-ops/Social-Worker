@@ -6,9 +6,8 @@ import {
   parseGenders, getSmoothPath, getRelativeTitle
 } from '../utils/helpers';
 import CaseBar from './CaseBar';
-import Collapsible from './Collapsible';
 import InfoTip from './InfoTip';
-import SymbolToolbox, { SymbolPreview, loadRecent, pushRecent } from './SymbolToolbox';
+import SymbolToolbox, { SymbolPreview, loadUsage, bumpUsage } from './SymbolToolbox';
 import {
   SYMBOL_MAP, halfPath, healthHalvesFor, divisionSegments, kinshipDashFor,
   CLINICAL_FILL, CLINICAL_STROKE, CLINICAL_STROKE_W,
@@ -31,7 +30,7 @@ const ECO_RY = 28;
 
 const GenogramTab = ({
   doc, setField, patchDoc, toggleNodeAttr, toggleLineAttr,
-  undo, redo, canUndo, canRedo, savedAt, restored, dismissRestored,
+  undo, redo, canUndo, canRedo,
   cases, activeCaseId, activeCase,
   switchCase, createCase, renameCase, deleteCase, exportCase, importCase,
   snapshots, takeSnapshot, restoreSnapshot, removeSnapshot,
@@ -56,7 +55,7 @@ const GenogramTab = ({
 
   /* --- 純 UI 暫態：不進復原、不存檔 --- */
   const [drag, setDrag] = useState(null);
-  const [recent, setRecent] = useState(loadRecent);
+  const [usage, setUsage] = useState(loadUsage);   // 符號使用次數：決定工具箱內的排序
   const [mode, setMode] = useState(null);
   const [draftPoly, setDraftPoly] = useState([]);
   const [selectedPolyId, setSelectedPolyId] = useState(null);
@@ -375,21 +374,21 @@ const GenogramTab = ({
         const lineId = hitTestLine(svgP);
         if (!lineId) return;                         // 放開在空白處：取消
         toggleLineAttr(lineId, key);
-        setRecent(pushRecent(key));
+        setUsage(bumpUsage(key));
         return;
       }
 
       if (kind === 'standalone') {
         if (hitTestNode(svgP)) return;                // 放開在既有人物節點上：不做事
         setFreeNodes(prev => [...prev, { id: 'f_' + Date.now(), type: key, x: svgP.x, y: svgP.y }]);
-        setRecent(pushRecent(key));
+        setUsage(bumpUsage(key));
         return;
       }
 
       const targetId = hitTestNode(svgP);
       if (!targetId) return;                         // 放開在空白處：取消
       toggleNodeAttr(targetId, key);
-      setRecent(pushRecent(key));
+      setUsage(bumpUsage(key));
     };
 
     const onKey = (ev) => { if (ev.key === 'Escape') setSymbolDrag(null); };
@@ -684,32 +683,20 @@ const GenogramTab = ({
           </div>
         </div>
 
-        {/* 復原/重做 + 自動儲存狀態：都是「你的東西留得住」，放在同一列 */}
-        <div className="save-status">
-          <span className="history-actions">
-            <button className="btn-icon" onClick={undo} disabled={!canUndo}
-                    title="復原 (Ctrl+Z)" aria-label="復原">↶</button>
-            <button className="btn-icon" onClick={redo} disabled={!canRedo}
-                    title="重做 (Ctrl+Shift+Z)" aria-label="重做">↷</button>
-          </span>
-          {restored && (
-            <span className="restored-tag">
-              已還原上次進度
-              <button onClick={dismissRestored} title="關閉提示" aria-label="關閉提示">×</button>
-            </span>
-          )}
-          <span className="save-note">
-            <span className="dot" />
-            {savedAt
-              ? `已自動儲存 ${new Date(savedAt).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}．僅存在本機`
-              : '自動儲存至本機瀏覽器'}
-          </span>
-        </div>
-
         <div className="quick-tool-panel">
           <div className="quick-tool-header">
             <span className="quick-tool-title">快捷操作工具列</span>
-            <InfoTip text="點擊或按 [Q / W / E / R] 切換模式，再點畫布上的人物即可標記。狀態標籤可用滾輪切換。" />
+            <InfoTip text="點擊或按 [Q / W / E / R] 切換模式，再點畫布上的人物即可標記。狀態標籤可用滾輪切換。復原／重做也可用 Ctrl+Z／Ctrl+Shift+Z。" />
+            {/* 復原／重做原本自己佔一列（旁邊還有「已自動儲存 ○○:○○」）。
+                狀態文字拿掉後那一列只剩兩顆小按鈕，不值得一列；移到這裡跟
+                標記模式放在一起，離實際會用到它們的按鈕最近。頂列放不下：
+                350px 容不下標題＋兩顆動作按鈕＋這兩顆。 */}
+            <span className="history-actions">
+              <button className="btn-icon" onClick={undo} disabled={!canUndo}
+                      title="復原 (Ctrl+Z)" aria-label="復原">↶</button>
+              <button className="btn-icon" onClick={redo} disabled={!canRedo}
+                      title="重做 (Ctrl+Shift+Z)" aria-label="重做">↷</button>
+            </span>
             {/* 年齡是「畫布上要顯示什麼」的開關，跟這一區的標記模式同一類；
                 放回面板頂列的話 350px 寬度容不下標題＋開關＋兩顆按鈕，會把「年齡」擠成兩行 */}
             <label className="toggle-switch" title="切換是否在節點上顯示年齡">
@@ -771,11 +758,14 @@ const GenogramTab = ({
           </div>
         </div>
 
+        {/* 第一代與第二代是同一條主線上的兩張卡，標題列結構刻意寫成一樣的
+            （section-title-row + label + ⓘ），字級與顏色才不會各走各的 */}
         <div className="section">
-          <label>第一代（父母）</label>
-          <div className="sub" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span className="hint" style={{ margin: 0 }}>系統預設一對父母 ■ 父 ● 母</span>
-            <span className="status-badge" data-status={g1Status} ref={el => wheelRef(el, G1_STATUSES, g1Status, setG1Status)}>{G1_LABELS[g1Status]}</span>
+          <div className="section-title-row">
+            <label>第一代（父母）</label>
+            <InfoTip text="系統預設一對父母（■ 父、● 母）。滑鼠停在右側標籤上滾動滾輪即可切換婚姻狀態。" />
+            <span className="status-badge" data-status={g1Status} ref={el => wheelRef(el, G1_STATUSES, g1Status, setG1Status)}
+                  style={{ marginLeft: 'auto' }}>{G1_LABELS[g1Status]}</span>
           </div>
         </div>
 
@@ -818,18 +808,26 @@ const GenogramTab = ({
           <button className="btn-soft tone-sage" onClick={addText} style={{ marginLeft: 'auto' }}>➕ 新增</button>
         </div>
 
-        <Collapsible
-          title="🧩 自由擴充區"
-          tip="拖曳擴充個體碰撞目標即可產生連線；生態圖新增後預設連結案主。"
-          badge={freeNodes.length || null}
-        >
-          <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
-            <button className="btn-soft tone-dust" onClick={() => addFreeNode('M')}>➕ 男性</button>
-            <button className="btn-soft tone-rose" onClick={() => addFreeNode('F')}>➕ 女性</button>
-            <button className="btn-soft tone-teal" onClick={addEcoNode}>➕ 生態圖</button>
-            <span className="status-badge" data-status={extColorMode === 'blue' ? 'horizontal' : 'none'} ref={el => wheelRef(el, EXT_COLOR_MODES, extColorMode, setExtColorMode)} title="滾輪切換：一般/編輯">{EXT_COLOR_LABELS[extColorMode]}</span>
+        <div className="section">
+          <div className="section-title-row">
+            <label>🧩 自由擴充區</label>
+            <InfoTip text="拖曳擴充個體碰撞目標即可產生連線；生態圖新增後預設連結案主。「編輯」會把擴充個體改用藍色畫，方便跟原本的家系區分。" />
           </div>
-        </Collapsible>
+          <div className="btn-row">
+            <button className="btn-soft tone-dust" onClick={() => addFreeNode('M')}>+ 男性</button>
+            <button className="btn-soft tone-rose" onClick={() => addFreeNode('F')}>+ 女性</button>
+            <button className="btn-soft tone-teal" onClick={addEcoNode}>+ 生態圖</button>
+            {/* 原本是個只能用滾輪切換的標籤（看起來像 tag，也沒人知道可以滾）。
+                改成真的按鈕：點一下切換，滾輪仍然可用。 */}
+            <button
+              className={`btn-toggle ${extColorMode === 'blue' ? 'on' : ''}`}
+              onClick={() => setExtColorMode(extColorMode === 'blue' ? 'black' : 'blue')}
+              ref={el => wheelRef(el, EXT_COLOR_MODES, extColorMode, setExtColorMode)}
+              title="切換擴充個體的顏色：一般／編輯（滾輪亦可）"
+              aria-pressed={extColorMode === 'blue'}
+            >{EXT_COLOR_LABELS[extColorMode]}</button>
+          </div>
+        </div>
 
         {customLinks.length > 0 && (
           <div className="section">
@@ -895,7 +893,7 @@ const GenogramTab = ({
         )}
 
         {/* 原本這裡是靜態的「操作說明」，改放工具箱；說明移到右上角的說明書 */}
-        <SymbolToolbox onPickUp={startSymbolDrag} recent={recent} activeKey={symbolDrag?.key} />
+        <SymbolToolbox onPickUp={startSymbolDrag} usage={usage} activeKey={symbolDrag?.key} />
       </div>
 
       {/* SVG 畫布 */}

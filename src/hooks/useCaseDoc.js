@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  INITIAL_DOC, idsWithAttr, setAttrIds, toggleAttr, toggleLineAttr, isEmptyDoc,
+  INITIAL_DOC, idsWithAttr, setAttrIds, toggleAttr, toggleLineAttr,
 } from '../utils/caseDoc';
 import {
   initLibrary, readCaseDoc, writeCaseDoc, writeIndex, touchCase,
@@ -35,10 +35,6 @@ export function useCaseDoc() {
   const [boot] = useState(() => initLibrary());
   const [index, setIndex] = useState(boot.index);
   const [doc, setDocRaw] = useState(boot.doc);
-
-  /* 是否從既有存檔還原（用來顯示「已還原上次進度」提示）。
-   * 空白文件不算還原，否則每次開啟都會跳一次無意義的提示。 */
-  const [restored, setRestored] = useState(() => !isEmptyDoc(boot.doc));
 
   /* --- 歷史堆疊 ---
    * 放在 ref 避免每次 push 都觸發 render；按鈕的可用狀態另外用
@@ -91,13 +87,14 @@ export function useCaseDoc() {
     prevDoc.current = doc;
   }, [doc]);
 
-  /* --- 自動存檔（節流）：只覆寫目前這一份案件 --- */
-  const [savedAt, setSavedAt] = useState(null);
+  /* --- 自動存檔（節流）：只覆寫目前這一份案件 ---
+   * 刻意不記「上次存檔時間」：面板上不再顯示它，留著就只是每 800ms
+   * 多觸發一次沒人看的 render。存檔時間仍寫進案件索引的 updatedAt，
+   * 案件切換選單看得到。 */
   useEffect(() => {
     const t = setTimeout(() => {
       const id = activeIdRef.current;
       if (!writeCaseDoc(id, doc)) return;
-      setSavedAt(Date.now());
       setIndex(prev => {
         const next = touchCase(prev, id);
         writeIndex(next);
@@ -222,7 +219,6 @@ export function useCaseDoc() {
     skipHistory.current = true;
     clearHistory();
     setDocRaw(nextDoc);
-    setRestored(false);
   }, [clearHistory]);
 
   const flushActive = useCallback(() => {
@@ -351,9 +347,6 @@ export function useCaseDoc() {
     canRedo: future.current.length > 0,
     histVersion,
 
-    savedAt,
-    restored,
-    dismissRestored: useCallback(() => setRestored(false), []),
 
     cases: index.list,
     activeCaseId: index.activeId,

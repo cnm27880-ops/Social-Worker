@@ -6,7 +6,7 @@
  * 都改成莫蘭迪色（灰調降飽和），社工長時間盯著畫面比較不刺眼。
  *
  * 「降飽和」不等於「降對比」：文字用深暖灰而非淺灰，實心按鈕的底色壓到
- * 白字有 4.5:1 以上，最淡的輔助文字也維持 4.5:1。這是社工每天要讀的
+ * 白字有 5.5:1 以上，最淡的輔助文字也維持 4.5:1。這是社工每天要讀的
  * 工作介面，柔和是為了不刺眼，不是為了看不清楚。
  *
  * 唯一刻意不套用的地方是 SVG 畫布裡的家系圖本體：節點線條、暴力關係的
@@ -30,13 +30,13 @@
 
   /* 莫蘭迪色（低飽和但壓得夠深，白字在上面都有 4.5:1 以上）
    *   base = 實心按鈕底（白字）／-d = 淺底上的文字與 hover／-w = 淺底／-bd = 邊框 */
-  --dust:      #5F7488;   --dust-d:  #4A5D6E;   --dust-w:  #ECF0F3;   --dust-bd: #C6D3DC;
-  --sage:      #607158;   --sage-d:  #4C5B46;   --sage-w:  #ECF0EA;   --sage-bd: #CBD7C7;
-  --clay:      #9C6552;   --clay-d:  #814F3F;   --clay-w:  #F6EDE9;   --clay-bd: #DFC8BE;
-  --mauve:     #6E6178;   --mauve-d: #574C60;   --mauve-w: #F0EDF3;   --mauve-bd: #D6CDDD;
-  --sand:      #8A6C39;   --sand-d:  #6E5529;   --sand-w:  #F6F0E2;   --sand-bd: #DFD0B2;
-  --rose:      #8F636B;   --rose-d:  #744F56;   --rose-w:  #F5EDEF;   --rose-bd: #DDC9CE;
-  --teal:      #5C7A76;   --teal-d:  #48625E;   --teal-w:  #EBF1F0;   --teal-bd: #C9D9D6;
+  --dust:      #55687A;   --dust-d:  #42525F;   --dust-w:  #ECF0F3;   --dust-bd: #C6D3DC;
+  --sage:      #57674F;   --sage-d:  #45523F;   --sage-w:  #ECF0EA;   --sage-bd: #CBD7C7;
+  --clay:      #8E5B49;   --clay-d:  #76483A;   --clay-w:  #F6EDE9;   --clay-bd: #DFC8BE;
+  --mauve:     #63566D;   --mauve-d: #4F4457;   --mauve-w: #F0EDF3;   --mauve-bd: #D6CDDD;
+  --sand:      #7C6033;   --sand-d:  #634D28;   --sand-w:  #F6F0E2;   --sand-bd: #DFD0B2;
+  --rose:      #825A61;   --rose-d:  #69484E;   --rose-w:  #F5EDEF;   --rose-bd: #DDC9CE;
+  --teal:      #526E6A;   --teal-d:  #415856;   --teal-w:  #EBF1F0;   --teal-bd: #C9D9D6;
 
   /* 形狀與陰影 */
   --r-card: 16px 4px 16px 4px;
@@ -109,7 +109,7 @@ body {
 }
 /* 氣泡的定位基準：有標題列就貼著標題列，沒有就退回整張卡片 */
 .section, .quick-tool-panel, .section-title-row, .section-inline,
-.quick-tool-header, .section-fold-head, .snap-pop-head { position: relative; }
+.quick-tool-header, .snap-pop-head { position: relative; }
 
 .infotip:hover .infotip-bubble,
 .infotip:focus-visible .infotip-bubble { opacity: 1; visibility: visible; transform: translateY(0); }
@@ -179,6 +179,23 @@ body {
 .btn-soft.tone-clay  { background: var(--clay); }
 .btn-soft.tone-mauve { background: var(--mauve); }
 .btn-soft.tone-teal  { background: var(--teal); }
+
+/* 一整橫行的按鈕（自由擴充區）。不換行：四顆放得下，換行會多出一整列高度 */
+.btn-row { display: flex; align-items: center; gap: 5px; flex-wrap: nowrap; }
+.btn-row .btn-soft { padding: 5px 9px; }
+
+/* 二值切換按鈕：跟旁邊的 .btn-soft 同高同字重，一眼看得出是按鈕而不是標籤 */
+.btn-toggle {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 4px 10px; cursor: pointer; white-space: nowrap;
+  border: 1px solid var(--line); border-radius: var(--r-xs);
+  background: var(--card); color: var(--ink);
+  font-family: inherit; font-size: 12px; font-weight: 700; letter-spacing: 0.2px; line-height: 1.35;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.btn-toggle:hover { background: var(--wash-warm); border-color: var(--ink-faint); }
+.btn-toggle.on { background: var(--dust); border-color: var(--dust); color: #fff; }
+.btn-toggle.on:hover { background: var(--dust-d); border-color: var(--dust-d); }
 
 /* ===== 復原 / 重做 ===== */
 .btn-icon {
@@ -274,25 +291,6 @@ body {
 }
 .case-menu-foot button:hover { background: var(--dust-w); }
 
-/* ===== 自動儲存狀態列 ===== */
-.save-status {
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  margin: -2px 0 12px; font-size: 11.5px; color: var(--ink-soft); letter-spacing: 0.2px;
-}
-.save-status .history-actions { display: inline-flex; gap: 4px; flex-shrink: 0; }
-.save-status .save-note { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
-.save-status .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--sage); flex-shrink: 0; }
-.save-status .restored-tag {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 3px 9px; border-radius: 999px;
-  background: var(--sage-w); color: var(--sage-d); font-weight: 700; border: 1px solid var(--sage-bd);
-}
-.save-status .restored-tag button {
-  border: none; background: none; color: var(--sage); cursor: pointer;
-  font-size: 13px; line-height: 1; padding: 0;
-}
-.save-status .restored-tag button:hover { color: var(--sage-d); }
-
 /* ===== 時間軸快照（收在案件列的 🕰️ 底下） ===== */
 .snap-menu-wrap { display: inline-flex; }
 .snap-count {
@@ -372,6 +370,7 @@ body {
 .quick-tool-header {
   display: flex; align-items: center; gap: 6px; margin-bottom: 10px;
 }
+.quick-tool-header .history-actions { display: inline-flex; gap: 4px; margin-left: 6px; flex-shrink: 0; }
 .quick-tool-header .toggle-switch { margin-left: auto; }
 .quick-tool-title {
   display: inline-flex; align-items: center; gap: 6px;
@@ -411,7 +410,13 @@ body {
   margin-bottom: 12px; padding: 10px 12px;
   background: var(--card); border-radius: var(--r-card); border: 1px solid var(--line);
 }
-.section > label { display: block; font-size: 13px; font-weight: 700; color: var(--ink); margin-bottom: 8px; }
+/* 卡片標題。三種擺法（直接放卡片裡／放在有 ⓘ 的標題列裡／單行卡片）
+ * 都要吃到同一組字級與顏色 —— 只寫 `.section > label` 的話，一旦標題被
+ * 包進標題列就選不到，會掉回瀏覽器繼承的 16px/400，跟隔壁卡片對不起來。 */
+.section > label,
+.section-title-row > label {
+  display: block; font-size: 13px; font-weight: 700; color: var(--ink); margin-bottom: 8px;
+}
 
 .section-title-row { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
 .section-title-row > label { margin-bottom: 0; }
@@ -420,28 +425,15 @@ body {
 .section-inline > label { margin-bottom: 0; white-space: nowrap; }
 .section-inline .badge-wrap { margin-bottom: 0; }
 
-/* ===== 手風琴卡片（預設收合的非核心區塊） ===== */
-.section-fold { padding: 0; transition: border-color 0.15s ease; }
-.section-fold:hover { border-color: #DDD7C7; }
-.section-fold-head { display: flex; align-items: center; gap: 6px; padding-right: 11px; }
-.section-fold-btn {
-  flex: 1 1 auto; min-width: 0;
-  display: flex; align-items: center; gap: 8px;
-  padding: 11px 4px 11px 12px;
-  border: none; background: none; cursor: pointer; font: inherit; text-align: left;
+input[type="text"] {
+  width: 100%; padding: 7px 10px;
+  border: 1px solid var(--line); border-radius: var(--r-xs);
+  font-family: inherit; font-size: 13.5px; font-weight: 500;
+  color: var(--ink); background: var(--card); outline: none;
 }
-.section-fold-caret { font-size: 12px; color: var(--ink-soft); line-height: 1; transition: transform 0.18s ease; flex-shrink: 0; }
-.section-fold.open .section-fold-caret { transform: rotate(180deg); }
-.section-fold-title { font-size: 13px; font-weight: 700; color: var(--ink); }
-.section-fold-badge {
-  font-size: 10.5px; font-weight: 700; color: var(--ink-soft);
-  background: var(--wash-warm); border-radius: 999px; padding: 1px 7px;
-}
-.section-fold.open .section-fold-badge { background: var(--dust-w); color: var(--dust-d); }
-.section-fold-body { padding: 10px 12px 12px; border-top: 1px solid var(--line-soft); }
-
-input[type="text"] { width: 100%; padding: 7px 10px; border: 1px solid var(--line); border-radius: var(--r-xs); font-size: 14px; color: var(--ink); background: var(--card); outline: none; }
-input[type="text"]:focus { border-color: var(--dust); box-shadow: 0 0 0 2px rgba(127, 148, 166, 0.18); }
+input[type="text"]:focus { border-color: var(--dust); box-shadow: 0 0 0 2px rgba(85, 104, 122, 0.18); }
+/* 瀏覽器預設的 placeholder 偏冷灰，跟整體暖色調不合，也比 hint 文字淡 */
+input::placeholder, textarea::placeholder { color: var(--ink-faint); font-weight: 400; }
 
 .hint { font-size: 11px; color: var(--ink-soft); margin-top: 3px; }
 
@@ -532,9 +524,14 @@ svg { display: block; user-select: none; }
 
 .info-box { font-size: 12px; color: var(--ink-mid); line-height: 1.9; padding: 2px 0; }
 
-/* ===== 積木工具箱 ===== */
-.sym-recent { margin-bottom: 9px; padding-bottom: 9px; border-bottom: 1px dashed var(--line); }
-.sym-recent-title { display: block; font-size: 10.5px; font-weight: 700; color: var(--ink-faint); letter-spacing: 0.6px; margin-bottom: 6px; }
+/* ===== 積木工具箱 =====
+ * 沒有外層卡片：分類本身就是一層抽屜，再包一層等於要點兩次才看得到符號 */
+.sym-toolbox { margin-bottom: 12px; }
+.sym-toolbox > .section-title-row { margin-bottom: 8px; }
+.sym-total {
+  margin-left: auto; font-size: 10.5px; font-weight: 700; color: var(--ink-soft);
+  background: var(--wash-warm); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px;
+}
 
 .sym-cat + .sym-cat { margin-top: 5px; }
 .sym-cat-head {
