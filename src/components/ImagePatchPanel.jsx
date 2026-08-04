@@ -46,20 +46,27 @@ const ImagePatchPanel = ({
     setEraseMode(false);
   };
 
-  return (
+return (
     <div className="section">
       <div className="section-title-row">
         <label>🖼️ 舊圖修補</label>
         <InfoTip text={TIP} />
+
+        {/* 尚未上傳圖片時，把「＋ 上傳舊圖」按鈕放到標題列右側 */}
+        {!bgImage && (
+          <button
+            className="btn-soft tone-dust"
+            onClick={() => fileRef.current?.click()}
+            disabled={busy}
+            style={{ marginLeft: 'auto' }}
+          >
+            {busy ? '處理中…' : '＋ 上傳舊圖'}
+          </button>
+        )}
       </div>
 
       {!bgImage ? (
-        <>
-          <button className="btn-soft tone-dust" onClick={() => fileRef.current?.click()} disabled={busy}>
-            {busy ? '處理中…' : '＋ 上傳舊圖'}
-          </button>
-          <div className="hint">支援 JPG／PNG／WebP，長邊超過 {MAX_EDGE}px 會自動縮圖。</div>
-        </>
+        <div className="hint">支援 JPG／PNG／WebP，長邊超過 {MAX_EDGE}px 會自動縮圖。</div>
       ) : (
         <>
           <div className="bg-slider">
