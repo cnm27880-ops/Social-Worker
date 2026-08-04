@@ -200,6 +200,12 @@ const GenogramTab = ({
     const id = 'f_' + Date.now();
     setFreeNodes(prev => [...prev, { id, gender, x: 500, y: 320 }]);
   };
+  /** 新增獨立個體（目前僅「三角」）：跟 addFreeNode 一樣，點按鈕就在畫布上
+   * 生出一個全新節點，不覆蓋任何既有節點——跟快捷列表「點人物套用標記」是兩回事。 */
+  const addStandaloneNode = (type) => {
+    const id = 'f_' + Date.now();
+    setFreeNodes(prev => [...prev, { id, type, x: 500, y: 320 }]);
+  };
   const addEcoNode = () => {
     const id = 'eco_' + Date.now();
     const hasIndex = !!indexId;
@@ -826,15 +832,19 @@ const GenogramTab = ({
             </div>
           </div>
 
-          {/* === 快捷標記（死亡／身障／慢性病／懷孕／正向親密／衝突／關係惡化） ===
+          {/* === 快捷標記（死亡／身障／慢性病／正向親密／衝突／關係惡化） ===
               拖曳到人物／婚姻線上放開即套用；或按 A 進入選取、S／D 左右切換，
-              選中後直接點畫布上的目標套用。點圖示本身也可以直接選中它。 */}
+              選中後直接點畫布上的目標套用。點圖示本身也可以直接選中它。
+              已套用的標記再套一次（拖曳或點選後點同一個目標）即取消——見
+              toggleNodeAttr／toggleLineAttr。只用原生 title 顯示短名稱，
+              不再用長文字懸浮框。 */}
           <div className="quick-mark-row">
             {QUICK_SYMBOLS.map(s => (
               <button
                 key={s.key}
                 className={`quick-mark-chip ${mode === s.key ? 'active' : ''} ${symbolDrag?.key === s.key ? 'dragging' : ''}`}
-                aria-label={`${s.label}：${s.desc}`}
+                title={s.label}
+                aria-label={s.label}
                 aria-pressed={mode === s.key}
                 onPointerDown={e => startSymbolDrag(e, s.key)}
                 onClick={(e) => {
@@ -845,9 +855,6 @@ const GenogramTab = ({
                 }}
               >
                 <SymbolPreview symbol={s} size={26} />
-                <span className="quick-mark-tip" aria-hidden="true">
-                  <b>{s.label}</b>{s.desc}
-                </span>
               </button>
             ))}
           </div>
@@ -914,11 +921,12 @@ const GenogramTab = ({
         <div className="section">
           <div className="section-title-row">
             <label>🧩 自由擴充區</label>
-            <InfoTip text="拖曳擴充個體碰撞目標即可產生連線；生態圖新增後預設連結案主。「編輯」會把擴充個體改用藍色畫，方便跟原本的家系區分。" />
+            <InfoTip text="男性／女性／三角／生態圖：點按鈕即在畫布上新增一個獨立個體。拖曳擴充個體碰撞目標即可產生連線；生態圖新增後預設連結案主。「編輯」會把擴充個體改用藍色畫，方便跟原本的家系區分。" />
           </div>
           <div className="btn-row">
             <button className="btn-soft tone-dust" onClick={() => addFreeNode('M')}>男性</button>
             <button className="btn-soft tone-rose" onClick={() => addFreeNode('F')}>女性</button>
+            <button className="btn-soft tone-mauve" onClick={() => addStandaloneNode('pregnancy')}>三角</button>
             <button className="btn-soft tone-teal" onClick={addEcoNode}>生態圖</button>
             {/* 原本是個只能用滾輪切換的標籤（看起來像 tag，也沒人知道可以滾）。
                 改成真的按鈕：點一下切換，滾輪仍然可用。 */}
