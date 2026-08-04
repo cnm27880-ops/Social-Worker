@@ -26,8 +26,8 @@ const App = () => {
   const {
     doc, setField, patchDoc, attrListSetter, toggleNodeAttr, toggleLineAttr,
     undo, redo, canUndo, canRedo,
-    cases, activeCaseId, activeCase,
-    switchCase, createCase, renameCase, deleteCase, exportCase, importCase,
+    cases, activeCaseId, activeCase, isSaved,
+    switchCase, saveCase, renameCase, deleteCase, exportCase, importCase,
     snapshots, takeSnapshot, restoreSnapshot, removeSnapshot,
   } = useCaseDoc();
 
@@ -63,8 +63,8 @@ const App = () => {
           toggleLineAttr={toggleLineAttr}
           undo={undo} redo={redo} canUndo={canUndo} canRedo={canRedo}
 
-          cases={cases} activeCaseId={activeCaseId} activeCase={activeCase}
-          switchCase={switchCase} createCase={createCase} renameCase={renameCase}
+          cases={cases} activeCaseId={activeCaseId} activeCase={activeCase} isSaved={isSaved}
+          switchCase={switchCase} saveCase={saveCase} renameCase={renameCase}
           deleteCase={deleteCase} exportCase={exportCase} importCase={importCase}
 
           snapshots={snapshots} takeSnapshot={takeSnapshot}

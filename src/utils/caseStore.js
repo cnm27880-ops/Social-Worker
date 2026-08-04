@@ -7,7 +7,10 @@
  *   genogram-cases      → { v, activeId, list: [{ id, name, updatedAt }] }
  *   genogram-case-<id>  → 該案件的文件 JSON
  *
- * 這樣自動存檔時只需要覆寫「目前這一份」，不必把所有案件重寫一遍。
+ * 這樣存檔時只需要覆寫「目前這一份」，不必把所有案件重寫一遍。
+ *
+ * 重要：開啟網頁不會自動建立或開啟任何案件。案件庫只有在使用者主動按下
+ * 「儲存案件」（或匯入 .json）時才會多一份，見 openLibrary()。
  * =========================================================================== */
 
 import { INITIAL_DOC, migrateDoc, STORAGE_KEY as LEGACY_DOC_KEY } from './caseDoc';
@@ -97,32 +100,33 @@ const removeCaseDoc = (id) => {
 };
 
 /* ===========================================================================
- * 初始化
+ * 開啟案件庫
  *
- * 三種情況：
- *   1. 已有案件庫        → 直接用
- *   2. 只有舊的單一存檔  → 轉成第一個案件
- *   3. 全新使用者        → 開一個空案件
+ * 只讀不寫，而且**不會開啟任何案件**：activeId 一律是 null，畫布從空白開始。
+ * 使用者按下「儲存案件」以前，這一次的編輯完全不落地（無痕畫布）。
+ * 已存的案件仍在清單裡，可以從案件選單開回來。
+ *
+ * 唯一的例外是很早期版本留下的單一存檔：那是使用者的資料，不能因為改了
+ * 儲存機制就讓他找不到。所以會一次性把它登記進案件庫（只登記，不開啟），
+ * 之後就從清單裡看得到。
  * =========================================================================== */
 
-export const initLibrary = () => {
+export const openLibrary = () => {
   const existing = normalizeIndex(readJSON(INDEX_KEY));
-  if (existing) {
-    return { index: existing, doc: readCaseDoc(existing.activeId) };
-  }
+  if (existing) return { index: { ...existing, activeId: null } };
 
   const legacy = migrateDoc(readJSON(LEGACY_DOC_KEY));
+  if (!legacy) return { index: emptyIndex() };
+
   const id = newCaseId();
-  const doc = legacy || { ...INITIAL_DOC };
   const index = {
     v: INDEX_VERSION,
-    activeId: id,
-    list: [{ id, name: nextCaseName([]), updatedAt: Date.now() }],
+    activeId: null,
+    list: [{ id, name: `${nextCaseName([])}（舊版存檔）`, updatedAt: Date.now() }],
   };
-
-  writeCaseDoc(id, doc);
+  writeCaseDoc(id, legacy);
   writeIndex(index);
-  return { index, doc, migratedFromLegacy: !!legacy };
+  return { index, migratedFromLegacy: true };
 };
 
 /* ===========================================================================
@@ -146,16 +150,19 @@ export const renameCaseIn = (index, id, name) => ({
 });
 
 /**
- * 刪除案件。若刪掉的是目前開啟的案件，會自動切到清單中的下一份；
- * 刪到一份都不剩時回傳 needsNewCase，由呼叫端建立空案件。
+ * 刪除案件。刪掉的若是目前開著的那一份，就回到未儲存的空白畫布
+ * （activeId = null）—— 不自動跳到別人的案件，避免以為還在看剛才那一份。
  */
 export const removeCase = (index, id) => {
   const list = index.list.filter(c => c.id !== id);
   removeCaseDoc(id);
-  if (!list.length) return { index: emptyIndex(), needsNewCase: true };
+  if (!list.length) return { index: emptyIndex(), closedActive: true };
 
-  const activeId = index.activeId === id ? list[0].id : index.activeId;
-  return { index: { ...index, activeId, list }, needsNewCase: false };
+  const closedActive = index.activeId === id;
+  return {
+    index: { ...index, activeId: closedActive ? null : index.activeId, list },
+    closedActive,
+  };
 };
 
 /* ===========================================================================

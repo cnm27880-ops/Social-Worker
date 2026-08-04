@@ -3,7 +3,7 @@ import {
   INITIAL_DOC, idsWithAttr, setAttrIds, toggleAttr, toggleLineAttr,
 } from '../utils/caseDoc';
 import {
-  initLibrary, readCaseDoc, writeCaseDoc, writeIndex, touchCase,
+  openLibrary, readCaseDoc, writeCaseDoc, writeIndex, touchCase,
   addCase, renameCaseIn, removeCase, downloadCaseFile, parseCaseFile,
 } from '../utils/caseStore';
 import {
@@ -30,11 +30,15 @@ const AUTOSAVE_MS = 800;
  *     const positions = doc.positions, setPositions = setField('positions')
  * 之後，元件內部所有呼叫點都不用改。
  */
+const QUOTA_MSG = '本機儲存空間不足，無法儲存案件。若有匯入舊圖，可先移除底圖再存，或匯出成 .json 保存。';
+
 export function useCaseDoc() {
-  /* 只初始化一次：讀出案件索引與目前開啟的那份文件 */
-  const [boot] = useState(() => initLibrary());
+  /* 只初始化一次：讀出案件清單，但**不開啟任何案件**。
+   * 每次開啟網頁都是一張乾淨的空白畫布，使用者按下「儲存案件」以前
+   * 什麼都不落地（無痕畫布）。 */
+  const [boot] = useState(() => openLibrary());
   const [index, setIndex] = useState(boot.index);
-  const [doc, setDocRaw] = useState(boot.doc);
+  const [doc, setDocRaw] = useState(() => ({ ...INITIAL_DOC }));
 
   /* --- 歷史堆疊 ---
    * 放在 ref 避免每次 push 都觸發 render；按鈕的可用狀態另外用
@@ -87,13 +91,16 @@ export function useCaseDoc() {
     prevDoc.current = doc;
   }, [doc]);
 
-  /* --- 自動存檔（節流）：只覆寫目前這一份案件 ---
-   * 刻意不記「上次存檔時間」：面板上不再顯示它，留著就只是每 800ms
-   * 多觸發一次沒人看的 render。存檔時間仍寫進案件索引的 updatedAt，
-   * 案件切換選單看得到。 */
+  /* --- 後續變更的自動存檔（節流）---
+   * 只有「已經按過儲存」的案件才會落地：activeId 是 null 時什麼都不寫。
+   * 這是無痕畫布與案件庫的分界線。
+   *
+   * 刻意不記「上次存檔時間」：面板上不顯示它，留著只是每 800ms 多觸發
+   * 一次沒人看的 render。存檔時間仍寫進案件索引的 updatedAt。 */
   useEffect(() => {
+    const id = index.activeId;
+    if (!id) return;
     const t = setTimeout(() => {
-      const id = activeIdRef.current;
       if (!writeCaseDoc(id, doc)) return;
       setIndex(prev => {
         const next = touchCase(prev, id);
@@ -102,7 +109,7 @@ export function useCaseDoc() {
       });
     }, AUTOSAVE_MS);
     return () => clearTimeout(t);
-  }, [doc]);
+  }, [doc, index.activeId]);
 
   /* --- 欄位 setter --- */
   const setField = useCallback((key) => {
@@ -221,8 +228,49 @@ export function useCaseDoc() {
     setDocRaw(nextDoc);
   }, [clearHistory]);
 
+  /** 立刻把目前的編輯寫回案件（未儲存的草稿不寫）。 */
   const flushActive = useCallback(() => {
+    if (!activeIdRef.current) return;
     writeCaseDoc(activeIdRef.current, docRef.current);
+  }, []);
+
+  /* =========================================================================
+   * 時間軸快照
+   *
+   * 跟復原/重做不同：快照存在 localStorage，重新整理仍在，可以隨時跳回去。
+   * 但它跟著「案件」走 —— 未儲存的無痕畫布沒有案件可掛，也就沒有時間軸；
+   * 使用者按下「儲存案件」的那一刻，時間軸才開始。
+   * ======================================================================= */
+
+  const [snapshots, setSnapshots] = useState([]);
+
+  /** 寫一份快照到指定案件，並刷新清單。 */
+  const snapshotInto = useCallback((caseId, name) => {
+    if (!caseId) return null;
+    const snap = saveSnapshot(caseId, name, docRef.current);
+    setSnapshots(listSnapshots(caseId));
+    return snap;
+  }, []);
+
+  // 切換／新建／關閉案件後，快照清單也要換成那份案件自己的（未儲存則是空的）
+  useEffect(() => {
+    setSnapshots(index.activeId ? listSnapshots(index.activeId) : []);
+  }, [index.activeId]);
+
+  const takeSnapshot = useCallback((name) => snapshotInto(activeIdRef.current, name), [snapshotInto]);
+
+  const removeSnapshot = useCallback((snapshotId) => {
+    if (!activeIdRef.current) return;
+    setSnapshots(deleteSnapshot(activeIdRef.current, snapshotId));
+  }, []);
+
+  /** 還原一份快照到目前編輯畫面：當成一次一般編輯，可以再用 Ctrl+Z 復原這次還原。 */
+  const restoreSnapshot = useCallback((snapshotId) => {
+    const snapDoc = readSnapshotDoc(activeIdRef.current, snapshotId);
+    if (!snapDoc) return false;
+    pendingKey.current = `__restoreSnapshot_${snapshotId}_${Date.now()}`;
+    setDocRaw(snapDoc);
+    return true;
   }, []);
 
   const commitIndex = useCallback((next) => {
@@ -237,15 +285,33 @@ export function useCaseDoc() {
     loadIntoEditor(readCaseDoc(id));
   }, [flushActive, commitIndex, loadIntoEditor]);
 
-  const createCase = useCallback(() => {
-    flushActive();
-    const { index: next, id } = addCase(indexRef.current);
-    const fresh = { ...INITIAL_DOC };
-    writeCaseDoc(id, fresh);
+  /**
+   * 儲存案件。這是「無痕畫布」變成「有紀錄的案件」的唯一入口。
+   *
+   *   還沒儲存過 → 在案件庫建一份新案件，並開始記錄時間軸與後續自動存檔
+   *   已經儲存過 → 立刻寫回，並在時間軸上留一個節點
+   *
+   * 每次儲存都順手存一份快照，儲存與時間軸因此是同一個動作的兩面：
+   * 使用者不必分別記得「要存檔」和「要留紀錄」。
+   */
+  const saveCase = useCallback((name) => {
+    const id = activeIdRef.current;
+
+    if (id) {
+      if (!writeCaseDoc(id, docRef.current)) throw new Error(QUOTA_MSG);
+      const touched = touchCase(indexRef.current, id);
+      const next = name?.trim() ? renameCaseIn(touched, id, name) : touched;
+      commitIndex(next);
+      snapshotInto(id, null);
+      return next.list.find(c => c.id === id) || null;
+    }
+
+    const { index: next, id: newId } = addCase(indexRef.current, name);
+    if (!writeCaseDoc(newId, docRef.current)) throw new Error(QUOTA_MSG);
     commitIndex(next);
-    loadIntoEditor(fresh);
-    return id;
-  }, [flushActive, commitIndex, loadIntoEditor]);
+    snapshotInto(newId, '建立案件');
+    return next.list.find(c => c.id === newId) || null;
+  }, [commitIndex, snapshotInto]);
 
   const renameCase = useCallback((id, name) => {
     commitIndex(renameCaseIn(indexRef.current, id, name));
@@ -253,62 +319,19 @@ export function useCaseDoc() {
 
   const deleteCase = useCallback((id) => {
     clearSnapshots(id); // 案件不在了，屬於它的時間軸快照也沒有意義了
-    const { index: next, needsNewCase } = removeCase(indexRef.current, id);
-
-    // 刪到一份都不剩：直接開一份空的，不要讓使用者面對空畫面
-    if (needsNewCase) {
-      const { index: withNew, id: newId } = addCase(next);
-      const fresh = { ...INITIAL_DOC };
-      writeCaseDoc(newId, fresh);
-      commitIndex(withNew);
-      loadIntoEditor(fresh);
-      return;
-    }
-
-    const wasActive = id === activeIdRef.current;
+    const { index: next, closedActive } = removeCase(indexRef.current, id);
     commitIndex(next);
-    if (wasActive) loadIntoEditor(readCaseDoc(next.activeId));
+    // 刪掉的是正在編輯的那一份：回到未儲存的空白畫布
+    if (closedActive) loadIntoEditor({ ...INITIAL_DOC });
   }, [commitIndex, loadIntoEditor]);
 
   const activeCase = index.list.find(c => c.id === index.activeId) || null;
 
-  /* =========================================================================
-   * 時間軸快照
-   *
-   * 跟復原/重做不同：快照是使用者主動按下才存的一份「留念」，重新整理
-   * 瀏覽器也還在，可以隨時跳回去看，但不是自動記錄的每一步。
-   * ======================================================================= */
-
-  const [snapshots, setSnapshots] = useState(() => listSnapshots(index.activeId));
-
-  // 切換案件後，快照清單也要換成那份案件自己的
-  useEffect(() => {
-    setSnapshots(listSnapshots(index.activeId));
-  }, [index.activeId]);
-
-  const takeSnapshot = useCallback((name) => {
-    const snap = saveSnapshot(activeIdRef.current, name, docRef.current);
-    setSnapshots(listSnapshots(activeIdRef.current));
-    return snap;
-  }, []);
-
-  const removeSnapshot = useCallback((snapshotId) => {
-    setSnapshots(deleteSnapshot(activeIdRef.current, snapshotId));
-  }, []);
-
-  /** 還原一份快照到目前編輯畫面：當成一次一般編輯，可以再用 Ctrl+Z 復原這次還原。 */
-  const restoreSnapshot = useCallback((snapshotId) => {
-    const snapDoc = readSnapshotDoc(activeIdRef.current, snapshotId);
-    if (!snapDoc) return false;
-    pendingKey.current = `__restoreSnapshot_${snapshotId}_${Date.now()}`;
-    setDocRaw(snapDoc);
-    return true;
-  }, []);
-
+  /** 匯出目前畫布。未儲存的草稿也能匯出（檔名用「未命名案件」）。 */
   const exportCase = useCallback(() => {
     const current = indexRef.current;
     const entry = current.list.find(c => c.id === current.activeId);
-    downloadCaseFile(entry?.name || '案件', docRef.current);
+    downloadCaseFile(entry?.name || '未命名案件', docRef.current);
   }, []);
 
   /** 匯入永遠是「新增一份」，不覆蓋目前開著的案件。 */
@@ -351,8 +374,9 @@ export function useCaseDoc() {
     cases: index.list,
     activeCaseId: index.activeId,
     activeCase,
+    isSaved: !!index.activeId,
     switchCase,
-    createCase,
+    saveCase,
     renameCase,
     deleteCase,
     exportCase,

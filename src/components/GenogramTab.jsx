@@ -6,8 +6,10 @@ import {
   parseGenders, getSmoothPath, getRelativeTitle
 } from '../utils/helpers';
 import CaseBar from './CaseBar';
+import ImagePatchPanel from './ImagePatchPanel';
 import InfoTip from './InfoTip';
 import SymbolToolbox, { SymbolPreview, loadUsage, bumpUsage } from './SymbolToolbox';
+import { BG_X, BG_Y, bgImageBox } from '../utils/bgImage';
 import {
   SYMBOL_MAP, halfPath, healthHalvesFor, divisionSegments, kinshipDashFor,
   CLINICAL_FILL, CLINICAL_STROKE, CLINICAL_STROKE_W,
@@ -31,8 +33,8 @@ const ECO_RY = 28;
 const GenogramTab = ({
   doc, setField, patchDoc, toggleNodeAttr, toggleLineAttr,
   undo, redo, canUndo, canRedo,
-  cases, activeCaseId, activeCase,
-  switchCase, createCase, renameCase, deleteCase, exportCase, importCase,
+  cases, activeCaseId, activeCase, isSaved,
+  switchCase, saveCase, renameCase, deleteCase, exportCase, importCase,
   snapshots, takeSnapshot, restoreSnapshot, removeSnapshot,
   gen2Str, setGen2Str, gen2Cfg, setGen2Cfg,
   indexId, setIndexId,
@@ -53,7 +55,14 @@ const GenogramTab = ({
   const ipStyle = doc.ipStyle,          setIpStyle = setField('ipStyle');
   const polygons = doc.polygons,        setPolygons = setField('polygons');
 
+  /* --- 舊圖修補 --- */
+  const bgImage = doc.bgImage,          setBgImage = setField('bgImage');
+  const bgErase = doc.bgErase,          setBgErase = setField('bgErase');
+
   /* --- 純 UI 暫態：不進復原、不存檔 --- */
+  const [eraseMode, setEraseMode] = useState(false);
+  const [eraseWidth, setEraseWidth] = useState(24);
+  const [eraseDraft, setEraseDraft] = useState(null);   // 正在畫的那一筆
   const [drag, setDrag] = useState(null);
   const [usage, setUsage] = useState(loadUsage);   // 符號使用次數：決定工具箱內的排序
   const [mode, setMode] = useState(null);
@@ -565,13 +574,16 @@ const GenogramTab = ({
     });
     texts.forEach(t => { const w = t.vertical ? t.fontSize * 1.5 : t.text.length * t.fontSize * 0.7, h = t.vertical ? t.text.length * t.fontSize * 1.2 : t.fontSize * 1.5; allXs.push(t.x - 4, t.x + (t.vertical ? t.fontSize * 1.5 : w)); allYs.push(t.y - (t.vertical ? 4 : t.fontSize + 4), t.y + (t.vertical ? h : 8)); });
     polygons.forEach(pg => pg.pts.forEach(pt => { allXs.push(pt.x); allYs.push(pt.y); }));
+    // 底圖也要進裁切範圍，否則下載/列印會把修補好的舊圖切掉
+    const bgBox = bgImageBox(bgImage);
+    if (bgBox) { allXs.push(bgBox.x, bgBox.x + bgBox.w); allYs.push(bgBox.y, bgBox.y + bgBox.h); }
     if (cohabitationBox && cohabitationBox.type === 'single') { allXs.push(cohabitationBox.x, cohabitationBox.x + cohabitationBox.w); allYs.push(cohabitationBox.y, cohabitationBox.y + cohabitationBox.h); }
     else if (cohabitationBox && cohabitationBox.type === 'poly') { cohabitationBox.points.forEach(pt => { allXs.push(pt.x); allYs.push(pt.y); }); }
     if (allXs.length === 0) return null;
     const minX = Math.min(...allXs) - PAD, minY = Math.min(...allYs) - PAD;
     const w = Math.max(...allXs) + PAD - minX, h = Math.max(...allYs) + PAD - minY;
     return { minX, minY, w, h };
-  }, [nodes, freeNodes, texts, polygons, cohabitationBox, pos]);
+  }, [nodes, freeNodes, texts, polygons, cohabitationBox, pos, bgImage]);
 
   /** 把畫布裁切後轉成點陣圖並下載。transparent=true 時不補白底（PNG 去背用）。 */
   const rasterizeAndDownload = useCallback((box, { transparent, format, filename }) => {
@@ -591,17 +603,31 @@ const GenogramTab = ({
     img.src = url;
   }, []);
 
-  const downloadJPG = useCallback(() => {
-    const box = computeCropBox();
-    if (!box) return;
-    rasterizeAndDownload(box, { transparent: false, format: 'image/jpeg', filename: 'genogram.jpg' });
-  }, [computeCropBox, rasterizeAndDownload]);
+  /** 檔名用案件名稱，未儲存的草稿就叫 genogram。 */
+  const exportBaseName = useCallback(
+    () => (activeCase?.name || 'genogram').replace(/[\\/:*?"<>|]/g, '_'),
+    [activeCase]
+  );
 
+  /* 主按鈕：一鍵下載高解析 PNG（3 倍圖、白底）。
+   * 白底而不是去背 —— 直接貼進 Word／LINE 都不會變成一片黑，去背留在進階選單。 */
   const downloadPNG = useCallback(() => {
     const box = computeCropBox();
     if (!box) return;
-    rasterizeAndDownload(box, { transparent: true, format: 'image/png', filename: 'genogram-去背.png' });
-  }, [computeCropBox, rasterizeAndDownload]);
+    rasterizeAndDownload(box, { transparent: false, format: 'image/png', filename: `${exportBaseName()}.png` });
+  }, [computeCropBox, rasterizeAndDownload, exportBaseName]);
+
+  const downloadJPG = useCallback(() => {
+    const box = computeCropBox();
+    if (!box) return;
+    rasterizeAndDownload(box, { transparent: false, format: 'image/jpeg', filename: `${exportBaseName()}.jpg` });
+  }, [computeCropBox, rasterizeAndDownload, exportBaseName]);
+
+  const downloadPNGTransparent = useCallback(() => {
+    const box = computeCropBox();
+    if (!box) return;
+    rasterizeAndDownload(box, { transparent: true, format: 'image/png', filename: `${exportBaseName()}-去背.png` });
+  }, [computeCropBox, rasterizeAndDownload, exportBaseName]);
 
   /* 列印/存成 PDF：借瀏覽器內建的列印功能，不額外引入 PDF 產生套件。
    * 做法是暫時在 <body> 底下插入一份只含裁切後 SVG 的列印專用容器，
@@ -633,14 +659,49 @@ const GenogramTab = ({
     window.print();
   }, [computeCropBox, activeCase]);
 
+  /* ===== 橡皮擦：在底圖上拖曳抹除 =====
+   * 一筆從 mousedown 開始、mouseup 結束，中途只更新本地暫態；
+   * 放開才寫進文件，所以一筆就是一筆歷史，Ctrl+Z 會整筆消失而不是一段一段。 */
+  const eraseStart = useCallback((e) => {
+    if (!bgImage) return;
+    e.stopPropagation();
+    const sp = svgPt(e);
+    setEraseDraft({ w: eraseWidth, pts: [[Math.round(sp.x), Math.round(sp.y)]] });
+  }, [bgImage, eraseWidth, svgPt]);
+
+  const eraseMoveTo = useCallback((e) => {
+    if (!eraseDraft) return;
+    const sp = svgPt(e);
+    setEraseDraft(d => {
+      if (!d) return d;
+      const last = d.pts[d.pts.length - 1];
+      // 每 3px 才記一點：省掉大量幾乎重疊的座標，存檔才不會膨脹
+      if (Math.abs(sp.x - last[0]) < 3 && Math.abs(sp.y - last[1]) < 3) return d;
+      return { ...d, pts: [...d.pts, [Math.round(sp.x), Math.round(sp.y)]] };
+    });
+  }, [eraseDraft, svgPt]);
+
+  const eraseEnd = useCallback(() => {
+    if (!eraseDraft) return;
+    const stroke = { id: 'er_' + Date.now(), ...eraseDraft };
+    setEraseDraft(null);
+    setBgErase(prev => [...prev, stroke]);
+  }, [eraseDraft, setBgErase]);
+
+  /* 沒有底圖就不該還停在橡皮擦模式（例如剛按了復原把底圖收回去） */
+  useEffect(() => { if (!bgImage && eraseMode) setEraseMode(false); }, [bgImage, eraseMode]);
+
+  const eraseStrokes = eraseDraft ? [...bgErase, eraseDraft] : bgErase;
+
   /* ===== SVG 尺寸計算 ===== */
   const allX = nodes.map(n => positions[n.id]?.x ?? n.dx).concat(texts.map(t => t.x + 100), freeNodes.map(fn => {
     if (fn.type === 'eco') return fn.x + ecoRx(fn.text);
     return fn.x + 100;
   }));
   const allY = nodes.map(n => positions[n.id]?.y ?? n.dy).concat(texts.map(t => t.y + 100), freeNodes.map(fn => fn.y + 100));
-  const svgW = Math.max(800, (allX.length ? Math.max(...allX) : 0) + 160);
-  const svgH = Math.max(520, (allY.length ? Math.max(...allY) : 0) + 80);
+  const bgBox = bgImageBox(bgImage);
+  const svgW = Math.max(800, (allX.length ? Math.max(...allX) : 0) + 160, bgBox ? bgBox.x + bgBox.w + 60 : 0);
+  const svgH = Math.max(520, (allY.length ? Math.max(...allY) : 0) + 80, bgBox ? bgBox.y + bgBox.h + 60 : 0);
 
   /* ===== 介面渲染 ===== */
   return (
@@ -648,8 +709,8 @@ const GenogramTab = ({
       {/* 左側面板 */}
       <div className="panel">
         <CaseBar
-          cases={cases} activeCaseId={activeCaseId} activeCase={activeCase}
-          switchCase={switchCase} createCase={createCase} renameCase={renameCase}
+          cases={cases} activeCaseId={activeCaseId} activeCase={activeCase} isSaved={isSaved}
+          switchCase={switchCase} saveCase={saveCase} renameCase={renameCase}
           deleteCase={deleteCase} exportCase={exportCase} importCase={importCase}
           snapshots={snapshots} takeSnapshot={takeSnapshot}
           restoreSnapshot={restoreSnapshot} removeSnapshot={removeSnapshot}
@@ -660,13 +721,18 @@ const GenogramTab = ({
             <h2>資料輸入面板</h2>
           </div>
           <div className="panel-header-actions">
-            <div className="export-menu" ref={exportMenuRef}>
-              <button className="btn-action btn-primary" onClick={() => setExportOpen(o => !o)}
-                      aria-expanded={exportOpen} aria-haspopup="true">⬇ 下載／列印</button>
+            {/* 一鍵速下載：點按鈕本體直接存高解析 PNG，其他格式收在箭頭底下 */}
+            <div className="export-menu split-btn" ref={exportMenuRef}>
+              <button className="btn-action btn-primary" onClick={downloadPNG}
+                      title="直接下載高解析 PNG（3 倍圖、白底）">⬇ 下載圖片</button>
+              <button className="btn-action btn-primary split-caret"
+                      onClick={() => setExportOpen(o => !o)}
+                      aria-expanded={exportOpen} aria-haspopup="true"
+                      title="其他格式與列印" aria-label="其他下載與列印選項">▼</button>
               {exportOpen && (
                 <ul className="export-menu-list">
                   <li><button onClick={() => { downloadJPG(); setExportOpen(false); }}>🖼️ JPG 圖片</button></li>
-                  <li><button onClick={() => { downloadPNG(); setExportOpen(false); }}>🪄 PNG（透明背景）</button></li>
+                  <li><button onClick={() => { downloadPNGTransparent(); setExportOpen(false); }}>🪄 PNG（透明背景）</button></li>
                   <li><button onClick={() => { printA4(); setExportOpen(false); }}>🖨️ 列印／存成 PDF（A4）</button></li>
                 </ul>
               )}
@@ -678,6 +744,7 @@ const GenogramTab = ({
                 gen2Str: '', gen2Cfg: [], indexId: null, cohabMembers: [], nodeAttrs: {}, lineAttrs: {},
                 cohabSolid: false, polygons: [], texts: [], ages: {},
                 freeNodes: [], customLinks: [], positions: {}, ipStyle: 'filled',
+                bgImage: null, bgErase: [],
               }, '__reset');
             }}>重置</button>
           </div>
@@ -829,6 +896,13 @@ const GenogramTab = ({
           </div>
         </div>
 
+        <ImagePatchPanel
+          bgImage={bgImage} setBgImage={setBgImage}
+          bgErase={bgErase} setBgErase={setBgErase}
+          eraseMode={eraseMode} setEraseMode={setEraseMode}
+          eraseWidth={eraseWidth} setEraseWidth={setEraseWidth}
+        />
+
         {customLinks.length > 0 && (
           <div className="section">
             <label>🔗 擴充連線設定</label>
@@ -901,8 +975,36 @@ const GenogramTab = ({
         <svg ref={svgRef} width={svgW} height={svgH} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp} onClick={() => { setSelectedTextId(null); setSelectedPolyId(null); }} style={{ background: '#fefefe', minWidth: '600px', cursor: mode === 'cohab' && cohabMode === 'poly' ? 'crosshair' : undefined }}>
           <defs>
             <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="#f0f0f0" strokeWidth="0.5" /></pattern>
+            {/* 橡皮擦遮罩：白＝留下、黑＝挖掉。用遮罩而不是在底圖上塗白色，
+                去背 PNG 匯出時擦過的地方才會是真的透明，而不是白色筆跡 */}
+            {bgImage && (
+              <mask id="bg-erase-mask" maskUnits="userSpaceOnUse"
+                    x={BG_X} y={BG_Y} width={bgBox.w} height={bgBox.h}>
+                <rect x={BG_X} y={BG_Y} width={bgBox.w} height={bgBox.h} fill="white" />
+                {eraseStrokes.map((st, i) => (
+                  <polyline
+                    key={st.id || `draft${i}`}
+                    points={st.pts.map(pt => pt.join(',')).join(' ')}
+                    fill="none" stroke="black" strokeWidth={st.w}
+                    strokeLinecap="round" strokeLinejoin="round"
+                  />
+                ))}
+              </mask>
+            )}
           </defs>
           <rect width="100%" height="100%" fill="url(#grid)" />
+
+          {/* 舊圖底圖：畫在所有內容底下，新疊上去的符號才會蓋在舊圖上面 */}
+          {bgImage && (
+            <image
+              href={bgImage.src} x={BG_X} y={BG_Y}
+              width={bgBox.w} height={bgBox.h}
+              opacity={bgImage.opacity ?? 0.55}
+              mask="url(#bg-erase-mask)"
+              preserveAspectRatio="none"
+              style={{ pointerEvents: 'none' }}
+            />
+          )}
 
           {mode === 'cohab' && cohabMode === 'poly' && (
             <rect width="100%" height="100%" fill="transparent" style={{ cursor: 'crosshair' }} onClick={e => { e.stopPropagation(); const sp = svgPt(e); const pt = { x: sp.x, y: sp.y }; if (draftPoly.length >= 3 && Math.sqrt(Math.pow(pt.x - draftPoly[0].x,2) + Math.pow(pt.y - draftPoly[0].y,2)) < 15) { setPolygons(p => [...p, { id: 'pg_' + Date.now(), pts: draftPoly }]); setDraftPoly([]); setMousePos(null); return; } setDraftPoly(p => [...p, pt]); }} />
@@ -1225,6 +1327,20 @@ const GenogramTab = ({
               </g>
             );
           })}
+
+          {/* 橡皮擦模式的擷取層：蓋在最上面，讓節點與文字方塊在擦除時不會被誤拖。
+              fill 透明所以不影響匯出結果。 */}
+          {eraseMode && bgImage && (
+            <rect
+              width="100%" height="100%" fill="transparent"
+              style={{ cursor: 'crosshair' }}
+              onMouseDown={eraseStart}
+              onMouseMove={eraseMoveTo}
+              onMouseUp={eraseEnd}
+              onMouseLeave={eraseEnd}
+              onClick={e => e.stopPropagation()}
+            />
+          )}
         </svg>
       </div>
 

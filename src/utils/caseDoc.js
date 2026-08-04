@@ -51,6 +51,21 @@ export const INITIAL_DOC = {
   texts: [],
   ages: {},
 
+  /* --- 舊圖修補（Image Overlay） ---
+   * 匯入一張既有的家系圖當底圖，在上面疊符號、關係線與文字方塊。
+   * { src: dataURL, w, h, opacity, scale }
+   * src 存 dataURL 而不是 File／blob URL：blob URL 重新整理就失效，
+   * 而底圖必須跟著案件一起存進案件庫、一起匯出成 .json。
+   * 上傳時會先縮圖再轉 dataURL（見 utils/bgImage.js），避免把
+   * 一張幾 MB 的掃描圖塞爆 localStorage 配額。 */
+  bgImage: null,
+
+  /* --- 底圖橡皮擦筆跡 ---
+   * [{ id, w, pts: [[x, y], ...] }]
+   * 底圖是點陣圖，「擦掉」的做法是拿這些筆跡組成 SVG mask 把該處挖成透明，
+   * 而不是在上面塗白色 —— 塗白在去背 PNG 匯出時會留下白色筆跡。 */
+  bgErase: [],
+
   /* --- 影響輸出結果的繪圖選項 --- */
   cohabMode: 'auto',
   cohabSolid: false,
@@ -139,6 +154,10 @@ export const migrateDoc = (raw) => {
     attrs = setAttrIds(attrs, 'disabled', raw.disabledIds || []);
     doc.nodeAttrs = attrs;
   }
+
+  // 底圖與橡皮擦筆跡：形狀不對就當沒有。壞掉的一筆不該讓整張畫布打不開
+  if (doc.bgImage && typeof doc.bgImage.src !== 'string') doc.bgImage = null;
+  doc.bgErase = doc.bgErase.filter(st => st && Array.isArray(st.pts) && st.pts.length > 0);
 
   return doc;
 };

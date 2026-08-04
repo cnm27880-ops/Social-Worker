@@ -7,7 +7,7 @@ const fmtTime = (ts) => {
   return d.toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 };
 
-const TIP = '存一份現在的家系圖，之後可以跳回來看或還原。不會取代自動儲存與復原／重做。';
+const TIP = '每次按「儲存案件」都會在這裡留一個節點；也可以自己命名再存一份。之後能隨時還原回那個時間點，重新整理也還在。';
 
 /**
  * 時間軸快照，收在案件列的 🕰️ 按鈕底下。
@@ -18,9 +18,12 @@ const TIP = '存一份現在的家系圖，之後可以跳回來看或還原。�
  *
  * 快照與復原／重做不同：快照存在 localStorage，重新整理仍在；
  * 還原走一般的文件替換，所以還原錯了可以再用 Ctrl+Z 復原這次還原。
+ *
+ * 時間軸掛在案件底下，所以案件還沒儲存時整顆按鈕是停用的 —— 沒有案件可掛，
+ * 存了也不知道要存到哪裡去。
  */
 const SnapshotMenu = ({
-  snapshots, takeSnapshot, restoreSnapshot, removeSnapshot,
+  snapshots, takeSnapshot, restoreSnapshot, removeSnapshot, isSaved,
   open, onToggle, onClose,
 }) => {
   const [draft, setDraft] = useState('');
@@ -54,7 +57,8 @@ const SnapshotMenu = ({
       <button
         className={`case-tool ${open ? 'active' : ''}`}
         onClick={onToggle}
-        title="時間軸快照"
+        disabled={!isSaved}
+        title={isSaved ? '時間軸快照' : '儲存案件後才會開始記錄時間軸'}
         aria-label="時間軸快照"
         aria-expanded={open}
       >
@@ -93,7 +97,7 @@ const SnapshotMenu = ({
               ))}
             </ul>
           ) : (
-            <p className="snap-empty">還沒有快照。</p>
+            <p className="snap-empty">還沒有節點。按「儲存案件」或上面的「建立」都會留下一個。</p>
           )}
         </div>
       )}
