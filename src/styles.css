@@ -1,9 +1,13 @@
 /* ===================================================================
  * 燕麥侘寂風視覺規範
  *
- * 燕麥護眼底色 + 純白卡片 + 柔和暖灰邊框，卡片一律用不對稱圓角
+ * 燕麥護眼底色 + 純白卡片 + 暖灰邊框，卡片一律用不對稱圓角
  * （16px 4px 16px 4px）帶出手作感。所有原本高飽和的藍／紅／綠
  * 都改成莫蘭迪色（灰調降飽和），社工長時間盯著畫面比較不刺眼。
+ *
+ * 「降飽和」不等於「降對比」：文字用深暖灰而非淺灰，實心按鈕的底色壓到
+ * 白字有 4.5:1 以上，最淡的輔助文字也維持 4.5:1。這是社工每天要讀的
+ * 工作介面，柔和是為了不刺眼，不是為了看不清楚。
  *
  * 唯一刻意不套用的地方是 SVG 畫布裡的家系圖本體：節點線條、暴力關係的
  * 紅色鋸齒線等等都是有標準依據的畫法，不是介面裝飾，不能為了風格改掉。
@@ -12,25 +16,27 @@
   /* 底色與骨架 */
   --oat:       #FDFBF7;   /* 頁面底色（燕麥護眼色） */
   --card:      #FFFFFF;   /* 卡片 */
-  --line:      #E8E4D9;   /* 柔和邊框 */
-  --line-soft: #F1EDE4;   /* 更淡的分隔線 */
+  --line:      #D8D2C5;   /* 卡片邊框：比底色明顯，卡片邊界才看得出來 */
+  --line-soft: #E8E4D9;   /* 卡片內部的分隔線 */
   --wash:      #FAF8F3;   /* 卡片內的區塊底 */
   --wash-warm: #F7F3EA;   /* 稍深的暖底 */
 
-  /* 文字（暖灰階，不用純黑，降低對比刺激） */
-  --ink:       #4A453D;
-  --ink-mid:   #6B6558;
-  --ink-soft:  #8A8375;
-  --ink-faint: #A9A294;
+  /* 文字（深暖灰階：不用純黑，但要壓得住白底，不能灰濛濛）
+   * 對白底的對比度：ink 14.4:1／mid 10.4:1／soft 6.5:1／faint 4.5:1 */
+  --ink:       #2C2A29;   /* 標題、關鍵按鈕文字 */
+  --ink-mid:   #3E3A37;   /* 一般內文 */
+  --ink-soft:  #5E5850;   /* 次要說明 */
+  --ink-faint: #7D766B;   /* 最淡的輔助文字，仍達 AA */
 
-  /* 莫蘭迪色（低飽和，solid 不用漸層） */
-  --dust:      #7F94A6;   --dust-d:  #6C8296;   --dust-w:  #EDF1F4;   --dust-bd: #D3DDE4;
-  --sage:      #8B9E8A;   --sage-d:  #76896F;   --sage-w:  #EDF1EB;   --sage-bd: #D5DFD2;
-  --clay:      #B98B7B;   --clay-d:  #A6786A;   --clay-w:  #F6EEEA;   --clay-bd: #E6D3C9;
-  --mauve:     #9A8CA5;   --mauve-d: #87799A;   --mauve-w: #F1EEF4;   --mauve-bd: #DED6E3;
-  --sand:      #C4A97D;   --sand-d:  #AE9166;   --sand-w:  #F7F1E4;   --sand-bd: #E7DAC0;
-  --rose:      #BE9AA2;   --rose-d:  #A8848C;   --rose-w:  #F6EEF0;   --rose-bd: #E5D3D7;
-  --teal:      #7E9A96;   --teal-d:  #6B8783;   --teal-w:  #ECF2F1;   --teal-bd: #D2DFDD;
+  /* 莫蘭迪色（低飽和但壓得夠深，白字在上面都有 4.5:1 以上）
+   *   base = 實心按鈕底（白字）／-d = 淺底上的文字與 hover／-w = 淺底／-bd = 邊框 */
+  --dust:      #5F7488;   --dust-d:  #4A5D6E;   --dust-w:  #ECF0F3;   --dust-bd: #C6D3DC;
+  --sage:      #607158;   --sage-d:  #4C5B46;   --sage-w:  #ECF0EA;   --sage-bd: #CBD7C7;
+  --clay:      #9C6552;   --clay-d:  #814F3F;   --clay-w:  #F6EDE9;   --clay-bd: #DFC8BE;
+  --mauve:     #6E6178;   --mauve-d: #574C60;   --mauve-w: #F0EDF3;   --mauve-bd: #D6CDDD;
+  --sand:      #8A6C39;   --sand-d:  #6E5529;   --sand-w:  #F6F0E2;   --sand-bd: #DFD0B2;
+  --rose:      #8F636B;   --rose-d:  #744F56;   --rose-w:  #F5EDEF;   --rose-bd: #DDC9CE;
+  --teal:      #5C7A76;   --teal-d:  #48625E;   --teal-w:  #EBF1F0;   --teal-bd: #C9D9D6;
 
   /* 形狀與陰影 */
   --r-card: 16px 4px 16px 4px;
@@ -142,13 +148,13 @@ body {
 .btn-action {
   display: inline-flex; align-items: center; justify-content: center;
   height: 30px; padding: 0 14px;
-  font-size: 12.5px; font-weight: 600; letter-spacing: 0.5px;
+  font-size: 12.5px; font-weight: 700; letter-spacing: 0.5px;
   border: none; border-radius: var(--r-sm); cursor: pointer;
-  color: white; transition: transform 0.15s ease, filter 0.2s ease;
+  color: #fff; transition: transform 0.15s ease, background 0.2s ease;
   white-space: nowrap; line-height: 1;
 }
-.btn-action:hover { transform: translateY(-1px); filter: brightness(1.04); }
-.btn-action:active { transform: translateY(0); filter: brightness(0.96); }
+.btn-action:hover { transform: translateY(-1px); }
+.btn-action:active { transform: translateY(0); }
 .btn-action.btn-primary { background: var(--dust); }
 .btn-action.btn-primary:hover { background: var(--dust-d); }
 .btn-action.btn-danger { background: var(--clay); }
@@ -162,8 +168,8 @@ body {
   color: #fff; cursor: pointer; white-space: nowrap; line-height: 1.35;
   transition: filter 0.15s ease, background 0.15s ease;
 }
-.btn-soft:hover { filter: brightness(1.05); }
-.btn-soft:active { filter: brightness(0.95); }
+.btn-soft:hover { filter: brightness(0.92); }
+.btn-soft:active { filter: brightness(0.86); }
 .btn-soft-xs { padding: 3px 9px; font-size: 11px; font-weight: 600; }
 .btn-soft-wide { flex: 1; padding: 8px; font-size: 13px; text-align: center; margin: 0; }
 .btn-soft.tone-dust  { background: var(--dust); }
@@ -271,7 +277,7 @@ body {
 /* ===== 自動儲存狀態列 ===== */
 .save-status {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  margin: -2px 0 12px; font-size: 11.5px; color: var(--ink-faint); letter-spacing: 0.2px;
+  margin: -2px 0 12px; font-size: 11.5px; color: var(--ink-soft); letter-spacing: 0.2px;
 }
 .save-status .history-actions { display: inline-flex; gap: 4px; flex-shrink: 0; }
 .save-status .save-note { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
@@ -437,7 +443,7 @@ body {
 input[type="text"] { width: 100%; padding: 7px 10px; border: 1px solid var(--line); border-radius: var(--r-xs); font-size: 14px; color: var(--ink); background: var(--card); outline: none; }
 input[type="text"]:focus { border-color: var(--dust); box-shadow: 0 0 0 2px rgba(127, 148, 166, 0.18); }
 
-.hint { font-size: 11px; color: var(--ink-faint); margin-top: 3px; }
+.hint { font-size: 11px; color: var(--ink-soft); margin-top: 3px; }
 
 /* 紀錄產生器專用 UI */
 .record-layout { display: flex; flex-direction: column; gap: 16px; max-width: 1500px; margin: 0 auto; }
@@ -540,7 +546,7 @@ svg { display: block; user-select: none; }
 .sym-cat-head:hover { background: var(--wash); border-color: #DDD7C7; }
 .sym-cat-head.open { background: var(--dust-w); border-color: var(--dust-bd); color: var(--dust-d); }
 .sym-cat-count {
-  margin-left: auto; font-size: 10.5px; font-weight: 700; color: var(--ink-faint);
+  margin-left: auto; font-size: 10.5px; font-weight: 700; color: var(--ink-soft);
   background: var(--wash-warm); border-radius: 999px; padding: 1px 7px;
 }
 .sym-cat-head.open .sym-cat-count { background: #fff; color: var(--dust-d); }

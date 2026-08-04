@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import Collapsible from './Collapsible';
 import {
-  CATEGORIES, SYMBOLS, halfPath, divisionSegments,
+  TOOLBOX_CATEGORIES, TOOLBOX_SYMBOLS, halfPath, divisionSegments,
   CLINICAL_FILL, CLINICAL_STROKE,
   trianglePath, triangleCrossLines, zigzagPoints, gapSegments, DISTANT_DASH,
 } from '../utils/symbols';
@@ -12,7 +12,8 @@ const RECENT_MAX = 4;
 export const loadRecent = () => {
   try {
     const raw = JSON.parse(localStorage.getItem(RECENT_KEY));
-    return Array.isArray(raw) ? raw.filter(k => SYMBOLS.some(s => s.key === k)) : [];
+    // 對 TOOLBOX_SYMBOLS 過濾而不是 SYMBOLS：舊紀錄可能留著已移出工具箱的符號
+    return Array.isArray(raw) ? raw.filter(k => TOOLBOX_SYMBOLS.some(s => s.key === k)) : [];
   } catch { return []; }
 };
 
@@ -86,12 +87,13 @@ export const SymbolPreview = ({ symbol, size = 24 }) => {
  * 拖曳過程中經過的節點不會被觸發，只有放開的位置算數。
  *
  * 整個工具箱預設收合：冷門符號不該跟第一代／第二代這條主線搶垂直空間。
+ * 快捷工具列已經提供的「死亡／身心障礙」不收在這裡（見 TOOLBOX_SYMBOLS）。
  */
 const SymbolToolbox = ({ onPickUp, recent, activeKey }) => {
-  const [openCat, setOpenCat] = useState('common');
+  const [openCat, setOpenCat] = useState(TOOLBOX_CATEGORIES[0]?.key ?? null);
 
   const recentSymbols = recent
-    .map(k => SYMBOLS.find(s => s.key === k))
+    .map(k => TOOLBOX_SYMBOLS.find(s => s.key === k))
     .filter(Boolean);
 
   const Chip = ({ s }) => (
@@ -108,8 +110,8 @@ const SymbolToolbox = ({ onPickUp, recent, activeKey }) => {
   return (
     <Collapsible
       title="🧱 積木工具箱"
-      tip="拖曳符號到人物上放開即可標記；拖到婚姻線上是關係品質，拖到空白處新增獨立個體。再拖一次可取消。"
-      badge={SYMBOLS.length}
+      tip="進階臨床標記。拖曳符號到人物上放開即可標記；拖到婚姻線上是關係品質，拖到空白處新增獨立個體。再拖一次可取消。案主／身障／死亡請用上方快捷工具列。"
+      badge={TOOLBOX_SYMBOLS.length}
     >
       {recentSymbols.length > 0 && (
         <div className="sym-recent">
@@ -120,8 +122,8 @@ const SymbolToolbox = ({ onPickUp, recent, activeKey }) => {
         </div>
       )}
 
-      {CATEGORIES.map(cat => {
-        const items = SYMBOLS.filter(s => s.category === cat.key);
+      {TOOLBOX_CATEGORIES.map(cat => {
+        const items = TOOLBOX_SYMBOLS.filter(s => s.category === cat.key);
         if (!items.length) return null;
         const open = openCat === cat.key;
         return (

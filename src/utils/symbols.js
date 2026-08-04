@@ -33,7 +33,7 @@
  * =========================================================================== */
 
 export const CATEGORIES = [
-  { key: 'common', label: '常用' },
+  { key: 'common', label: '基本標記（快捷工具列 Q／W／R）' },
   { key: 'health', label: '健康狀況' },
   { key: 'kinship', label: '親子關係' },
   { key: 'perinatal', label: '妊娠與失落' },
@@ -76,6 +76,7 @@ export const SYMBOLS = [
     category: 'common',
     kind: 'nodeAttr',
     shortcut: 'R',
+    quickTool: true,
     desc: '在符號上畫對角叉。',
     note: '兩份來源一致。',
   },
@@ -85,6 +86,7 @@ export const SYMBOLS = [
     category: 'common',
     kind: 'nodeAttr',
     shortcut: 'W',
+    quickTool: true,
     desc: '左半實心填滿。',
     note: '本工具沿用的既有畫法。McGoldrick 標準中左半代表精神疾病，'
         + '兩者不同，判讀時請以本工具的圖例為準。',
@@ -247,6 +249,17 @@ export const SYMBOLS = [
 ];
 
 export const SYMBOL_MAP = Object.fromEntries(SYMBOLS.map(s => [s.key, s]));
+
+/* 積木工具箱只放冷門／進階的臨床標記。
+ *
+ * 「死亡」與「身心障礙」在面板上方的快捷工具列（Q／W／R）已經有入口，
+ * 同一個功能在同一個面板出現兩次只會讓人猶豫該用哪一個，所以標了
+ * quickTool 的符號不進工具箱 —— 但定義本身要留著：畫布靠 SYMBOL_MAP
+ * 畫這些標記，說明書的符號對照也要能查到它們的畫法與出處。 */
+export const TOOLBOX_SYMBOLS = SYMBOLS.filter(s => !s.quickTool);
+export const TOOLBOX_CATEGORIES = CATEGORIES.filter(
+  c => TOOLBOX_SYMBOLS.some(s => s.category === c.key)
+);
 
 /** 會畫在親子連線上的標記（拖到子代節點，但線變樣式）。只在本檔案內使用。 */
 const KINSHIP_KEYS = SYMBOLS.filter(s => s.kind === 'kinship').map(s => s.key);
