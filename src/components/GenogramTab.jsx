@@ -888,7 +888,7 @@ const GenogramTab = ({
                 onClick={cycleOnClick(TEXT_DIRS, textDirection, setTextDirection)}
                 ref={el => wheelRef(el, TEXT_DIRS, textDirection, setTextDirection)}
                 title="點擊或滾輪切換：橫式/直式">{TEXT_DIR_LABELS[textDirection]}</span>
-          <button className="btn-soft tone-sage" onClick={addText} style={{ marginLeft: 'auto' }}>➕ 新增</button>
+          <button className="btn-soft tone-sage" onClick={addText} style={{ marginLeft: 'auto' }}>新增</button>
         </div>
 
         <div className="section">
@@ -897,9 +897,9 @@ const GenogramTab = ({
             <InfoTip text="拖曳擴充個體碰撞目標即可產生連線；生態圖新增後預設連結案主。「編輯」會把擴充個體改用藍色畫，方便跟原本的家系區分。" />
           </div>
           <div className="btn-row">
-            <button className="btn-soft tone-dust" onClick={() => addFreeNode('M')}>+ 男性</button>
-            <button className="btn-soft tone-rose" onClick={() => addFreeNode('F')}>+ 女性</button>
-            <button className="btn-soft tone-teal" onClick={addEcoNode}>+ 生態圖</button>
+            <button className="btn-soft tone-dust" onClick={() => addFreeNode('M')}>男性</button>
+            <button className="btn-soft tone-rose" onClick={() => addFreeNode('F')}>女性</button>
+            <button className="btn-soft tone-teal" onClick={addEcoNode}>生態圖</button>
             {/* 原本是個只能用滾輪切換的標籤（看起來像 tag，也沒人知道可以滾）。
                 改成真的按鈕：點一下切換，滾輪仍然可用。 */}
             <button
