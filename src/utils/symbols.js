@@ -1,9 +1,10 @@
 /* ===========================================================================
- * 家系圖符號表（精簡版 - 僅保留 7 個常用快捷符號）
+ * 家系圖符號表（精簡版 - 快捷列表 6 個狀態／關係標記 + 自由擴充區 1 個獨立節點）
  * =========================================================================== */
 
 export const CATEGORIES = [
   { key: 'common', label: '快捷列表' },
+  { key: 'free', label: '自由擴充區' },
 ];
 
 /** 臨床標記的填色與描邊設定 */
@@ -34,7 +35,11 @@ export const quarterPath = (gender, r) => {
 };
 
 /* ===========================================================================
- * 符號定義：僅保留 7 個常用快捷符號，已移除 desc 以隱藏懸浮提示框
+ * 符號定義
+ * - 快捷列表（category: 'common'）：6 個狀態／關係標記，套用在已存在的人物節點
+ *   或婚姻線上，點一下套用、再點一下（或套到同樣的標記）即取消。
+ * - 自由擴充區（category: 'free'）：獨立節點，點按鈕即在畫布上新增一個全新個體。
+ * desc 只用在說明書「符號對照」表，不再驅動快捷列表按鈕上的懸浮提示框。
  * =========================================================================== */
 
 export const SYMBOLS = [
@@ -44,7 +49,7 @@ export const SYMBOLS = [
     category: 'common',
     kind: 'nodeAttr',
     quickTool: true,
-    desc: '',
+    desc: '在符號上畫對角叉。',
   },
   {
     key: 'disabled',
@@ -52,7 +57,7 @@ export const SYMBOLS = [
     category: 'common',
     kind: 'nodeAttr',
     quickTool: true,
-    desc: '',
+    desc: '左半實心填滿。',
   },
   {
     key: 'chronicIllness',
@@ -61,16 +66,15 @@ export const SYMBOLS = [
     kind: 'nodeAttr',
     quarter: 'top-left',
     quickTool: true,
-    desc: '',
+    desc: '左上四分之一填色。',
   },
   {
     key: 'pregnancy',
-    label: '懷孕',
-    category: 'common',
+    label: '三角',
+    category: 'free',
     kind: 'standalone',
     shape: 'triangle',
-    quickTool: true,
-    desc: '',
+    desc: '點選按鈕即在畫布上新增一個獨立三角形節點。',
   },
   {
     key: 'closeRelationship',
@@ -79,7 +83,7 @@ export const SYMBOLS = [
     kind: 'relLine',
     lineStyle: 'double',
     quickTool: true,
-    desc: '',
+    desc: '婚姻線改為雙線。',
   },
   {
     key: 'conflict',
@@ -88,7 +92,7 @@ export const SYMBOLS = [
     kind: 'relLine',
     lineStyle: 'zigzag',
     quickTool: true,
-    desc: '',
+    desc: '婚姻線改為鋸齒線。',
   },
   {
     key: 'deteriorating',
@@ -97,14 +101,14 @@ export const SYMBOLS = [
     kind: 'relLine',
     lineStyle: 'hatch',
     quickTool: true,
-    desc: '',
+    desc: '婚姻線上加一排斜線刻痕。',
   },
 ];
 
 export const SYMBOL_MAP = Object.fromEntries(SYMBOLS.map(s => [s.key, s]));
 
 export const QUICK_KEYS = [
-  'deceased', 'disabled', 'chronicIllness', 'pregnancy',
+  'deceased', 'disabled', 'chronicIllness',
   'closeRelationship', 'conflict', 'deteriorating',
 ];
 export const QUICK_SYMBOLS = QUICK_KEYS.map(k => SYMBOL_MAP[k]);
