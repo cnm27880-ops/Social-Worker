@@ -1,5 +1,5 @@
 import {
-  halfPath, divisionSegments, quarterPath, quarterBoundary,
+  halfPath, divisionSegments, quarterPath,
   CLINICAL_FILL, CLINICAL_STROKE,
   trianglePath, triangleCrossLines,
   zigzagPoints, gapSegments, doubleLineSegments, hatchSegments, DISTANT_DASH,
@@ -91,14 +91,9 @@ export const SymbolPreview = ({ symbol, size = 24 }) => {
               ))}
             </>
           )}
-          {symbol.quarter && (
-            <>
-              <path d={quarterPath('M', r)} fill={CLINICAL_FILL} />
-              {quarterBoundary(r).map(([x1, y1, x2, y2], i) => (
-                <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke={CLINICAL_STROKE} strokeWidth="1.6" />
-              ))}
-            </>
-          )}
+          {/* 慢性病跟身心障礙同色（深色實心），不用淡紫色系，
+              以免被誤認成精神／生理疾病那組標記。 */}
+          {symbol.quarter && <path d={quarterPath('M', r)} fill="#334155" />}
           {symbol.key === 'disabled' && <path d={halfPath('M', 'left', r)} fill="#334155" />}
           {symbol.key === 'deceased' && (
             <>

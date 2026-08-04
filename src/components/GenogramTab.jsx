@@ -13,7 +13,7 @@ import { BG_X, BG_Y, bgImageBox } from '../utils/bgImage';
 import {
   SYMBOL_MAP, QUICK_KEYS, QUICK_SYMBOLS,
   halfPath, healthHalvesFor, divisionSegments, kinshipDashFor,
-  quarterPath, quarterBoundary,
+  quarterPath,
   CLINICAL_FILL, CLINICAL_STROKE, CLINICAL_STROKE_W,
   trianglePath, triangleCrossLines,
   zigzagPoints, gapSegments, doubleLineSegments, hatchSegments, distToSegment, DISTANT_DASH,
@@ -1177,16 +1177,12 @@ const GenogramTab = ({
                     </g>
                   );
                 })()}
-                {/* 慢性病：左上四分之一填色。跟上面的半邊系統各自獨立畫——
-                    只有一個象限，套不進「halves 組合」那套邏輯，也沒有必要。 */}
+                {/* 慢性病：左上四分之一填色，跟「身心障礙」的半邊實心同色，
+                    不用淡紫色系以免被誤認成精神／生理疾病那組標記。
+                    跟上面的半邊系統各自獨立畫——只有一個象限，套不進
+                    「halves 組合」那套邏輯，也沒有必要畫額外的分界線。 */}
                 {doc.nodeAttrs[nd.id]?.includes('chronicIllness') && (
-                  <g pointerEvents="none">
-                    <path d={quarterPath(nd.gender, R)} fill={CLINICAL_FILL} />
-                    {quarterBoundary(R).map(([x1, y1, x2, y2], i) => (
-                      <line key={i} x1={x1} y1={y1} x2={x2} y2={y2}
-                            stroke={CLINICAL_STROKE} strokeWidth={CLINICAL_STROKE_W} />
-                    ))}
-                  </g>
+                  <path d={quarterPath(nd.gender, R)} fill={overlayDark} pointerEvents="none" />
                 )}
                 {/* 工具箱拖曳經過時的高亮：只是預覽，放開才會真的貼上 */}
                 {symbolDrag?.hoverId === nd.id && (nd.gender === 'M'
