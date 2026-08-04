@@ -70,6 +70,15 @@ body {
    * 每次都把右側內容擠進擠出、看起來像在抖動。先佔位就不會再跳動。 */
   scrollbar-gutter: stable;
 }
+/* 手機（<768px）時 .app-layout 是直排，flex-basis 的主軸換成垂直方向——
+ * 350px 這時會變成「面板高度只有 350px」而不是原本桌面版的「面板寬度」，
+ * 把面板硬壓成一個要在裡面滾動的小盒子，畫布反而被推到很下面。改成
+ * flex-basis:auto 讓面板照內容自然撐高，寬度用滿版；高度上限也放寬，
+ * 但仍留一點滾動空間避免面板比整個手機螢幕還高。 */
+@media (max-width: 767px) {
+  .panel { flex: 0 0 auto; width: 100%; max-height: 65vh; }
+  .canvas-wrap { min-height: 55vh; }
+}
 .panel h2 { font-size: 17px; color: var(--ink); margin-bottom: 14px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
 
 /* ===== 面板頂列：標題 + 顯示年齡切換 + 操作按鈕 ===== */

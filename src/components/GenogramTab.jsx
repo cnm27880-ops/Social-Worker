@@ -1030,7 +1030,8 @@ const GenogramTab = ({
 
       {/* SVG 畫布 */}
       <div className="canvas-wrap">
-        <svg ref={svgRef} width={svgW} height={svgH} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp}
+        <svg ref={svgRef} width={svgW} height={svgH}
+             onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp} onPointerCancel={onUp}
              onClick={(e) => {
                setSelectedTextId(null); setSelectedPolyId(null);
                // 快捷列表選中「關係線」或「獨立個體」這兩類符號時，點畫布即套用
@@ -1092,7 +1093,7 @@ const GenogramTab = ({
           {polygons.map(pg => (
             <g key={pg.id}>
               <path d={getSmoothPath(pg.pts, true)} fill="rgba(239, 68, 68, 0.05)" stroke="#ef4444" strokeWidth="2.5" strokeDasharray={cohabSolid ? "0" : "8,6"} strokeLinejoin="round" style={{ cursor: !mode ? 'pointer' : undefined }} onClick={e => { if (!mode) { e.stopPropagation(); setSelectedPolyId(pg.id); } }} onDoubleClick={e => { e.stopPropagation(); setPolygons(p => p.filter(x => x.id !== pg.id)); setSelectedPolyId(null); }} />
-              {selectedPolyId === pg.id && pg.pts.map((pt, idx) => <circle key={`v${idx}`} cx={pt.x} cy={pt.y} r={6} fill="#3b82f6" stroke="white" strokeWidth="1.5" style={{ cursor: 'crosshair' }} onMouseDown={e => { e.stopPropagation(); const sp = svgPt(e); setDragVertex({ polyId: pg.id, index: idx, ox: sp.x - pt.x, oy: sp.y - pt.y }); }} />)}
+              {selectedPolyId === pg.id && pg.pts.map((pt, idx) => <circle key={`v${idx}`} cx={pt.x} cy={pt.y} r={6} fill="#3b82f6" stroke="white" strokeWidth="1.5" style={{ cursor: 'crosshair', touchAction: 'none' }} onPointerDown={e => { e.stopPropagation(); const sp = svgPt(e); setDragVertex({ polyId: pg.id, index: idx, ox: sp.x - pt.x, oy: sp.y - pt.y }); }} />)}
             </g>
           ))}
 
@@ -1139,7 +1140,7 @@ const GenogramTab = ({
           {/* === 所有節點 (原生 + 自由人物) 共用渲染 === */}
           {[
             ...nodes.map(nd => ({ id: nd.id, gender: nd.gender, ...pos(nd.id), stroke: nd.isExt && extColorMode === 'blue' ? '#3b82f6' : '#333', dash: undefined, isFree: false })),
-            ...freeNodes.filter(fn => fn.type !== 'eco').map(fn => ({ id: fn.id, gender: fn.gender, x: fn.x, y: fn.y, stroke: extColorMode === 'blue' ? '#3b82f6' : '#333', dash: undefined, isFree: true }))
+            ...freeNodes.filter(fn => fn.type !== 'eco' && !STANDALONE_TYPES.includes(fn.type)).map(fn => ({ id: fn.id, gender: fn.gender, x: fn.x, y: fn.y, stroke: extColorMode === 'blue' ? '#3b82f6' : '#333', dash: undefined, isFree: true }))
           ].map(nd => {
             const isIP = nd.id === indexId;
             const isDouble = isIP && ipStyle === 'double';
@@ -1148,8 +1149,8 @@ const GenogramTab = ({
             const overlayDark = isIP && !isDouble ? 'white' : '#333';
             const isEditAge = editingAgeId === nd.id, ageVal = ages[nd.id] || '';
             return (
-              <g key={nd.id} transform={`translate(${nd.x},${nd.y})`} style={{ cursor: drag?.id === nd.id ? 'grabbing' : 'grab' }}
-                 onMouseDown={e => onDown(e, nd.id)} onClick={e => onClick(e, nd.id)}
+              <g key={nd.id} transform={`translate(${nd.x},${nd.y})`} style={{ cursor: drag?.id === nd.id ? 'grabbing' : 'grab', touchAction: 'none' }}
+                 onPointerDown={e => onDown(e, nd.id)} onClick={e => onClick(e, nd.id)}
                  onDoubleClick={e => {
                    e.stopPropagation();
                    if(showAgeMode) {
@@ -1228,8 +1229,8 @@ const GenogramTab = ({
             const rx = ecoRx(ecoNode.text);
             const isEditingThis = editingEcoId === ecoNode.id;
             return (
-              <g key={ecoNode.id} transform={`translate(${ecoNode.x},${ecoNode.y})`} style={{ cursor: drag?.id === ecoNode.id ? 'grabbing' : 'grab' }}
-                 onMouseDown={e => onDown(e, ecoNode.id)}
+              <g key={ecoNode.id} transform={`translate(${ecoNode.x},${ecoNode.y})`} style={{ cursor: drag?.id === ecoNode.id ? 'grabbing' : 'grab', touchAction: 'none' }}
+                 onPointerDown={e => onDown(e, ecoNode.id)}
                  onDoubleClick={e => { e.stopPropagation(); setEditingEcoId(ecoNode.id); }}>
                 <ellipse cx="0" cy="0" rx={rx} ry={ECO_RY} fill="#2563eb" stroke="#1e40af" strokeWidth="2.5" />
                 {isEditingThis ? (
@@ -1251,8 +1252,8 @@ const GenogramTab = ({
             const r = standaloneRadius(fn.type);
             const hasCross = fn.type !== 'pregnancy';
             return (
-              <g key={fn.id} transform={`translate(${fn.x},${fn.y})`} style={{ cursor: drag?.id === fn.id ? 'grabbing' : 'grab' }}
-                 onMouseDown={e => onDown(e, fn.id)}
+              <g key={fn.id} transform={`translate(${fn.x},${fn.y})`} style={{ cursor: drag?.id === fn.id ? 'grabbing' : 'grab', touchAction: 'none' }}
+                 onPointerDown={e => onDown(e, fn.id)}
                  onDoubleClick={e => {
                    e.stopPropagation();
                    if (window.confirm('確定要刪除這個標記嗎？(相關連線也會一併刪除)')) {
@@ -1411,7 +1412,7 @@ const GenogramTab = ({
                     />
                   </foreignObject>
                 ) : (
-                  <text style={{ fontFamily: TEXT_FONT, fontSize: t.fontSize, writingMode: t.vertical ? 'vertical-rl' : undefined }} fill="#333" cursor="move" onMouseDown={e => onTextDown(e, t.id)} onClick={e => onTextClick(e, t.id)} onDoubleClick={e => onTextDoubleClick(e, t.id)}>
+                  <text style={{ fontFamily: TEXT_FONT, fontSize: t.fontSize, writingMode: t.vertical ? 'vertical-rl' : undefined, touchAction: 'none' }} fill="#333" cursor="move" onPointerDown={e => onTextDown(e, t.id)} onClick={e => onTextClick(e, t.id)} onDoubleClick={e => onTextDoubleClick(e, t.id)}>
                     {lines.map((line, idx) => (
                       <tspan key={idx} x={t.vertical ? undefined : "0"} dy={idx === 0 ? 0 : "1.2em"}>{line}</tspan>
                     ))}
@@ -1421,7 +1422,7 @@ const GenogramTab = ({
                 {isSel && !isEditing && (
                   <g>
                     <g transform={`translate(${estW+8},${t.vertical ? -4 : -t.fontSize})`} style={{ cursor: 'pointer' }} onClick={e => { e.stopPropagation(); deleteText(t.id); }}><circle r="10" fill="white" stroke="#ef4444" strokeWidth="1.5" /><text y="4" textAnchor="middle" fontSize="11" fill="#ef4444" style={{fontFamily: TEXT_FONT}}>✕</text></g>
-                    <g transform={`translate(${estW+8},${t.vertical ? estH+4 : estH - t.fontSize + 4})`} style={{ cursor: 'nwse-resize' }} onMouseDown={e => onResizeDown(e, t.id)}><circle r="8" fill="#3b82f6" /><text y="3.5" textAnchor="middle" fontSize="9" fill="white" style={{fontFamily: TEXT_FONT}}>↘</text></g>
+                    <g transform={`translate(${estW+8},${t.vertical ? estH+4 : estH - t.fontSize + 4})`} style={{ cursor: 'nwse-resize', touchAction: 'none' }} onPointerDown={e => onResizeDown(e, t.id)}><circle r="8" fill="#3b82f6" /><text y="3.5" textAnchor="middle" fontSize="9" fill="white" style={{fontFamily: TEXT_FONT}}>↘</text></g>
                   </g>
                 )}
               </g>
@@ -1433,11 +1434,12 @@ const GenogramTab = ({
           {eraseMode && bgImage && (
             <rect
               width="100%" height="100%" fill="transparent"
-              style={{ cursor: 'crosshair' }}
-              onMouseDown={eraseStart}
-              onMouseMove={eraseMoveTo}
-              onMouseUp={eraseEnd}
-              onMouseLeave={eraseEnd}
+              style={{ cursor: 'crosshair', touchAction: 'none' }}
+              onPointerDown={eraseStart}
+              onPointerMove={eraseMoveTo}
+              onPointerUp={eraseEnd}
+              onPointerLeave={eraseEnd}
+              onPointerCancel={eraseEnd}
               onClick={e => e.stopPropagation()}
             />
           )}
