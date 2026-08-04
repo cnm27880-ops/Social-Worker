@@ -31,10 +31,11 @@ const HelpDrawer = ({ open, onClose }) => {
             <h3>快捷鍵</h3>
             <table className="help-keys">
               <tbody>
-                <tr><td><kbd>Q</kbd></td><td>開／關快捷列表的符號選取狀態</td></tr>
-                <tr><td><kbd>W</kbd></td><td>快捷列表選取狀態下，焦點切到左邊的符號</td></tr>
+                <tr><td><kbd>A</kbd></td><td>開／關快捷列表的符號選取狀態</td></tr>
+                <tr><td><kbd>S</kbd></td><td>快捷列表選取狀態下，焦點切到左邊的符號</td></tr>
+                <tr><td><kbd>D</kbd></td><td>快捷列表選取狀態下，焦點切到右邊的符號</td></tr>
+                <tr><td><kbd>W</kbd></td><td>切換「案主」標記模式</td></tr>
                 <tr><td><kbd>E</kbd></td><td>切換「同住」標記模式</td></tr>
-                <tr><td><kbd>R</kbd></td><td>快捷列表選取狀態下，焦點切到右邊的符號</td></tr>
                 <tr><td><kbd>Ctrl</kbd>＋<kbd>Z</kbd></td><td>復原</td></tr>
                 <tr><td><kbd>Ctrl</kbd>＋<kbd>Shift</kbd>＋<kbd>Z</kbd></td><td>重做</td></tr>
                 <tr><td><kbd>Esc</kbd></td><td>取消目前的拖曳或繪製</td></tr>
@@ -75,13 +76,15 @@ const HelpDrawer = ({ open, onClose }) => {
               <li><b>拖曳</b>：直接把符號拖到人物節點或婚姻線上放開即套用；拖曳過程中
                   經過的目標不會被更動，只有放開的位置算數，放開在不適用的地方等於
                   取消。已經套用過的再拖一次就是取消。</li>
-              <li><b>鍵盤選取</b>：按 <kbd>Q</kbd> 開啟選取狀態（再按一次關閉），
-                  用 <kbd>W</kbd>／<kbd>R</kbd> 把焦點切到左／右邊的符號（也可以直接
+              <li><b>鍵盤選取</b>：按 <kbd>A</kbd> 開啟選取狀態（再按一次關閉），
+                  用 <kbd>S</kbd>／<kbd>D</kbd> 把焦點切到左／右邊的符號（也可以直接
                   點符號本身選取），選中後點畫布上的目標即套用，跟拖曳是同一套邏輯。</li>
             </ul>
             <p className="help-note">
-              「案主」與「同住」不在這 7 個裡面——它們是畫布模式而不是符號標記，
-              沿用原本點按鈕進入模式、再點人物套用的方式，就在快捷列表的上半段。
+              「案主」（<kbd>W</kbd>）與「同住」（<kbd>E</kbd>）不在這 7 個裡面——
+              它們是畫布模式而不是符號標記，沿用原本點按鈕（或按快捷鍵）進入模式、
+              再點人物套用的方式，就在快捷列表的上半段，跟符號列的 <kbd>A</kbd>／
+              <kbd>S</kbd>／<kbd>D</kbd> 是各自獨立的開關。
             </p>
             <p>
               所有套用都可以用 <kbd>Ctrl</kbd>＋<kbd>Z</kbd> 復原。

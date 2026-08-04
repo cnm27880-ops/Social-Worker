@@ -65,6 +65,10 @@ body {
   background: var(--card); padding: 18px; border-radius: var(--r-card);
   border: 1px solid var(--line); box-shadow: var(--shadow); flex: 0 0 350px;
   max-height: 90vh; overflow-y: auto;
+  /* 固定保留卷軸欄寬度：懸浮提示框（ⓘ、符號說明）用 position:absolute
+   * 掛在面板內，展開時會讓可捲動內容的高度多出一點，捲軸因此忽隱忽現，
+   * 每次都把右側內容擠進擠出、看起來像在抖動。先佔位就不會再跳動。 */
+  scrollbar-gutter: stable;
 }
 .panel h2 { font-size: 17px; color: var(--ink); margin-bottom: 14px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
 
@@ -178,16 +182,19 @@ body {
 .btn-row { display: flex; align-items: center; gap: 5px; flex-wrap: nowrap; }
 .btn-row .btn-soft { padding: 5px 9px; }
 
-/* 二值切換按鈕：跟旁邊的 .btn-soft 同高同字重，一眼看得出是按鈕而不是標籤 */
+/* 二值切換按鈕：跟旁邊的 .btn-soft 同高同字重，一眼看得出是按鈕而不是標籤。
+ * 「一般」（off）原本用 --card 底色，跟卡片背景幾乎融成一片，看不出是
+ * 個標籤；改用柔和的沙棕色系跟背景拉出區隔，同時跟「編輯」（on）的
+ * 藍灰色系明顯不同色。 */
 .btn-toggle {
   display: inline-flex; align-items: center; justify-content: center;
   padding: 4px 10px; cursor: pointer; white-space: nowrap;
-  border: 1px solid var(--line); border-radius: 999px;
-  background: var(--card); color: var(--ink);
+  border: 1px solid var(--sand-bd); border-radius: 999px;
+  background: var(--sand-w); color: var(--sand-d);
   font-family: inherit; font-size: 12px; font-weight: 700; letter-spacing: 0.2px; line-height: 1.35;
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
-.btn-toggle:hover { background: var(--wash-warm); border-color: var(--ink-faint); }
+.btn-toggle:hover { background: var(--sand-w); border-color: var(--sand-d); filter: brightness(0.97); }
 .btn-toggle.on { background: var(--dust); border-color: var(--dust); color: #fff; }
 .btn-toggle.on:hover { background: var(--dust-d); border-color: var(--dust-d); }
 

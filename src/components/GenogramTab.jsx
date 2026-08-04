@@ -141,18 +141,20 @@ const GenogramTab = ({
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
       const key = e.key.toLowerCase();
       const quickActive = mode !== null && QUICK_KEYS.includes(mode);
-      /* Q：開／關快捷列表選取狀態，從上次選到的位置繼續。
-       * W／R：只有選取狀態開著時才移動焦點——沒開著按了也不該有反應，
-       * 否則使用者搞不清楚現在到底選中了什麼。 */
-      if (key === 'q') setMode(quickActive ? null : QUICK_KEYS[quickIdx]);
-      if (key === 'w' && quickActive) {
+      /* A：開／關快捷列表選取狀態，從上次選到的位置繼續。
+       * S／D：只有選取狀態開著時才移動焦點——沒開著按了也不該有反應，
+       * 否則使用者搞不清楚現在到底選中了什麼。
+       * W／E：案主／同住模式切換，跟快捷列表選取是各自獨立的開關。 */
+      if (key === 'a') setMode(quickActive ? null : QUICK_KEYS[quickIdx]);
+      if (key === 's' && quickActive) {
         const next = (quickIdx - 1 + QUICK_KEYS.length) % QUICK_KEYS.length;
         setQuickIdx(next); setMode(QUICK_KEYS[next]);
       }
-      if (key === 'r' && quickActive) {
+      if (key === 'd' && quickActive) {
         const next = (quickIdx + 1) % QUICK_KEYS.length;
         setQuickIdx(next); setMode(QUICK_KEYS[next]);
       }
+      if (key === 'w') setMode(p => p === 'index' ? null : 'index');
       if (key === 'e') setMode(p => p === 'cohab' ? null : 'cohab');
       if (e.key === 'Enter' && mode === 'cohab' && cohabMode === 'poly' && draftPoly.length >= 3) {
         setPolygons(prev => [...prev, { id: 'pg_' + Date.now(), pts: draftPoly }]); setDraftPoly([]); setMousePos(null);
@@ -739,14 +741,6 @@ const GenogramTab = ({
     <div className="app-layout">
       {/* 左側面板 */}
       <div className="panel">
-        <CaseBar
-          cases={cases} activeCaseId={activeCaseId} activeCase={activeCase} isSaved={isSaved}
-          switchCase={switchCase} saveCase={saveCase} renameCase={renameCase}
-          deleteCase={deleteCase} exportCase={exportCase} importCase={importCase}
-          snapshots={snapshots} takeSnapshot={takeSnapshot}
-          restoreSnapshot={restoreSnapshot} removeSnapshot={removeSnapshot}
-        />
-
         <div className="panel-header">
           <div className="panel-header-left">
             <h2>資料輸入面板</h2>
@@ -784,7 +778,7 @@ const GenogramTab = ({
         <div className="quick-tool-panel">
           <div className="quick-tool-header">
             <span className="quick-tool-title">快捷列表</span>
-            <InfoTip text="案主／同住：點按鈕進入模式再點人物套用，跟以前一樣。下面的符號列可以直接拖到人物／婚姻線上放開套用，或按 [Q] 進入選取、[W]／[R] 左右切換要套用的符號，選中後點畫布即可套用。" />
+            <InfoTip text="案主 [W]／同住 [E]：點按鈕（或按快捷鍵）進入模式再點人物套用，跟以前一樣。下面的符號列可以直接拖到人物／婚姻線上放開套用，或按 [A] 進入選取、[S]／[D] 左右切換要套用的符號，選中後點畫布即可套用。" />
             {/* 年齡是「畫布上要顯示什麼」的開關，跟這一區的標記模式同一類。
                 做成有凹凸感的按鈕：關閉時浮起、開啟時壓下去並填色，
                 原本的滑軌開關在暖色卡片上跟背景太接近，看不出開關狀態。 */}
@@ -797,13 +791,14 @@ const GenogramTab = ({
           </div>
 
           <div className="quick-tool-rows">
-            {/* 案主／同住：沿用既有的「點按鈕進入模式→點人物套用」，Q/W/R 已經
-                挪去給下面的符號列用，所以這裡的按鈕不再標快捷鍵。 */}
+            {/* 案主／同住：沿用既有的「點按鈕進入模式→點人物套用」，快捷鍵
+                分別是 W／E，跟下面符號列的 A/S/D 是各自獨立的開關。
+                兩個放同一列——面板夠寬，分兩列只是白白多佔一行高度。 */}
             <div className="quick-tool-row-group">
               <div className="quick-tool-row">
                 <button className={`quick-tool-btn tone-blue ${mode === 'index' ? 'active' : ''}`}
                         onClick={() => setMode(mode === 'index' ? null : 'index')}>
-                  案主
+                  案主 [W]
                 </button>
                 <span className="status-badge" data-status={ipStyle}
                       onClick={() => setIpStyle(ipStyle === 'filled' ? 'double' : 'filled')}
@@ -811,9 +806,7 @@ const GenogramTab = ({
                   {ipStyle === 'filled' ? '填滿' : '雙線'}
                 </span>
               </div>
-            </div>
 
-            <div className="quick-tool-row-group">
               <div className="quick-tool-row">
                 <button className={`quick-tool-btn tone-amber ${mode === 'cohab' ? 'active' : ''}`}
                         onClick={() => setMode(mode === 'cohab' ? null : 'cohab')}>
@@ -834,7 +827,7 @@ const GenogramTab = ({
           </div>
 
           {/* === 快捷標記（死亡／身障／慢性病／懷孕／正向親密／衝突／關係惡化） ===
-              拖曳到人物／婚姻線上放開即套用；或按 Q 進入選取、W／R 左右切換，
+              拖曳到人物／婚姻線上放開即套用；或按 A 進入選取、S／D 左右切換，
               選中後直接點畫布上的目標套用。點圖示本身也可以直接選中它。 */}
           <div className="quick-mark-row">
             {QUICK_SYMBOLS.map(s => (
@@ -944,6 +937,14 @@ const GenogramTab = ({
           bgErase={bgErase} setBgErase={setBgErase}
           eraseMode={eraseMode} setEraseMode={setEraseMode}
           eraseWidth={eraseWidth} setEraseWidth={setEraseWidth}
+        />
+
+        <CaseBar
+          cases={cases} activeCaseId={activeCaseId} activeCase={activeCase} isSaved={isSaved}
+          switchCase={switchCase} saveCase={saveCase} renameCase={renameCase}
+          deleteCase={deleteCase} exportCase={exportCase} importCase={importCase}
+          snapshots={snapshots} takeSnapshot={takeSnapshot}
+          restoreSnapshot={restoreSnapshot} removeSnapshot={removeSnapshot}
         />
 
         {customLinks.length > 0 && (
