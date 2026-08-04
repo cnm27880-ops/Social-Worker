@@ -30,14 +30,24 @@
  *
  *    顏色選淡紫而非深色，是為了和既有的「身心障礙」左半深色實心、以及
  *    案主的深色實心區隔；灰階列印時它會變成淺灰，與那兩者仍可分辨。
+ *
+ * 4. 2026-08 第二次修訂：面板上的互動介面收斂成「快捷列表」，只留 7 個
+ *    最常用的標記（deceased／disabled／chronicIllness／pregnancy／
+ *    closeRelationship／conflict／deteriorating，見 QUICK_KEYS）。
+ *    其餘符號（收養／寄養／精神疾病等舊版分類）保留定義只是為了讓舊案件
+ *    裡已經標記過的內容能正常畫出來，不再有 UI 入口可以新增。
+ *    chronicIllness（四分之一填色）與 deteriorating（斜線刻痕）在
+ *    McGoldrick／GenoPro 等來源中都找不到對應的標準畫法，是本工具自訂的
+ *    簡化符號，在各自的 note 欄位裡如實註明；closeRelationship（雙線）
+ *    則是 McGoldrick 標準裡本來就有、只是先前沒收進工具箱的畫法。
  * =========================================================================== */
 
 export const CATEGORIES = [
-  { key: 'common', label: '基本標記（快捷工具列 Q／W／R）' },
-  { key: 'health', label: '健康狀況' },
-  { key: 'kinship', label: '親子關係' },
-  { key: 'perinatal', label: '妊娠與失落' },
-  { key: 'relLine', label: '關係品質' },
+  { key: 'common', label: '快捷列表' },
+  { key: 'health', label: '健康狀況（舊版，僅供對照）' },
+  { key: 'kinship', label: '親子關係（舊版，僅供對照）' },
+  { key: 'perinatal', label: '妊娠與失落（舊版，僅供對照）' },
+  { key: 'relLine', label: '關係品質（舊版，僅供對照）' },
 ];
 
 /** 臨床標記的填色。所有標記同色，病因靠位置區分。 */
@@ -62,6 +72,22 @@ export const halfPath = (gender, side, r) => {
   return `M ${-r},0 A ${r},${r} 0 0,0 ${r},0 Z`;                          // bottom
 };
 
+/**
+ * 左上四分之一的裁切路徑（慢性病專用；目前只需要這一個角）。
+ * 圓形那條弧線刻意跟 halfPath 的 'left' 分支用同一個 sweep-flag（0），
+ * 因為它其實就是那條左半圓弧的前半段——保證掃過的是左上方而不是左下方。
+ */
+export const quarterPath = (gender, r) => {
+  if (gender === 'M') return `M ${-r},${-r} L 0,${-r} L 0,0 L ${-r},0 Z`;
+  return `M 0,0 L 0,${-r} A ${r},${r} 0 0,0 ${-r},0 Z`;
+};
+
+/** 左上四分之一與留白的分界線段（右邊界＋下邊界）。 */
+export const quarterBoundary = (r) => [
+  [0, -r, 0, 0],
+  [-r, 0, 0, 0],
+];
+
 /* ===========================================================================
  * 符號定義
  *
@@ -75,7 +101,6 @@ export const SYMBOLS = [
     label: '死亡',
     category: 'common',
     kind: 'nodeAttr',
-    shortcut: 'R',
     quickTool: true,
     desc: '在符號上畫對角叉。',
     note: '兩份來源一致。',
@@ -85,11 +110,22 @@ export const SYMBOLS = [
     label: '身心障礙',
     category: 'common',
     kind: 'nodeAttr',
-    shortcut: 'W',
     quickTool: true,
     desc: '左半實心填滿。',
     note: '本工具沿用的既有畫法。McGoldrick 標準中左半代表精神疾病，'
         + '兩者不同，判讀時請以本工具的圖例為準。',
+  },
+  {
+    key: 'chronicIllness',
+    label: '慢性病',
+    category: 'common',
+    kind: 'nodeAttr',
+    quarter: 'top-left',
+    quickTool: true,
+    desc: '左上四分之一填色。',
+    note: '本工具自訂的簡化畫法，McGoldrick／GenoPro 等來源都沒有這個符號。'
+        + '用跟精神疾病／生理疾病／藥酒癮同一套淡紫色系，但改用四分之一'
+        + '區塊表示「慢性、非急性」的健康狀況，位置本身不承載病因意義。',
   },
 
   {
@@ -166,9 +202,10 @@ export const SYMBOLS = [
   {
     key: 'pregnancy',
     label: '懷孕',
-    category: 'perinatal',
+    category: 'common',
     kind: 'standalone',
     shape: 'triangle',
+    quickTool: true,
     desc: '拖到空白畫布放開即新增一個三角形節點。',
     note: '兩份來源一致：三角形代表懷孕。',
   },
@@ -198,17 +235,46 @@ export const SYMBOLS = [
   },
 
   /* ===========================================================================
-   * 關係品質：衝突／疏離／斷絕／暴力
+   * 關係品質：正向親密／衝突／關係惡化（快捷列表）＋疏離／斷絕／暴力（舊版）
    *
    * kind:'relLine' — 拖到一條婚姻線（案主父母、案主與配偶，或擴充關係
    * 的配偶線）上放開，會在那條線上疊加對應的關係線樣式；再拖一次同一個
    * 符號到同一條線上是取消。同一條線只會有一種關係品質（不疊加），拖
    * 別的符號上去是直接取代。
-   *
-   * 只收錄社工實務最常需要標記的四種「需要留意」的關係，不收錄
-   * McGoldrick 標準中「親密／要好」等正向關係符號——那些對風險評估的
-   * 幫助有限，先不放進工具箱增加選擇負擔。
    * =========================================================================== */
+  {
+    key: 'closeRelationship',
+    label: '正向親密',
+    category: 'common',
+    kind: 'relLine',
+    lineStyle: 'double',
+    quickTool: true,
+    desc: '婚姻線改為雙線。',
+    note: 'McGoldrick 標準畫法：雙線代表關係緊密、良好。',
+  },
+  {
+    key: 'conflict',
+    label: '衝突',
+    category: 'common',
+    kind: 'relLine',
+    lineStyle: 'zigzag',
+    quickTool: true,
+    desc: '婚姻線改為鋸齒線。',
+    note: 'McGoldrick 標準畫法：鋸齒線代表關係中有衝突、爭執。',
+  },
+  {
+    key: 'deteriorating',
+    label: '關係惡化',
+    category: 'common',
+    kind: 'relLine',
+    lineStyle: 'hatch',
+    quickTool: true,
+    desc: '婚姻線上加一排斜線刻痕。',
+    note: '本工具自訂的簡化畫法，McGoldrick／GenoPro 等來源都沒有這個符號。'
+        + '跟既有的疏離（虛線）／斷絕（缺口）／暴力（紅色鋸齒線）這幾種'
+        + '既定狀態不同，這個符號標記的是「正在惡化」的變化趨勢。',
+  },
+
   {
     key: 'distant',
     label: '疏離',
@@ -217,15 +283,6 @@ export const SYMBOLS = [
     lineStyle: 'dashed',
     desc: '婚姻線改為虛線。',
     note: '兩份來源一致：虛線代表關係疏遠、溝通有限。',
-  },
-  {
-    key: 'conflict',
-    label: '衝突',
-    category: 'relLine',
-    kind: 'relLine',
-    lineStyle: 'zigzag',
-    desc: '婚姻線改為鋸齒線。',
-    note: 'McGoldrick 標準畫法：鋸齒線代表關係中有衝突、爭執。',
   },
   {
     key: 'cutoff',
@@ -250,16 +307,20 @@ export const SYMBOLS = [
 
 export const SYMBOL_MAP = Object.fromEntries(SYMBOLS.map(s => [s.key, s]));
 
-/* 積木工具箱只放冷門／進階的臨床標記。
+/**
+ * 快捷列表：面板上唯一互動入口，固定 7 個、固定順序（拖曳與 Q/W/R 鍵盤
+ * 選取都依這個順序）。用明確陣列而不是從 SYMBOLS 篩選 quickTool 再排序，
+ * 是為了讓順序跟 quickTool 標記脫鉤——之後想調整顯示順序，改這裡就好，
+ * 不用去動每個符號定義裡的旗標。
  *
- * 「死亡」與「身心障礙」在面板上方的快捷工具列（Q／W／R）已經有入口，
- * 同一個功能在同一個面板出現兩次只會讓人猶豫該用哪一個，所以標了
- * quickTool 的符號不進工具箱 —— 但定義本身要留著：畫布靠 SYMBOL_MAP
- * 畫這些標記，說明書的符號對照也要能查到它們的畫法與出處。 */
-export const TOOLBOX_SYMBOLS = SYMBOLS.filter(s => !s.quickTool);
-export const TOOLBOX_CATEGORIES = CATEGORIES.filter(
-  c => TOOLBOX_SYMBOLS.some(s => s.category === c.key)
-);
+ * 其餘符號（收養、精神疾病、疏離…）不在這裡，畫布靠 SYMBOL_MAP 畫出
+ * 舊案件裡已經標記過的內容，但面板上沒有入口可以新增。
+ */
+export const QUICK_KEYS = [
+  'deceased', 'disabled', 'chronicIllness', 'pregnancy',
+  'closeRelationship', 'conflict', 'deteriorating',
+];
+export const QUICK_SYMBOLS = QUICK_KEYS.map(k => SYMBOL_MAP[k]);
 
 /** 會畫在親子連線上的標記（拖到子代節點，但線變樣式）。只在本檔案內使用。 */
 const KINSHIP_KEYS = SYMBOLS.filter(s => s.kind === 'kinship').map(s => s.key);
@@ -378,6 +439,41 @@ export const gapSegments = (x1, y1, x2, y2, gapRatio = 0.24) => {
     [x1, y1, x1 + dx * midStart, y1 + dy * midStart],
     [x1 + dx * midEnd, y1 + dy * midEnd, x2, y2],
   ];
+};
+
+/**
+ * 正向親密：兩條平行線，往基準線兩側各偏移 offset。
+ * 回傳 [[x1,y1,x2,y2], [x1,y1,x2,y2]]。
+ */
+export const doubleLineSegments = (x1, y1, x2, y2, offset = 2.6) => {
+  const dx = x2 - x1, dy = y2 - y1;
+  const len = Math.sqrt(dx * dx + dy * dy) || 1;
+  const nx = -dy / len, ny = dx / len;
+  return [
+    [x1 + nx * offset, y1 + ny * offset, x2 + nx * offset, y2 + ny * offset],
+    [x1 - nx * offset, y1 - ny * offset, x2 - nx * offset, y2 - ny * offset],
+  ];
+};
+
+/**
+ * 關係惡化：在基準線上等距排列的斜線刻痕，本身不含基準線——呼叫端
+ * 要另外畫一條實線當底（見 GenogramTab 的 'deteriorating' 分支）。
+ * 每一刻痕跟基準線夾 45°，長度 tickLen，回傳 [[x1,y1,x2,y2], …]。
+ */
+export const hatchSegments = (x1, y1, x2, y2, count = 5, tickLen = 7) => {
+  const dx = x2 - x1, dy = y2 - y1;
+  const len = Math.sqrt(dx * dx + dy * dy) || 1;
+  const tx = dx / len, ty = dy / len;   // 沿線方向
+  const nx = -ty, ny = tx;              // 垂直方向
+  const half = tickLen / 2 / Math.SQRT2; // (tx+nx, ty+ny) 長度固定是 √2，先歸一化
+  const segs = [];
+  for (let i = 1; i <= count; i++) {
+    const t = i / (count + 1);
+    const cx = x1 + dx * t, cy = y1 + dy * t;
+    const hx = (tx + nx) * half, hy = (ty + ny) * half;
+    segs.push([cx - hx, cy - hy, cx + hx, cy + hy]);
+  }
+  return segs;
 };
 
 /** 點到線段的最短距離，供拖曳關係線符號時判斷是否命中某條婚姻線。 */

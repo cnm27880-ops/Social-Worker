@@ -121,7 +121,7 @@ body {
   flex-shrink: 0;
   display: inline-flex; align-items: center; justify-content: center;
   height: 26px; padding: 0 14px; cursor: pointer;
-  border: 1px solid var(--line); border-radius: var(--r-xs);
+  border: 1px solid var(--line); border-radius: 999px;
   background: linear-gradient(180deg, #fff, var(--wash-warm));
   color: var(--ink); font-family: inherit;
   font-size: 12px; font-weight: 700; letter-spacing: 0.5px; line-height: 1;
@@ -182,7 +182,7 @@ body {
 .btn-toggle {
   display: inline-flex; align-items: center; justify-content: center;
   padding: 4px 10px; cursor: pointer; white-space: nowrap;
-  border: 1px solid var(--line); border-radius: var(--r-xs);
+  border: 1px solid var(--line); border-radius: 999px;
   background: var(--card); color: var(--ink);
   font-family: inherit; font-size: 12px; font-weight: 700; letter-spacing: 0.2px; line-height: 1.35;
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
@@ -424,9 +424,52 @@ body {
 .quick-tool-btn:hover { background: var(--wash-warm); color: var(--ink); }
 .quick-tool-btn.active { color: white; }
 .quick-tool-btn.active.tone-blue   { background: var(--dust); }
-.quick-tool-btn.active.tone-purple { background: var(--mauve); }
-.quick-tool-btn.active.tone-red    { background: var(--clay); }
 .quick-tool-btn.active.tone-amber  { background: var(--sand); }
+
+/* ===== 快捷列表：符號列 =====
+ * 死亡／身障／慢性病／懷孕／正向親密／衝突／關係惡化，固定 7 個、單排。
+ * 跟上面的案主／同住模式按鈕放在同一張卡片裡，是「快捷列表」merge 過後
+ * 唯一新增的一塊——原本分開的積木工具箱已經整個併進來，不再是獨立卡片。 */
+.quick-mark-row {
+  position: relative; display: flex; gap: 5px; margin-top: 10px;
+  padding-top: 10px; border-top: 1px dashed var(--line);
+}
+.quick-mark-chip {
+  position: relative; flex: 1 1 0;
+  display: flex; align-items: center; justify-content: center;
+  aspect-ratio: 1; padding: 0; min-width: 0;
+  border: 1.5px solid var(--line); border-radius: var(--r-xs);
+  background: var(--card); color: var(--ink); cursor: grab; touch-action: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 1px 2px rgba(74, 69, 61, 0.1);
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+.quick-mark-chip:hover { border-color: var(--dust); background: var(--dust-w); }
+.quick-mark-chip:active { box-shadow: inset 0 2px 3px rgba(74, 69, 61, 0.2); }
+.quick-mark-chip.dragging { opacity: 0.4; cursor: grabbing; }
+/* 鍵盤選取／點選中：淺色底＋粗邊框，不用深色填底——符號本身是深色線稿，
+ * 填深色背景會讓圖示自己不見。 */
+.quick-mark-chip.active {
+  border-color: var(--dust); border-width: 2px;
+  background: var(--dust-w);
+  box-shadow: 0 0 0 3px var(--dust-bd), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+.quick-mark-chip svg { flex-shrink: 0; }
+
+/* 符號名稱與用法的懸浮說明，掛在 .quick-mark-row 上（left/right 都是 0）
+ * 而不是掛在單顆 chip 上——面板只有 350px 寬，掛在最左/右那顆會被裁掉。 */
+.quick-mark-tip {
+  position: absolute; z-index: 60; left: 0; right: 0; top: calc(100% + 6px);
+  padding: 7px 10px; border-radius: 10px 2px 10px 2px;
+  background: var(--ink); color: #FBF9F4;
+  font-size: 11.5px; font-weight: 500; line-height: 1.6; letter-spacing: 0.2px;
+  text-align: left; box-shadow: var(--shadow-pop);
+  opacity: 0; visibility: hidden; transform: translateY(-3px);
+  transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
+  pointer-events: none;
+}
+.quick-mark-tip b { display: block; font-size: 12px; margin-bottom: 1px; }
+.quick-mark-chip:hover .quick-mark-tip,
+.quick-mark-chip:focus-visible .quick-mark-tip { opacity: 1; visibility: visible; transform: translateY(0); }
 
 /* ===== 卡片區塊 ===== */
 .section {
@@ -469,9 +512,18 @@ input::placeholder, textarea::placeholder { color: var(--ink-faint); font-weight
 .record-preview > textarea { flex: 1; width: 100%; min-height: 500px; padding: 16px; border: 1px solid var(--line); border-radius: var(--r-sm); font-size: 16px; font-family: 'Times New Roman', 'DFKai-SB', 'BiauKai', serif; line-height: 1.8; resize: vertical; margin-bottom: 12px; background: var(--wash); color: var(--ink); }
 
 .badge-wrap { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
-.badge-btn { padding: 4px 10px; font-size: 12px; border: 1px solid var(--line); border-radius: 15px; background: var(--card); color: var(--ink-mid); cursor: pointer; user-select: none; transition: all 0.15s; display: flex; align-items: center; }
-.badge-btn:hover { border-color: var(--ink-faint); }
-.badge-btn.active { background: var(--sage); color: white; border-color: var(--sage-d); font-weight: bold; }
+.badge-btn {
+  padding: 4px 10px; font-size: 12px; border: 1px solid var(--line); border-radius: 999px;
+  background: var(--card); color: var(--ink-mid); cursor: pointer; user-select: none;
+  transition: all 0.15s; display: flex; align-items: center;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65), 0 1px 2px rgba(74, 69, 61, 0.14);
+}
+.badge-btn:hover { border-color: var(--ink-faint); filter: brightness(0.97); }
+.badge-btn:active { box-shadow: inset 0 1px 2px rgba(74, 69, 61, 0.25); }
+.badge-btn.active {
+  background: var(--sage); color: white; border-color: var(--sage-d); font-weight: bold;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.28), inset 0 -1px 0 rgba(255, 255, 255, 0.18);
+}
 .badge-del { margin-left: 6px; color: var(--clay-d); cursor: pointer; font-weight: bold; font-size: 14px; line-height: 1; }
 .badge-add { display: flex; gap: 4px; align-items: center; margin-left: 4px; }
 .badge-add input[type="text"] { width: 80px; padding: 2px 6px; font-size: 12px; border-radius: 4px; }
@@ -488,8 +540,9 @@ input::placeholder, textarea::placeholder { color: var(--ink-faint); font-weight
   display: inline-block; margin-left: 6px; padding: 2px 8px; vertical-align: middle;
   font-size: 12px; font-weight: 600; border-radius: 999px;
   background: var(--ink); color: #FBF9F4;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 1px 2px rgba(74, 69, 61, 0.2);
 }
-.ip-pill.warn { background: var(--clay-w); color: var(--clay-d); border: 1px solid var(--clay-bd); }
+.ip-pill.warn { background: var(--clay-w); color: var(--clay-d); border: 1px solid var(--clay-bd); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65), 0 1px 2px rgba(74, 69, 61, 0.14); }
 
 /* 紀錄預覽側 */
 .record-preview-title { margin: 0 0 14px; padding: 0; border: none; font-size: 18px; color: var(--ink); }
@@ -532,8 +585,16 @@ svg { display: block; user-select: none; }
 /* 點擊往前切到下一個狀態、滾輪可雙向切換（見 GenogramTab 的 cycleOnClick／wheelRef）。
  * cursor 用 pointer 而非原本的 ns-resize —— ns-resize 只暗示「可以滾」，
  * 沒有滾輪或不知道能滾的人看不出這是個可以點的東西。 */
-.status-badge { display: inline-block; padding: 2px 10px; font-size: 12px; font-weight: 600; border-radius: 12px; cursor: pointer; user-select: none; border: 1px solid; transition: filter 0.15s ease; }
+/* 立體感：上緣高光＋外陰影，跟背後的卡片／暖底拉出一點厚度，不會糊在
+ * 背景上分不出這是個可以按的東西。按下去時陰影收成內凹，給個回饋。 */
+.status-badge {
+  display: inline-block; padding: 2px 10px; font-size: 12px; font-weight: 600;
+  border-radius: 999px; cursor: pointer; user-select: none; border: 1px solid;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65), 0 1px 2px rgba(74, 69, 61, 0.14);
+  transition: filter 0.15s ease, box-shadow 0.1s ease;
+}
 .status-badge:hover { filter: brightness(0.96); }
+.status-badge:active { box-shadow: inset 0 1px 2px rgba(74, 69, 61, 0.25); }
 .status-badge[data-status="none"]       { background: var(--wash-warm); color: var(--ink-mid);  border-color: var(--line); }
 .status-badge[data-status="married"]    { background: var(--sage-w);    color: var(--sage-d);   border-color: var(--sage-bd); }
 .status-badge[data-status="cohab"]      { background: var(--sand-w);    color: var(--sand-d);   border-color: var(--sand-bd); }
@@ -551,57 +612,7 @@ svg { display: block; user-select: none; }
 
 .info-box { font-size: 12px; color: var(--ink-mid); line-height: 1.9; padding: 2px 0; }
 
-/* ===== 積木工具箱 =====
- * 沒有外層卡片：分類本身就是一層抽屜，再包一層等於要點兩次才看得到符號 */
-.sym-toolbox { margin-bottom: 12px; }
-.sym-toolbox > .section-title-row { margin-bottom: 8px; }
-.sym-total {
-  margin-left: auto; font-size: 10.5px; font-weight: 700; color: var(--ink-soft);
-  background: var(--wash-warm); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px;
-}
-
-/* 分類全部展開，標題只是個小標（不再是可點的收合按鈕） */
-.sym-cat { position: relative; }
-.sym-cat + .sym-cat { margin-top: 10px; }
-.sym-cat-head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
-.sym-cat-name { font-size: 11.5px; font-weight: 700; color: var(--ink-soft); letter-spacing: 0.3px; }
-.sym-cat-count {
-  font-size: 10px; font-weight: 700; color: var(--ink-soft);
-  background: var(--wash-warm); border-radius: 999px; padding: 1px 6px;
-}
-
-/* 只放符號，名稱滑過才浮出來，所以格子改成正方形小格、一排放得下更多 */
-.sym-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; }
-.sym-chip {
-  /* 刻意不設 position：讓 .sym-tip 的定位基準往上落到 .sym-cat */
-  display: flex; align-items: center; justify-content: center;
-  aspect-ratio: 1; padding: 0;
-  border: 1px solid var(--line); border-radius: var(--r-xs);
-  background: var(--card); cursor: grab; touch-action: none; color: var(--ink);
-  transition: border-color 0.15s ease, background 0.15s ease;
-}
-.sym-chip:hover { border-color: var(--dust); background: var(--dust-w); }
-.sym-chip.dragging { opacity: 0.4; cursor: grabbing; }
-.sym-chip svg { flex-shrink: 0; }
-
-/* 符號名稱與用法的懸浮說明。
- * 定位基準是 .sym-cat（left/right 都是 0）而不是 chip 本身 —— 面板只有
- * 350px 寬又會裁切溢出內容，掛在 chip 上時最左／最右那顆一定會被切掉。 */
-.sym-tip {
-  position: absolute; z-index: 60; left: 0; right: 0; top: calc(100% + 6px);
-  padding: 7px 10px; border-radius: 10px 2px 10px 2px;
-  background: var(--ink); color: #FBF9F4;
-  font-size: 11.5px; font-weight: 500; line-height: 1.6; letter-spacing: 0.2px;
-  text-align: left; box-shadow: var(--shadow-pop);
-  opacity: 0; visibility: hidden; transform: translateY(-3px);
-  transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
-  pointer-events: none;
-}
-.sym-tip b { display: block; font-size: 12px; margin-bottom: 1px; }
-.sym-chip:hover .sym-tip,
-.sym-chip:focus-visible .sym-tip { opacity: 1; visibility: visible; transform: translateY(0); }
-
-/* 跟著游標走的拖曳分身 */
+/* 跟著游標走的拖曳分身（快捷列表拖曳時用，見 GenogramTab 的 symbolDrag） */
 .sym-ghost {
   position: fixed; z-index: 100; pointer-events: none;
   transform: translate(-50%, -50%);

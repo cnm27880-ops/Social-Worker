@@ -8,12 +8,15 @@ import {
 import CaseBar from './CaseBar';
 import ImagePatchPanel from './ImagePatchPanel';
 import InfoTip from './InfoTip';
-import SymbolToolbox, { SymbolPreview, loadUsage, bumpUsage } from './SymbolToolbox';
+import { SymbolPreview, loadUsage, bumpUsage } from './SymbolPreview';
 import { BG_X, BG_Y, bgImageBox } from '../utils/bgImage';
 import {
-  SYMBOL_MAP, halfPath, healthHalvesFor, divisionSegments, kinshipDashFor,
+  SYMBOL_MAP, QUICK_KEYS, QUICK_SYMBOLS,
+  halfPath, healthHalvesFor, divisionSegments, kinshipDashFor,
+  quarterPath, quarterBoundary,
   CLINICAL_FILL, CLINICAL_STROKE, CLINICAL_STROKE_W,
-  trianglePath, triangleCrossLines, zigzagPoints, gapSegments, distToSegment, DISTANT_DASH,
+  trianglePath, triangleCrossLines,
+  zigzagPoints, gapSegments, doubleLineSegments, hatchSegments, distToSegment, DISTANT_DASH,
 } from '../utils/symbols';
 
 /* 獨立個體（懷孕／流產／死產）用的三角形半徑：死產跟人物節點一樣大（R），
@@ -38,8 +41,8 @@ const GenogramTab = ({
   gen2Str, setGen2Str, gen2Cfg, setGen2Cfg,
   indexId, setIndexId,
   cohabMembers, setCohabMembers,
-  deceasedIds, setDeceasedIds,
-  disabledIds, setDisabledIds,
+  deceasedIds,
+  disabledIds,
   g1Status, setG1Status,
   freeNodes, setFreeNodes,
   customLinks, setCustomLinks
@@ -63,8 +66,11 @@ const GenogramTab = ({
   const [eraseWidth, setEraseWidth] = useState(24);
   const [eraseDraft, setEraseDraft] = useState(null);   // 正在畫的那一筆
   const [drag, setDrag] = useState(null);
-  const [usage, setUsage] = useState(loadUsage);   // 符號使用次數：決定工具箱內的排序
+  const [usage, setUsage] = useState(loadUsage);   // 符號使用次數：決定快捷列表內的排序
   const [mode, setMode] = useState(null);
+  /* 快捷列表目前選到第幾個（0-based，順序見 QUICK_KEYS）。Q 重新開啟時
+   * 從上次的位置繼續，不用每次都從頭數。 */
+  const [quickIdx, setQuickIdx] = useState(0);
   const [draftPoly, setDraftPoly] = useState([]);
   const [selectedPolyId, setSelectedPolyId] = useState(null);
   const [dragVertex, setDragVertex] = useState(null);
@@ -134,10 +140,20 @@ const GenogramTab = ({
     const handleKeyDown = (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
       const key = e.key.toLowerCase();
-      if (key === 'q') setMode(p => p === 'index' ? null : 'index');
-      if (key === 'w') setMode(p => p === 'disabled' ? null : 'disabled');
+      const quickActive = mode !== null && QUICK_KEYS.includes(mode);
+      /* Q：開／關快捷列表選取狀態，從上次選到的位置繼續。
+       * W／R：只有選取狀態開著時才移動焦點——沒開著按了也不該有反應，
+       * 否則使用者搞不清楚現在到底選中了什麼。 */
+      if (key === 'q') setMode(quickActive ? null : QUICK_KEYS[quickIdx]);
+      if (key === 'w' && quickActive) {
+        const next = (quickIdx - 1 + QUICK_KEYS.length) % QUICK_KEYS.length;
+        setQuickIdx(next); setMode(QUICK_KEYS[next]);
+      }
+      if (key === 'r' && quickActive) {
+        const next = (quickIdx + 1) % QUICK_KEYS.length;
+        setQuickIdx(next); setMode(QUICK_KEYS[next]);
+      }
       if (key === 'e') setMode(p => p === 'cohab' ? null : 'cohab');
-      if (key === 'r') setMode(p => p === 'deceased' ? null : 'deceased');
       if (e.key === 'Enter' && mode === 'cohab' && cohabMode === 'poly' && draftPoly.length >= 3) {
         setPolygons(prev => [...prev, { id: 'pg_' + Date.now(), pts: draftPoly }]); setDraftPoly([]); setMousePos(null);
       }
@@ -145,7 +161,7 @@ const GenogramTab = ({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [draftPoly, mode, cohabMode]);
+  }, [draftPoly, mode, cohabMode, quickIdx]);
 
   const onGen2Change = (val) => {
     setGen2Str(val);
@@ -357,6 +373,9 @@ const GenogramTab = ({
     setSymbolDrag({ key, x: e.clientX, y: e.clientY, hoverId: null });
   }, []);
 
+  /** 記錄用過一次某個符號，快捷列表依這個次數排序。拖曳與點擊套用共用。 */
+  const recordUse = useCallback((key) => setUsage(bumpUsage(key)), []);
+
   useEffect(() => {
     if (!symbolDrag) return;
     const kind = SYMBOL_MAP[symbolDrag.key]?.kind;
@@ -390,21 +409,21 @@ const GenogramTab = ({
         const lineId = hitTestLine(svgP);
         if (!lineId) return;                         // 放開在空白處：取消
         toggleLineAttr(lineId, key);
-        setUsage(bumpUsage(key));
+        recordUse(key);
         return;
       }
 
       if (kind === 'standalone') {
         if (hitTestNode(svgP)) return;                // 放開在既有人物節點上：不做事
         setFreeNodes(prev => [...prev, { id: 'f_' + Date.now(), type: key, x: svgP.x, y: svgP.y }]);
-        setUsage(bumpUsage(key));
+        recordUse(key);
         return;
       }
 
       const targetId = hitTestNode(svgP);
       if (!targetId) return;                         // 放開在空白處：取消
       toggleNodeAttr(targetId, key);
-      setUsage(bumpUsage(key));
+      recordUse(key);
     };
 
     const onKey = (ev) => { if (ev.key === 'Escape') setSymbolDrag(null); };
@@ -417,7 +436,7 @@ const GenogramTab = ({
       window.removeEventListener('pointerup', onUp);
       window.removeEventListener('keydown', onKey);
     };
-  }, [symbolDrag, hitTestNode, hitTestLine, toggleNodeAttr, toggleLineAttr, setFreeNodes]);
+  }, [symbolDrag, hitTestNode, hitTestLine, toggleNodeAttr, toggleLineAttr, setFreeNodes, recordUse]);
 
   const onDown = useCallback((e, id) => {
     e.stopPropagation(); nodeDragMoved.current = false; const sp = svgPt(e); const p = pos(id);
@@ -546,10 +565,15 @@ const GenogramTab = ({
     e.stopPropagation();
     // 放手前如果真的拖動過，這是一次拖曳的收尾，不是要標記這個節點
     if (nodeDragMoved.current) { nodeDragMoved.current = false; return; }
-    if (mode === 'index') setIndexId(p => p === id ? null : id);
-    else if (mode === 'cohab' && cohabMode === 'auto') setCohabMembers(p => p.includes(id) ? p.filter(m => m !== id) : [...p, id]);
-    else if (mode === 'deceased') setDeceasedIds(p => p.includes(id) ? p.filter(m => m !== id) : [...p, id]);
-    else if (mode === 'disabled') setDisabledIds(p => p.includes(id) ? p.filter(m => m !== id) : [...p, id]);
+    if (mode === 'index') { setIndexId(p => p === id ? null : id); return; }
+    if (mode === 'cohab' && cohabMode === 'auto') { setCohabMembers(p => p.includes(id) ? p.filter(m => m !== id) : [...p, id]); return; }
+    // 快捷列表選中的符號若是「貼在人物身上」這一類，點節點即套用；
+    // 關係線／獨立個體這兩類不在這裡處理（見 <svg> 的 onClick，這裡的
+    // e.stopPropagation() 讓事件不會冒泡上去，剛好避免點到節點時誤觸那邊）。
+    if (mode && SYMBOL_MAP[mode]?.kind === 'nodeAttr') {
+      toggleNodeAttr(id, mode);
+      recordUse(mode);
+    }
   };
 
   const cohabitationBox = useMemo(() => {
@@ -731,7 +755,7 @@ const GenogramTab = ({
             {/* 一鍵速下載：點按鈕本體直接存高解析 PNG，其他格式收在箭頭底下 */}
             <div className="export-menu split-btn" ref={exportMenuRef}>
               <button className="btn-action btn-primary" onClick={downloadPNG}
-                      title="直接下載高解析 PNG（3 倍圖、白底）">⬇ 下載圖片</button>
+                      title="直接下載高解析 PNG（3 倍圖、白底）">⬇ 下載</button>
               <button className="btn-action btn-primary split-caret"
                       onClick={() => setExportOpen(o => !o)}
                       aria-expanded={exportOpen} aria-haspopup="true"
@@ -759,8 +783,8 @@ const GenogramTab = ({
 
         <div className="quick-tool-panel">
           <div className="quick-tool-header">
-            <span className="quick-tool-title">快捷操作工具列</span>
-            <InfoTip text="點擊或按 [Q / W / E / R] 切換模式，再點畫布上的人物即可標記。狀態標籤可點擊或用滾輪切換。復原／重做請用 Ctrl+Z／Ctrl+Shift+Z。" />
+            <span className="quick-tool-title">快捷列表</span>
+            <InfoTip text="案主／同住：點按鈕進入模式再點人物套用，跟以前一樣。下面的符號列可以直接拖到人物／婚姻線上放開套用，或按 [Q] 進入選取、[W]／[R] 左右切換要套用的符號，選中後點畫布即可套用。" />
             {/* 年齡是「畫布上要顯示什麼」的開關，跟這一區的標記模式同一類。
                 做成有凹凸感的按鈕：關閉時浮起、開啟時壓下去並填色，
                 原本的滑軌開關在暖色卡片上跟背景太接近，看不出開關狀態。 */}
@@ -773,13 +797,13 @@ const GenogramTab = ({
           </div>
 
           <div className="quick-tool-rows">
-
-            {/* 排 1: 案主 [Q] + 身障 [W] */}
+            {/* 案主／同住：沿用既有的「點按鈕進入模式→點人物套用」，Q/W/R 已經
+                挪去給下面的符號列用，所以這裡的按鈕不再標快捷鍵。 */}
             <div className="quick-tool-row-group">
               <div className="quick-tool-row">
                 <button className={`quick-tool-btn tone-blue ${mode === 'index' ? 'active' : ''}`}
                         onClick={() => setMode(mode === 'index' ? null : 'index')}>
-                  案主 [Q]
+                  案主
                 </button>
                 <span className="status-badge" data-status={ipStyle}
                       onClick={() => setIpStyle(ipStyle === 'filled' ? 'double' : 'filled')}
@@ -787,15 +811,8 @@ const GenogramTab = ({
                   {ipStyle === 'filled' ? '填滿' : '雙線'}
                 </span>
               </div>
-              <div className="quick-tool-row">
-                <button className={`quick-tool-btn tone-purple ${mode === 'disabled' ? 'active' : ''}`}
-                        onClick={() => setMode(mode === 'disabled' ? null : 'disabled')}>
-                  身障 [W]
-                </button>
-              </div>
             </div>
 
-            {/* 排 2: 同住 [E] + 死亡 [R] */}
             <div className="quick-tool-row-group">
               <div className="quick-tool-row">
                 <button className={`quick-tool-btn tone-amber ${mode === 'cohab' ? 'active' : ''}`}
@@ -813,14 +830,33 @@ const GenogramTab = ({
                   {cohabSolid ? '實線' : '虛線'}
                 </span>
               </div>
-              <div className="quick-tool-row">
-                <button className={`quick-tool-btn tone-red ${mode === 'deceased' ? 'active' : ''}`}
-                        onClick={() => setMode(mode === 'deceased' ? null : 'deceased')}>
-                  死亡 [R]
-                </button>
-              </div>
             </div>
+          </div>
 
+          {/* === 快捷標記（死亡／身障／慢性病／懷孕／正向親密／衝突／關係惡化） ===
+              拖曳到人物／婚姻線上放開即套用；或按 Q 進入選取、W／R 左右切換，
+              選中後直接點畫布上的目標套用。點圖示本身也可以直接選中它。 */}
+          <div className="quick-mark-row">
+            {QUICK_SYMBOLS.map(s => (
+              <button
+                key={s.key}
+                className={`quick-mark-chip ${mode === s.key ? 'active' : ''} ${symbolDrag?.key === s.key ? 'dragging' : ''}`}
+                aria-label={`${s.label}：${s.desc}`}
+                aria-pressed={mode === s.key}
+                onPointerDown={e => startSymbolDrag(e, s.key)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const idx = QUICK_KEYS.indexOf(s.key);
+                  setQuickIdx(idx);
+                  setMode(m => m === s.key ? null : s.key);
+                }}
+              >
+                <SymbolPreview symbol={s} size={26} />
+                <span className="quick-mark-tip" aria-hidden="true">
+                  <b>{s.label}</b>{s.desc}
+                </span>
+              </button>
+            ))}
           </div>
         </div>
 
@@ -981,13 +1017,29 @@ const GenogramTab = ({
           </div>
         )}
 
-        {/* 原本這裡是靜態的「操作說明」，改放工具箱；說明移到右上角的說明書 */}
-        <SymbolToolbox onPickUp={startSymbolDrag} usage={usage} activeKey={symbolDrag?.key} />
       </div>
 
       {/* SVG 畫布 */}
       <div className="canvas-wrap">
-        <svg ref={svgRef} width={svgW} height={svgH} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp} onClick={() => { setSelectedTextId(null); setSelectedPolyId(null); }} style={{ background: '#fefefe', minWidth: '600px', cursor: mode === 'cohab' && cohabMode === 'poly' ? 'crosshair' : undefined }}>
+        <svg ref={svgRef} width={svgW} height={svgH} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp}
+             onClick={(e) => {
+               setSelectedTextId(null); setSelectedPolyId(null);
+               // 快捷列表選中「關係線」或「獨立個體」這兩類符號時，點畫布即套用
+               // ——點在節點上不會走到這裡（onClick(e,id) 已經 stopPropagation）。
+               const sym = mode && SYMBOL_MAP[mode];
+               if (!sym) return;
+               const sp = svgPt(e);
+               if (sym.kind === 'relLine') {
+                 const lineId = hitTestLine(sp);
+                 if (lineId) { toggleLineAttr(lineId, mode); recordUse(mode); }
+               } else if (sym.kind === 'standalone') {
+                 if (!hitTestNode(sp)) {
+                   setFreeNodes(prev => [...prev, { id: 'f_' + Date.now(), type: mode, x: sp.x, y: sp.y }]);
+                   recordUse(mode);
+                 }
+               }
+             }}
+             style={{ background: '#fefefe', minWidth: '600px', cursor: mode === 'cohab' && cohabMode === 'poly' ? 'crosshair' : undefined }}>
           <defs>
             <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="#f0f0f0" strokeWidth="0.5" /></pattern>
             {/* 橡皮擦遮罩：白＝留下、黑＝挖掉。用遮罩而不是在底圖上塗白色，
@@ -1125,6 +1177,17 @@ const GenogramTab = ({
                     </g>
                   );
                 })()}
+                {/* 慢性病：左上四分之一填色。跟上面的半邊系統各自獨立畫——
+                    只有一個象限，套不進「halves 組合」那套邏輯，也沒有必要。 */}
+                {doc.nodeAttrs[nd.id]?.includes('chronicIllness') && (
+                  <g pointerEvents="none">
+                    <path d={quarterPath(nd.gender, R)} fill={CLINICAL_FILL} />
+                    {quarterBoundary(R).map(([x1, y1, x2, y2], i) => (
+                      <line key={i} x1={x1} y1={y1} x2={x2} y2={y2}
+                            stroke={CLINICAL_STROKE} strokeWidth={CLINICAL_STROKE_W} />
+                    ))}
+                  </g>
+                )}
                 {/* 工具箱拖曳經過時的高亮：只是預覽，放開才會真的貼上 */}
                 {symbolDrag?.hoverId === nd.id && (nd.gender === 'M'
                   ? <rect x={-(R+8)} y={-(R+8)} width={SZ+16} height={SZ+16} rx="5" fill="none" stroke="#3b82f6" strokeWidth="2.5" strokeDasharray="5,4" pointerEvents="none" />
@@ -1296,6 +1359,23 @@ const GenogramTab = ({
               <g key={`rel-${lineId}`} pointerEvents="none">
                 <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="white" strokeWidth={eraseW} />
                 {gapSegments(x1, y1, x2, y2).map(([sx1, sy1, sx2, sy2], i) => (
+                  <line key={i} x1={sx1} y1={sy1} x2={sx2} y2={sy2} stroke="#444" strokeWidth="2" />
+                ))}
+              </g>
+            );
+            if (key === 'closeRelationship') return (
+              <g key={`rel-${lineId}`} pointerEvents="none">
+                <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="white" strokeWidth={eraseW} />
+                {doubleLineSegments(x1, y1, x2, y2).map(([sx1, sy1, sx2, sy2], i) => (
+                  <line key={i} x1={sx1} y1={sy1} x2={sx2} y2={sy2} stroke="#444" strokeWidth="2" />
+                ))}
+              </g>
+            );
+            if (key === 'deteriorating') return (
+              <g key={`rel-${lineId}`} pointerEvents="none">
+                <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="white" strokeWidth={eraseW} />
+                <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#444" strokeWidth="2" />
+                {hatchSegments(x1, y1, x2, y2).map(([sx1, sy1, sx2, sy2], i) => (
                   <line key={i} x1={sx1} y1={sy1} x2={sx2} y2={sy2} stroke="#444" strokeWidth="2" />
                 ))}
               </g>

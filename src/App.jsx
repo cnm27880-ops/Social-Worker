@@ -24,7 +24,7 @@ const App = () => {
 
   /* --- 案件文件：自動存檔 + 復原/重做的單一資料來源 --- */
   const {
-    doc, setField, patchDoc, attrListSetter, toggleNodeAttr, toggleLineAttr,
+    doc, setField, patchDoc, toggleNodeAttr, toggleLineAttr,
     cases, activeCaseId, activeCase, isSaved,
     switchCase, saveCase, renameCase, deleteCase, exportCase, importCase,
     snapshots, takeSnapshot, restoreSnapshot, removeSnapshot,
@@ -72,8 +72,8 @@ const App = () => {
           gen2Cfg={doc.gen2Cfg} setGen2Cfg={setField('gen2Cfg')}
           indexId={doc.indexId} setIndexId={setField('indexId')}
           cohabMembers={doc.cohabMembers} setCohabMembers={setField('cohabMembers')}
-          deceasedIds={deceasedIds} setDeceasedIds={attrListSetter('deceased')}
-          disabledIds={disabledIds} setDisabledIds={attrListSetter('disabled')}
+          deceasedIds={deceasedIds}
+          disabledIds={disabledIds}
           g1Status={doc.g1Status} setG1Status={setField('g1Status')}
           freeNodes={doc.freeNodes} setFreeNodes={setField('freeNodes')}
           customLinks={doc.customLinks} setCustomLinks={setField('customLinks')}

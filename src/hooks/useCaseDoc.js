@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  INITIAL_DOC, idsWithAttr, setAttrIds, toggleAttr, toggleLineAttr,
+  INITIAL_DOC, toggleAttr, toggleLineAttr,
 } from '../utils/caseDoc';
 import {
   openLibrary, readCaseDoc, writeCaseDoc, writeIndex, touchCase,
@@ -173,25 +173,6 @@ export function useCaseDoc() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [undo, redo]);
 
-  /* --- 相容層 ---
-   * 既有的 GenogramTab / RecordTab 是用 deceasedIds / disabledIds 兩個
-   * 陣列在讀寫的。這裡把它們接到 nodeAttrs 上，讓那些元件不用改。
-   * 之後積木工具箱做好、呼叫點都改用 nodeAttrs 後即可移除。 */
-  const attrListSetter = useCallback((attr) => {
-    const cacheKey = `__attr_${attr}`;
-    if (!setterCache.current[cacheKey]) {
-      setterCache.current[cacheKey] = (valueOrFn) => {
-        pendingKey.current = cacheKey;
-        setDocRaw(prev => {
-          const cur = idsWithAttr(prev.nodeAttrs, attr);
-          const next = typeof valueOrFn === 'function' ? valueOrFn(cur) : valueOrFn;
-          return { ...prev, nodeAttrs: setAttrIds(prev.nodeAttrs, attr, next) };
-        });
-      };
-    }
-    return setterCache.current[cacheKey];
-  }, []);
-
   /** 切換單一節點的單一標記（積木工具箱拖曳貼附用） */
   const toggleNodeAttr = useCallback((id, attr) => {
     pendingKey.current = `__toggle_${id}_${attr}`;
@@ -356,7 +337,6 @@ export function useCaseDoc() {
     doc,
     setField,
     patchDoc,
-    attrListSetter,
     toggleNodeAttr,
     toggleLineAttr: toggleLineAttrCb,
 
