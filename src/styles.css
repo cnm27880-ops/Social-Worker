@@ -390,48 +390,127 @@ body {
   #print-a4-container svg { width: 100%; height: auto; display: block; }
 }
 
-/* ===== 快捷操作工具列 ===== */
+/* ===== 快捷操作工具列（瘦身質感優化版） ===== */
 .quick-tool-panel {
   margin-bottom: 12px;
-  padding: 12px;
+  padding: 10px 12px;
   background: var(--wash-warm);
   border: 1px solid var(--line);
   border-radius: var(--r-card);
 }
+
 .quick-tool-header {
-  display: flex; align-items: center; gap: 6px; margin-bottom: 10px;
+  display: flex; 
+  align-items: center; 
+  gap: 6px; 
+  margin-bottom: 8px;
 }
-.quick-tool-header .btn-emboss { margin-left: auto; }
+
+.quick-tool-header .btn-emboss { 
+  margin-left: auto; 
+}
+
 .quick-tool-title {
-  display: inline-flex; align-items: center; gap: 6px;
-  font-size: 13px; font-weight: 700; color: var(--ink);
+  display: inline-flex; 
+  align-items: center; 
+  gap: 6px;
+  font-size: 12.5px; 
+  font-weight: 700; 
+  color: var(--ink);
+  letter-spacing: 0.3px;
 }
+
 .quick-tool-title::before {
-  content: ''; width: 3px; height: 14px; border-radius: 2px;
+  content: ''; 
+  width: 3px; 
+  height: 12px; 
+  border-radius: 2px;
   background: linear-gradient(180deg, var(--sage), var(--dust));
 }
-.quick-tool-rows { display: flex; flex-direction: column; gap: 8px; }
-.quick-tool-row-group { display: flex; gap: 6px; flex-wrap: nowrap; align-items: center; }
+
+.quick-tool-rows { 
+  display: flex; 
+  flex-direction: column; 
+  gap: 8px; 
+}
+
+.quick-tool-row-group { 
+  display: flex; 
+  gap: 8px; 
+  flex-wrap: wrap; 
+  align-items: center; 
+}
+
+/* 1. 瘦身外框：取消 999px 大膠囊，改用精緻的微圓角 (8px) 與極輕陰影 */
 .quick-tool-row {
   background: var(--card);
-  padding: 3px;
-  border-radius: 999px;
-  display: inline-flex; align-items: center; gap: 3px;
+  padding: 2px 3px;
+  border-radius: 8px;
+  display: inline-flex; 
+  align-items: center; 
+  gap: 3px;
   border: 1px solid var(--line);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
   min-width: 0;
 }
-.quick-tool-row .status-badge { padding: 2px 8px !important; font-size: 11.5px !important; }
+
+/* 2. 主按鈕瘦身：縮減內距，改用 6px 順眼微圓角 */
 .quick-tool-btn {
-  border: none; cursor: pointer;
-  padding: 4px 11px; font-size: 12.5px; font-weight: 600;
-  border-radius: 999px; background: transparent; color: var(--ink-mid);
-  transition: background 0.18s ease, color 0.18s ease;
-  letter-spacing: 0.2px; white-space: nowrap;
+  border: none; 
+  cursor: pointer;
+  padding: 3px 8px; 
+  font-size: 12px; 
+  font-weight: 600;
+  border-radius: 6px; 
+  background: transparent; 
+  color: var(--ink-mid);
+  transition: all 0.15s ease;
+  letter-spacing: 0.2px; 
+  white-space: nowrap;
 }
-.quick-tool-btn:hover { background: var(--wash-warm); color: var(--ink); }
-.quick-tool-btn.active { color: white; }
+
+.quick-tool-btn:hover { 
+  background: var(--wash-warm); 
+  color: var(--ink); 
+}
+
+.quick-tool-btn.active { 
+  color: white; 
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+}
+
 .quick-tool-btn.active.tone-blue   { background: var(--dust); }
 .quick-tool-btn.active.tone-amber  { background: var(--sand); }
+
+/* 3. 狀態標籤（填滿、自動、虛線）：精緻 Tag 視覺，點擊開啟時發光浮起 */
+.quick-tool-row .status-badge {
+  padding: 2px 6px !important; 
+  font-size: 11px !important;
+  font-weight: 500;
+  border-radius: 5px !important;
+  cursor: pointer;
+  background: var(--wash-warm);
+  color: var(--ink-mid);
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.quick-tool-row .status-badge:hover {
+  background: var(--line);
+  color: var(--ink);
+}
+
+/* 開啟狀態的標籤質感提升 */
+.quick-tool-row .status-badge[data-status="filled"],
+.quick-tool-row .status-badge[data-status="auto"],
+.quick-tool-row .status-badge[data-status="solid"] {
+  background: #FFFFFF;
+  color: var(--ink);
+  border-color: var(--line);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  font-weight: 600;
+}
 
 /* ===== 快捷列表：符號列 =====
  * 死亡／身障／慢性病／懷孕／正向親密／衝突／關係惡化，固定 7 個、單排。
@@ -492,6 +571,7 @@ body {
 }
 
 .section-title-row { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+.section-title-row:last-child { margin-bottom: 0; }
 .section-title-row > label { margin-bottom: 0; }
 
 .section-inline { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
