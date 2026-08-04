@@ -551,7 +551,11 @@ input::placeholder, textarea::placeholder { color: var(--ink-faint); font-weight
 .canvas-wrap { background: var(--card); border-radius: var(--r-card); border: 1px solid var(--line); box-shadow: var(--shadow); flex: 1; overflow: auto; position: relative; }
 svg { display: block; user-select: none; }
 
-.status-badge { display: inline-block; padding: 2px 10px; font-size: 12px; font-weight: 600; border-radius: 12px; cursor: ns-resize; user-select: none; border: 1px solid; }
+/* 點擊往前切到下一個狀態、滾輪可雙向切換（見 GenogramTab 的 cycleOnClick／wheelRef）。
+ * cursor 用 pointer 而非原本的 ns-resize —— ns-resize 只暗示「可以滾」，
+ * 沒有滾輪或不知道能滾的人看不出這是個可以點的東西。 */
+.status-badge { display: inline-block; padding: 2px 10px; font-size: 12px; font-weight: 600; border-radius: 12px; cursor: pointer; user-select: none; border: 1px solid; transition: filter 0.15s ease; }
+.status-badge:hover { filter: brightness(0.96); }
 .status-badge[data-status="none"]       { background: var(--wash-warm); color: var(--ink-mid);  border-color: var(--line); }
 .status-badge[data-status="married"]    { background: var(--sage-w);    color: var(--sage-d);   border-color: var(--sage-bd); }
 .status-badge[data-status="cohab"]      { background: var(--sand-w);    color: var(--sand-d);   border-color: var(--sand-bd); }

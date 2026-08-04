@@ -122,6 +122,14 @@ const GenogramTab = ({
     if (!el) return;
     el.onwheel = (e) => { e.preventDefault(); e.stopPropagation(); const next = (list.indexOf(current) + (e.deltaY > 0 ? 1 : -1) + list.length) % list.length; setter(list[next]); };
   };
+  /** 點擊往前切到下一個狀態（跟滾輪往下同方向），滾輪仍可雙向切換。
+   * 這批狀態標籤原本只能滾輪操作——滑鼠沒有滾輪（觸控板手勢因人而異）或
+   * 不知道可以滾的人根本切不動，點擊是找得到的最低限度操作方式。 */
+  const cycleOnClick = (list, current, setter) => (e) => {
+    e.stopPropagation();
+    const next = (list.indexOf(current) + 1) % list.length;
+    setter(list[next]);
+  };
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -753,7 +761,7 @@ const GenogramTab = ({
         <div className="quick-tool-panel">
           <div className="quick-tool-header">
             <span className="quick-tool-title">快捷操作工具列</span>
-            <InfoTip text="點擊或按 [Q / W / E / R] 切換模式，再點畫布上的人物即可標記。狀態標籤可用滾輪切換。復原／重做也可用 Ctrl+Z／Ctrl+Shift+Z。" />
+            <InfoTip text="點擊或按 [Q / W / E / R] 切換模式，再點畫布上的人物即可標記。狀態標籤可點擊或用滾輪切換。復原／重做也可用 Ctrl+Z／Ctrl+Shift+Z。" />
             {/* 復原／重做原本自己佔一列（旁邊還有「已自動儲存 ○○:○○」）。
                 狀態文字拿掉後那一列只剩兩顆小按鈕，不值得一列；移到這裡跟
                 標記模式放在一起，離實際會用到它們的按鈕最近。頂列放不下：
@@ -782,7 +790,7 @@ const GenogramTab = ({
                         onClick={() => setMode(mode === 'index' ? null : 'index')}>
                   案主 [Q]
                 </button>
-                <span className="status-badge" data-status={ipStyle} style={{ cursor: 'pointer' }}
+                <span className="status-badge" data-status={ipStyle}
                       onClick={() => setIpStyle(ipStyle === 'filled' ? 'double' : 'filled')}
                       ref={el => wheelRef(el, ['filled', 'double'], ipStyle, setIpStyle)}>
                   {ipStyle === 'filled' ? '填滿' : '雙線'}
@@ -803,12 +811,12 @@ const GenogramTab = ({
                         onClick={() => setMode(mode === 'cohab' ? null : 'cohab')}>
                   同住 [E]
                 </button>
-                <span className="status-badge" data-status={cohabMode} style={{ cursor: 'pointer' }}
+                <span className="status-badge" data-status={cohabMode}
                       onClick={() => setCohabMode(cohabMode === 'auto' ? 'poly' : 'auto')}
                       ref={el => wheelRef(el, ['auto', 'poly'], cohabMode, setCohabMode)}>
                   {cohabMode === 'auto' ? '自動' : '點繪'}
                 </span>
-                <span className="status-badge" data-status={cohabSolid ? 'solid' : 'dashed'} style={{ cursor: 'pointer' }}
+                <span className="status-badge" data-status={cohabSolid ? 'solid' : 'dashed'}
                       onClick={() => setCohabSolid(!cohabSolid)}
                       ref={el => wheelRef(el, [false, true], cohabSolid, setCohabSolid)}>
                   {cohabSolid ? '實線' : '虛線'}
@@ -830,8 +838,10 @@ const GenogramTab = ({
         <div className="section">
           <div className="section-title-row">
             <label>第一代（父母）</label>
-            <InfoTip text="系統預設一對父母（■ 父、● 母）。滑鼠停在右側標籤上滾動滾輪即可切換婚姻狀態。" />
-            <span className="status-badge" data-status={g1Status} ref={el => wheelRef(el, G1_STATUSES, g1Status, setG1Status)}
+            <InfoTip text="系統預設一對父母（■ 父、● 母）。右側標籤可點擊切換婚姻狀態，滑鼠停在上面滾動滾輪也可以。" />
+            <span className="status-badge" data-status={g1Status}
+                  onClick={cycleOnClick(G1_STATUSES, g1Status, setG1Status)}
+                  ref={el => wheelRef(el, G1_STATUSES, g1Status, setG1Status)}
                   style={{ marginLeft: 'auto' }}>{G1_LABELS[g1Status]}</span>
           </div>
         </div>
@@ -854,7 +864,10 @@ const GenogramTab = ({
                   <span className={`child-name ${c.gender === 'M' ? 'm' : 'f'}`}>{getRelativeTitle(c.gender, i, gen2Cfg)}</span>
                   <div className="chk-wrap">
                     <label><input type="checkbox" checked={c.isMulti || false} onChange={() => toggleMulti(i)} /> 多胞胎</label>
-                    <span className="status-badge" data-status={c.partner || 'none'} ref={el => wheelRef(el, G2_STATUSES, c.partner || 'none', v => changePartner(i, v))} style={{marginLeft: '8px'}}>{G2_LABELS[c.partner || 'none']}</span>
+                    <span className="status-badge" data-status={c.partner || 'none'}
+                          onClick={cycleOnClick(G2_STATUSES, c.partner || 'none', v => changePartner(i, v))}
+                          ref={el => wheelRef(el, G2_STATUSES, c.partner || 'none', v => changePartner(i, v))}
+                          style={{ marginLeft: '8px' }}>{G2_LABELS[c.partner || 'none']}</span>
                   </div>
                 </div>
                 {c.partner !== 'none' && (
@@ -871,7 +884,10 @@ const GenogramTab = ({
         <div className="section section-inline">
           <label style={{ margin: 0 }}>📝 文字方塊</label>
           <InfoTip text="單擊選取文字方塊（顯示框線）；雙擊可編輯內容；選取後可刪除或拖曳右下角縮放。" />
-          <span className="status-badge" data-status={textDirection} ref={el => wheelRef(el, TEXT_DIRS, textDirection, setTextDirection)} title="滾輪切換：橫式/直式">{TEXT_DIR_LABELS[textDirection]}</span>
+          <span className="status-badge" data-status={textDirection}
+                onClick={cycleOnClick(TEXT_DIRS, textDirection, setTextDirection)}
+                ref={el => wheelRef(el, TEXT_DIRS, textDirection, setTextDirection)}
+                title="點擊或滾輪切換：橫式/直式">{TEXT_DIR_LABELS[textDirection]}</span>
           <button className="btn-soft tone-sage" onClick={addText} style={{ marginLeft: 'auto' }}>➕ 新增</button>
         </div>
 
@@ -924,7 +940,12 @@ const GenogramTab = ({
                 <div key={lnk.id} className={`link-card ${isEcoLink ? 'eco' : isAnnotationLink ? 'annotation' : ''}`}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}>
                     <span>{isEcoLink ? '🌐 ' : isAnnotationLink ? '📎 ' : ''}{srcLabel} ↔ {tgtLabel}</span>
-                    {!isSpecialLink && <span className="status-badge" data-status={lnk.status} ref={el => wheelRef(el, CUSTOM_LINK_STATUSES, lnk.status, v => updateCustomLink(lnk.id, 'status', v))}>{CUSTOM_LINK_LABELS[lnk.status]}</span>}
+                    {!isSpecialLink && (
+                      <span className="status-badge" data-status={lnk.status}
+                            onClick={cycleOnClick(CUSTOM_LINK_STATUSES, lnk.status, v => updateCustomLink(lnk.id, 'status', v))}
+                            ref={el => wheelRef(el, CUSTOM_LINK_STATUSES, lnk.status, v => updateCustomLink(lnk.id, 'status', v))}
+>{CUSTOM_LINK_LABELS[lnk.status]}</span>
+                    )}
                     <button className="btn-soft tone-clay btn-soft-xs" onClick={() => deleteCustomLink(lnk.id)} style={{ marginLeft: 'auto' }}>刪除</button>
                   </div>
                   {!isSpecialLink && (
@@ -945,7 +966,10 @@ const GenogramTab = ({
                                 <span className={`child-icon ${kc.gender === 'M' ? 'm' : 'f'}`}>{kc.gender === 'M' ? '■' : '●'}</span>
                                 <span className={`child-name ${kc.gender === 'M' ? 'm' : 'f'}`}>{getRelativeTitle(kc.gender, ki, lnk.kidsCfg)}</span>
                                 <div className="chk-wrap">
-                                  <span className="status-badge" data-status={kc.partner || 'none'} ref={el => wheelRef(el, G2_STATUSES, kc.partner || 'none', v => setCustomLinks(prev => prev.map(l => l.id === lnk.id ? { ...l, kidsCfg: l.kidsCfg.map((k, idx) => idx === ki ? { ...k, partner: v, g3Str: v === 'none' ? '' : k.g3Str } : k) } : l)))}>{G2_LABELS[kc.partner || 'none']}</span>
+                                  <span className="status-badge" data-status={kc.partner || 'none'}
+                                        onClick={cycleOnClick(G2_STATUSES, kc.partner || 'none', v => setCustomLinks(prev => prev.map(l => l.id === lnk.id ? { ...l, kidsCfg: l.kidsCfg.map((k, idx) => idx === ki ? { ...k, partner: v, g3Str: v === 'none' ? '' : k.g3Str } : k) } : l)))}
+                                        ref={el => wheelRef(el, G2_STATUSES, kc.partner || 'none', v => setCustomLinks(prev => prev.map(l => l.id === lnk.id ? { ...l, kidsCfg: l.kidsCfg.map((k, idx) => idx === ki ? { ...k, partner: v, g3Str: v === 'none' ? '' : k.g3Str } : k) } : l)))}
+>{G2_LABELS[kc.partner || 'none']}</span>
                                 </div>
                               </div>
                               {kc.partner !== 'none' && (
