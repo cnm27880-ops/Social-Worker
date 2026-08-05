@@ -784,7 +784,7 @@ const GenogramTab = ({
         <div className="quick-tool-panel">
           <div className="quick-tool-header">
             <span className="quick-tool-title">快捷列表</span>
-            <InfoTip text="案主 [W]／同住 [E]：點按鈕（或按快捷鍵）進入模式再點人物套用，跟以前一樣。下面的符號列可以直接拖到人物／婚姻線上放開套用，或按 [A] 進入選取、[S]／[D] 左右切換要套用的符號，選中後點畫布即可套用。" />
+            <InfoTip text="案主 [W]／同住 [E]：點按鈕（或按快捷鍵）進入模式，再點畫布上的人物套用。下面的符號列可以直接拖到人物／婚姻線上放開套用，或按 [A] 進入選取、[S]／[D] 左右切換要套用的符號，選中後點畫布上的目標即可套用。" />
             {/* 年齡是「畫布上要顯示什麼」的開關，跟這一區的標記模式同一類。
                 做成有凹凸感的按鈕：關閉時浮起、開啟時壓下去並填色，
                 原本的滑軌開關在暖色卡片上跟背景太接近，看不出開關狀態。 */}
@@ -921,7 +921,7 @@ const GenogramTab = ({
         <div className="section">
           <div className="section-title-row">
             <label>🧩 自由擴充區</label>
-            <InfoTip text="男性／女性／三角／生態圖：點按鈕即在畫布上新增一個獨立個體。拖曳擴充個體碰撞目標即可產生連線；生態圖新增後預設連結案主。「編輯」會把擴充個體改用藍色畫，方便跟原本的家系區分。" />
+            <InfoTip text="男性／女性／三角／生態圖：點按鈕即在畫布上新增一個獨立個體。把新增的個體拖到目標人物上疊在一起放開，就會自動產生連線；生態圖新增後預設連結案主。按下「編輯」會把擴充個體改用藍色畫，方便跟原本的家系區分。" />
           </div>
           <div className="btn-row">
             <button className="btn-soft tone-dust" onClick={() => addFreeNode('M')}>男性</button>

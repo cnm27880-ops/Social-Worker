@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import BadgeGroup from './BadgeGroup';
+import InfoTip from './InfoTip';
 import { getRelativeTitle, formatKidsText, G2_LABELS } from '../utils/helpers';
 
 const DEFAULT_TAGS = {
@@ -215,7 +216,11 @@ const RecordTab = ({
     <div className="record-layout">
       <div className="record-form panel">
         <h2 style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>案主基本資料 {indexId ? <span className="ip-pill">已於家系圖指定案主</span> : <span className="ip-pill warn">尚未指定案主</span>}</div>
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            案主基本資料
+            <InfoTip text="填好這裡跟下面的家屬清單，右側會即時整理成一段文字紀錄，按「一鍵複製至剪貼簿」就能直接貼到你原本用的紀錄系統。標籤（身分別、教育程度等）點「編輯標籤」可自行增刪。" />
+            {indexId ? <span className="ip-pill">已於家系圖指定案主</span> : <span className="ip-pill warn">尚未指定案主</span>}
+          </div>
           <button className={`btn-soft ${isEditingTags ? 'tone-clay' : 'tone-muted'}`} onClick={() => setIsEditingTags(!isEditingTags)}>
             {isEditingTags ? '✅ 完成編輯' : '✏️ 編輯標籤'}
           </button>
@@ -362,7 +367,11 @@ const RecordTab = ({
               <input type="file" accept=".json" onChange={importBackup} style={{ display: 'none' }} />
             </label>
           </div>
-          <div className="hint" style={{ marginTop: '6px' }}>可將自訂標籤與常用短語下載備份；更換電腦或清除瀏覽器資料後可重新匯入還原。</div>
+          <div className="hint" style={{ marginTop: '6px' }}>
+            這裡存的是「編輯標籤」的選項和「自由保存區」的內容，<b>不含案件本身</b>；
+            案件（家系圖與紀錄資料）請到「家系圖繪製」頁籤的案件列另外匯出。
+            更換電腦或清除瀏覽器資料前，兩邊都建議先各自備份一次。
+          </div>
         </div>
 
       </div>
