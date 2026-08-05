@@ -19,11 +19,10 @@ import {
   zigzagPoints, gapSegments, doubleLineSegments, hatchSegments, distToSegment, DISTANT_DASH,
 } from '../utils/symbols';
 
-/* 獨立個體（懷孕／流產／死產）用的三角形半徑：死產跟人物節點一樣大（R），
- * 懷孕／流產縮小，視覺上跟「附加在別人身上的標記」區分開來。 */
-const STANDALONE_SMALL_R = 13;
+/* 獨立個體（懷孕／流產／死產）用的三角形半徑：跟人物節點（正方形／圓形）
+ * 一樣大，畫布上才不會顯得特別小。 */
 const STANDALONE_TYPES = ['pregnancy', 'miscarriage', 'stillbirth'];
-const standaloneRadius = (type) => (type === 'stillbirth' ? R : STANDALONE_SMALL_R);
+const standaloneRadius = () => R;
 
 const CUSTOM_LINK_STATUSES = ['married', 'divorced'];
 const CUSTOM_LINK_LABELS = { married: '已婚', divorced: '離婚' };
@@ -1261,7 +1260,7 @@ const GenogramTab = ({
                      setFreeNodes(prev => prev.filter(f => f.id !== fn.id));
                    }
                  }}>
-                <path d={trianglePath(r)} fill="white" stroke="#333" strokeWidth="2.5" />
+                <path d={trianglePath(r)} fill="white" stroke="#333" strokeWidth="2.5" strokeLinejoin="round" />
                 {hasCross && triangleCrossLines(r).map(([x1, y1, x2, y2], i) => (
                   <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#333" strokeWidth="1.5" pointerEvents="none" />
                 ))}
@@ -1306,7 +1305,7 @@ const GenogramTab = ({
               const cStroke = isEcoLink ? '#2563eb' : '#8b5cf6';
               return (
                 <g key={lnk.id}>
-                  <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={cStroke} strokeWidth={isEcoLink ? '2' : '1.5'} strokeDasharray={isAnnotationLink ? '4,3' : undefined} />
+                  <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={cStroke} strokeWidth={isEcoLink ? '2' : '1.5'} />
                   <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent" strokeWidth="12" style={{ cursor: 'pointer' }} onDoubleClick={e => { e.stopPropagation(); deleteCustomLink(lnk.id); }} />
                 </g>
               );
