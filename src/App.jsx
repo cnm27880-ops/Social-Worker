@@ -36,6 +36,12 @@ const App = () => {
 
   return (
     <div>
+      {/* 網站標頭：唯一的 <h1>，畫面上維持低調的標語列，但把「這是什麼、給誰用」
+          講清楚——SEO 需要語意化的主標題，新用戶也需要一眼知道自己找對地方了。 */}
+      <header className="site-header">
+        <h1>Geno-Link<span className="site-tagline">社工、護理、諮商、個管等第一線工作者都適用的線上家系圖與個案紀錄產生器</span></h1>
+      </header>
+
       {/* 頁籤列 */}
       <div className="tab-nav">
         <button className={`tab-btn ${activeTab === 'genogram' ? 'active' : ''}`} onClick={() => setActiveTab('genogram')}>📊 家系圖繪製</button>
