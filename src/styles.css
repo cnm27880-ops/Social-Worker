@@ -546,6 +546,13 @@ body {
   background: var(--card); color: var(--ink); cursor: grab; touch-action: none;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 1px 2px rgba(74, 69, 61, 0.1);
   transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+  /* 手機長按這顆按鈕本來要直接拖去畫布套用，結果被系統的「長按」行為
+   * 搶走：iOS 會跳出 title 的說明氣泡（-webkit-touch-callout）、還有
+   * 選取態的反白／灰色觸控高亮，看起來像多跳出一段文字、疊在原本的
+   * 提示上。三個都關掉，長按就只剩我們自己的拖曳邏輯。 */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none; user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 .quick-mark-chip:hover { border-color: var(--dust); background: var(--dust-w); }
 .quick-mark-chip:active { box-shadow: inset 0 2px 3px rgba(74, 69, 61, 0.2); }
@@ -669,6 +676,13 @@ input::placeholder, textarea::placeholder { color: var(--ink-faint); font-weight
 .link-card.annotation { background: var(--mauve-w); border-color: var(--mauve-bd); }
 
 .canvas-wrap { background: var(--card); border-radius: var(--r-card); border: 1px solid var(--line); box-shadow: var(--shadow); flex: 1; overflow: auto; position: relative; }
+/* 畫布上節點／文字方塊／多邊形頂點都是長按拖曳操作，同樣要關掉手機的
+ * 長按選字／callout，理由跟 .quick-mark-chip 一樣。 */
+.canvas-wrap svg {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none; user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
 svg { display: block; user-select: none; }
 
 /* 點擊往前切到下一個狀態、滾輪可雙向切換（見 GenogramTab 的 cycleOnClick／wheelRef）。
