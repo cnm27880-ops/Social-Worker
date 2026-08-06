@@ -224,11 +224,25 @@ body {
   box-shadow: 0 1px 3px rgba(74, 69, 61, 0.16);
 }
 
-/* --- 右：說明按鈕 --- */
+/* --- 右：全螢幕與說明按鈕 --- */
 .navbar-actions { justify-self: end; display: flex; align-items: center; gap: 10px; }
 
+/* 圓形圖示鈕，與 .help-btn 同一個尺寸與外框，排在一起才不會一大一小。
+ * ⛶ 這個字符在多數字型裡的墨色偏小，字級調大一級補回視覺重量。 */
+.icon-btn {
+  width: 32px; height: 32px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--line); border-radius: 50%; background: var(--card);
+  color: var(--ink-soft); font-size: 17px; line-height: 1; cursor: pointer;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+.icon-btn:hover { background: var(--dust); color: #fff; border-color: var(--dust); }
+/* 全螢幕進行中：實心狀態讓「再按一次會退出」看得出來。 */
+.icon-btn.is-on { background: var(--dust); color: #fff; border-color: var(--dust); }
+
 /* 鍵盤操作看得見焦點（滑鼠點擊不會觸發 :focus-visible，不影響視覺）。 */
-.brand-btn:focus-visible, .tab-btn:focus-visible, .help-btn:focus-visible {
+.brand-btn:focus-visible, .tab-btn:focus-visible,
+.help-btn:focus-visible, .icon-btn:focus-visible {
   outline: 2px solid var(--dust); outline-offset: 2px;
 }
 

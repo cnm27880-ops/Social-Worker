@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import GenogramTab from './components/GenogramTab';
 import HelpDrawer from './components/HelpDrawer';
 import RecordTab from './components/RecordTab';
 import { useCaseDoc } from './hooks/useCaseDoc';
+import { useFullscreen } from './hooks/useFullscreen';
 import { idsWithAttr } from './utils/caseDoc';
 import './styles.css';
 
@@ -10,6 +11,12 @@ const App = () => {
   /* --- 頁籤狀態（純 UI，不屬於案件文件） --- */
   const [activeTab, setActiveTab] = useState('genogram');
   const [helpOpen, setHelpOpen] = useState(false);
+
+  /* 全螢幕切換。手機畫面本來就窄，收掉瀏覽器網址列與工具列能多出可觀的
+   * 畫布高度；iPhone 版 Safari 不支援時改用提示引導「加入主畫面」。 */
+  const fsFallback = useCallback((msg) => window.alert(msg), []);
+  const { active: fsActive, supported: fsSupported, toggle: toggleFullscreen } =
+    useFullscreen(fsFallback);
 
   /* 「?」開啟說明書；輸入框內不攔截 */
   useEffect(() => {
@@ -72,6 +79,20 @@ const App = () => {
           </nav>
 
           <div className="navbar-actions">
+            {/* 不支援的裝置照樣把按鈕留著：按下去會給「加入主畫面」的替代做法，
+                比整顆消失讓人不知道有沒有這功能好。狀態靠 aria-pressed 與
+                .is-on 表達，圖示維持同一個字符，不會因字型缺字而變成空白框。 */}
+            <button
+              className={`icon-btn ${fsActive ? 'is-on' : ''}`}
+              onClick={toggleFullscreen}
+              title={
+                fsActive ? '退出全螢幕'
+                  : fsSupported ? '全螢幕模式'
+                  : '全螢幕模式（此裝置不支援，點擊看替代做法）'
+              }
+              aria-label={fsActive ? '退出全螢幕' : '進入全螢幕'}
+              aria-pressed={fsActive}
+            >⛶</button>
             <button
               className="help-btn"
               onClick={() => setHelpOpen(true)}
