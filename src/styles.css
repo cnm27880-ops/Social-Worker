@@ -87,8 +87,15 @@ body {
  * padding 移到這裡，min-height 撐滿視窗，.tab-pane 用 flex:1 吃掉
  * tab-nav 以外的剩餘高度，.panel 再用 max-height:100% 貼著那個已經算好
  * 的高度，不用再猜。 */
+/* 左右與下緣的安全區：index.html 的 viewport-fit=cover 讓版面延伸到瀏海與
+ * Home 指示條底下，這裡再用 env() 把內容推回看得到的範圍。env() 在沒有
+ * 瀏海的裝置與桌機一律回 0，所以這幾條對其他平台等於沒寫；max() 保證至少
+ * 保留原本的 12px 內距。上緣交給 .top-navbar 自己處理（它有負 margin）。 */
 .app-shell {
   display: flex; flex-direction: column; min-height: 100vh; padding: 12px;
+  padding-left: max(12px, env(safe-area-inset-left));
+  padding-right: max(12px, env(safe-area-inset-right));
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
 }
 /* 桌機（雙欄）：外殼鎖在視窗高度內，讓「該捲的東西自己捲」。
  * 只寫 min-height 的話，面板內容一長（子代很多、家屬卡片一堆），整個
@@ -119,10 +126,18 @@ body {
   /* .app-shell 有 12px 內距，導覽列要真的「全寬」貼到視窗左右兩邊，
    * 得用等量的負 margin 把那圈內距抵銷掉——底線才會橫貫整個畫面，
    * 而不是左右各短一截。下緣的 12px 是導覽列與下方內容的間距。 */
-  margin: -12px -12px 12px;
+  /* 左右的負 margin 要跟 .app-shell 實際的內距等量——那個內距在有瀏海的
+   * 裝置上會被 env() 撐大，寫死 -12px 的話導覽列就短一截、底線接不到螢幕邊。 */
+  margin: -12px 0 12px;
+  margin-left: calc(-1 * max(12px, env(safe-area-inset-left)));
+  margin-right: calc(-1 * max(12px, env(safe-area-inset-right)));
   /* 左右內距刻意跟 .app-shell 的 12px 一致：品牌名的字緣、說明按鈕的右緣
-   * 才會跟下方面板卡片與畫布切齊成同一條版心線，不會差幾像素看起來歪掉。 */
+   * 才會跟下方面板卡片與畫布切齊成同一條版心線，不會差幾像素看起來歪掉。
+   * 底色鋪滿到螢幕邊、內容退回安全區，是瀏海裝置的標準做法。 */
   padding: 8px 12px;
+  padding-top: max(8px, env(safe-area-inset-top));
+  padding-left: max(12px, env(safe-area-inset-left));
+  padding-right: max(12px, env(safe-area-inset-right));
   background: var(--card);
   border-bottom: 1px solid var(--line);
   box-shadow: 0 1px 2px rgba(74, 69, 61, 0.04);
@@ -224,11 +239,25 @@ body {
   box-shadow: 0 1px 3px rgba(74, 69, 61, 0.16);
 }
 
-/* --- 右：說明按鈕 --- */
+/* --- 右：全螢幕與說明按鈕 --- */
 .navbar-actions { justify-self: end; display: flex; align-items: center; gap: 10px; }
 
+/* 圓形圖示鈕，與 .help-btn 同一個尺寸與外框，排在一起才不會一大一小。
+ * ⛶ 這個字符在多數字型裡的墨色偏小，字級調大一級補回視覺重量。 */
+.icon-btn {
+  width: 32px; height: 32px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--line); border-radius: 50%; background: var(--card);
+  color: var(--ink-soft); font-size: 17px; line-height: 1; cursor: pointer;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+.icon-btn:hover { background: var(--dust); color: #fff; border-color: var(--dust); }
+/* 全螢幕進行中：實心狀態讓「再按一次會退出」看得出來。 */
+.icon-btn.is-on { background: var(--dust); color: #fff; border-color: var(--dust); }
+
 /* 鍵盤操作看得見焦點（滑鼠點擊不會觸發 :focus-visible，不影響視覺）。 */
-.brand-btn:focus-visible, .tab-btn:focus-visible, .help-btn:focus-visible {
+.brand-btn:focus-visible, .tab-btn:focus-visible,
+.help-btn:focus-visible, .icon-btn:focus-visible {
   outline: 2px solid var(--dust); outline-offset: 2px;
 }
 
@@ -305,7 +334,7 @@ body {
  * 沒開滿」這類常見情境。 */
 @media (max-height: 960px) {
   /* 導覽列也一起壓一階：短視窗下每一列高度都要省給下面的面板與畫布。 */
-  .top-navbar { padding-top: 5px; padding-bottom: 5px; }
+  .top-navbar { padding-top: max(5px, env(safe-area-inset-top)); padding-bottom: 5px; }
   .tab-btn { padding-top: 6px; padding-bottom: 6px; }
   .panel { padding: 12px; gap: 6px; }
   .section, .quick-tool-panel, .fam-card { padding: 8px 10px !important; }
