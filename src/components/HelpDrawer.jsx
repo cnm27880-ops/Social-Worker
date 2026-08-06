@@ -16,20 +16,27 @@ const HelpDrawer = ({ open, onClose }) => {
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
 
-  if (!open) return null;
-
+  // 注意：取消 conditional return null，讓爬蟲能抓取 DOM 內的語意文字
   return (
-    <div className="help-overlay" onClick={onClose}>
+    <div 
+      className={`help-overlay ${open ? 'is-open' : 'is-closed'}`} 
+      onClick={onClose}
+      aria-hidden={!open}
+      style={{ display: open ? 'block' : 'none' }} // 兼顧 DOM 存在與視覺顯隱
+    >
       <aside className="help-drawer" onClick={e => e.stopPropagation()} role="dialog" aria-label="使用說明">
         <header className="help-head">
-          <h2>使用說明</h2>
+          <h2>Geno-Link 使用說明與功能介紹</h2>
           <button className="help-close" onClick={onClose} aria-label="關閉說明">×</button>
         </header>
 
         <div className="help-body">
           <section>
             <p className="help-intro">
-              這個工具分兩步：先在「📊 家系圖繪製」頁籤畫出家庭結構，再切到「📝 個案紀錄產生」
+              Geno-Link 是專為<b>社工、護理師、諮商心理師、臨床心理師、學校輔導老師與長照個管師</b>設計的免費線上家系圖與生態圖（Ecomap）繪製工具。
+            </p>
+            <p className="help-intro">
+              工具分為兩步：先在「📊 家系圖繪製」頁籤畫出家庭結構，再切到「📝 個案紀錄產生」
               頁籤——系統會照家系圖的內容自動整理成一段可直接複製貼上的個案紀錄文字。兩邊資料是
               連動的：家系圖裡標記的死亡、身障、同住狀態，紀錄那邊會自動反映，不用重打一次。
               第一次使用建議照這個順序來：① 輸入第二代子女、② 指定「案主」、③ 需要的話用下面的
@@ -55,7 +62,7 @@ const HelpDrawer = ({ open, onClose }) => {
           </section>
 
           <section>
-            <h3>基本操作</h3>
+            <h3>基本操作與家系圖繪製</h3>
             <ul>
               <li><b>節點</b>：單擊依目前模式標記；雙擊可輸入年齡（需先開啟「年齡」）。</li>
               <li><b>狀態標籤</b>：點擊即可切到下一個狀態；滑鼠停在上面滾動滾輪也可以（且能雙向切換）。</li>
@@ -63,7 +70,7 @@ const HelpDrawer = ({ open, onClose }) => {
               <li><b>自由連線</b>：拖曳「🧩 自由擴充區」新增的個體去疊到目標人物上即產生連線；雙擊關係線可刪除。</li>
               <li><b>自由擴充區</b>：點「男性」「女性」「三角」「生態圖」按鈕即新增一個獨立個體到畫布上，
                   跟快捷列表「點選既有節點套用標記」是兩回事。</li>
-              <li><b>生態圖</b>：新增後預設連結案主，雙擊圖形可編輯文字，清空文字即刪除。</li>
+              <li><b>生態圖（Ecomap）與家族樹</b>：新增後預設連結案主，雙擊圖形可編輯文字，清空文字即刪除。</li>
               <li>⚠️ <b>雙擊即刪除</b>：「自由擴充區」新增的男／女節點，在「年齡」模式關閉時雙擊會直接
                   刪除該節點（有跳出確認）；三角形節點（懷孕／流產／死產）則不論「年齡」開關，雙擊
                   一律是刪除。這兩種節點跟原生家系的節點（父母、子女）不同——原生節點沒有雙擊刪除。</li>
@@ -77,7 +84,7 @@ const HelpDrawer = ({ open, onClose }) => {
           </section>
 
           <section>
-            <h3>快捷列表</h3>
+            <h3>快捷列表與家系圖符號標記</h3>
             <p className="help-note">
               面板最上方，資料輸入面板下面。只留 6 個最常用的狀態／關係標記：死亡、身障、
               慢性病（套在人物節點上），以及正向親密、衝突、關係惡化（套在婚姻線上）。
@@ -113,10 +120,10 @@ const HelpDrawer = ({ open, onClose }) => {
           </section>
 
           <section>
-            <h3>符號對照</h3>
+            <h3>標準家系圖符號對照（Genogram Symbols）</h3>
             <p className="help-note">
               畫法依 GenoPro 標準符號說明與 McGoldrick, Gerson &amp; Petry
-              《Genograms: Assessment and Intervention》所建立的通用符號集。
+              《Genograms: Assessment and Intervention》所建立的通用家庭系統圖符號集。
               各家畫法略有差異，以下為本工具採用的版本。「快捷列表」是套在既有節點／
               婚姻線上的 6 個狀態標記；「自由擴充區」的三角是點按鈕即新增到畫布上的
               獨立個體。
@@ -144,7 +151,7 @@ const HelpDrawer = ({ open, onClose }) => {
           </section>
 
           <section>
-            <h3>舊圖修補</h3>
+            <h3>舊圖修補與家庭圖底圖疊加</h3>
             <p>
               手邊已經畫好的家系圖（掃描或手機拍的）可以匯入當<b>底圖</b>，
               直接在上面疊新的符號、關係線與文字方塊，不必整張重畫。
@@ -158,9 +165,9 @@ const HelpDrawer = ({ open, onClose }) => {
           </section>
 
           <section>
-            <h3>個案紀錄產生</h3>
+            <h3>自動生成個案紀錄與家庭評估</h3>
             <p>
-              第二個頁籤，把家系圖轉換成一段可以直接貼進紀錄系統的文字。左側填基本資料，
+              第二個頁籤，把家系圖轉換成一段可以直接貼進個案紀錄系統的文字。左側填基本資料，
               右側即時看到產生的文字，兩邊同步更新，不用等按下什麼按鈕。
             </p>
             <ul>
@@ -169,7 +176,7 @@ const HelpDrawer = ({ open, onClose }) => {
               <li><b>家屬動態清單</b>：不用自己新增——先回「家系圖繪製」頁籤輸入第二代子女，
                   這裡的欄位會自動跟著長出來。每位家屬可以填居住地、職業、特殊備註，勾選
                   「主要聯絡人」會反映在產生的文字裡；家系圖裡標記「已歿」的家屬會自動排除細項欄位。</li>
-              <li>右側「📋 一鍵複製至剪貼簿」把目前產生的整段文字複製起來，貼到你原本用的紀錄系統即可。</li>
+              <li>右側「📋 一鍵複製至剪貼簿」把目前產生的整段文字複製起來，貼到你原本用的個案系統即可。</li>
               <li><b>📝 自由保存區</b>：跟家系圖無關的自由文字欄，用來存常用的短語或還沒歸類的備註，
                   可以開好幾行、隨時增減。</li>
               <li><b>💾 系統資料備份與還原</b>：存的是「編輯標籤」改過的選項和「自由保存區」的內容，
@@ -179,10 +186,10 @@ const HelpDrawer = ({ open, onClose }) => {
           </section>
 
           <section>
-            <h3>存檔與案件</h3>
+            <h3>隱私安全、存檔與案件管理</h3>
             <p className="help-note">
               這個工具<b>預設不留痕跡</b>：每次開啟網頁都是一張乾淨的空白畫布，
-              在你按下「儲存案件」之前，什麼都不會寫進這台電腦。
+              在你按下「儲存案件」之前，所有個案資料與家庭數據都不會寫進電腦或上傳至伺服器，完全保障個案隱私。
             </p>
             <ul>
               <li><b>儲存</b>（磁碟片圖示）：第一次按會請你命名，之後這份案件才會進案件庫，
@@ -194,7 +201,7 @@ const HelpDrawer = ({ open, onClose }) => {
                   要開一份新的，重新整理或另開分頁就是乾淨畫布。</li>
               <li><b>匯出／匯入</b> <code>.json</code>（案件列最右邊兩顆）：備份或交接用；匯入一律新增一份，不覆蓋目前的內容。
                   未儲存的草稿也可以直接匯出。</li>
-              <li>資料只存在<b>這台電腦的瀏覽器</b>，不會上傳到任何伺服器；清除瀏覽器資料會一併清掉，
+              <li>資料只存在<b>這台電腦的瀏覽器</b>（Local Storage），不會上傳到任何雲端伺服器；清除瀏覽器資料會一併清掉，
                   重要案件請匯出保存。</li>
             </ul>
           </section>
