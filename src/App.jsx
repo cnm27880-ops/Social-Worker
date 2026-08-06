@@ -36,31 +36,58 @@ const App = () => {
 
   return (
     <div className="app-shell">
-      {/* 網站標頭：唯一的 <h1>，畫面上維持低調的標語列，但把「這是什麼、給誰用」
-          講清楚——SEO 需要語意化的主標題，新用戶也需要一眼知道自己找對地方了。 */}
-      <header className="site-header">
-        <h1>Geno-Link<span className="site-tagline">社工、護理、諮商、個管等第一線工作者都適用的線上家系圖與個案紀錄產生器</span></h1>
+      {/* 頂端全寬導覽列：左邊品牌、中間頁籤、右邊輔助功能。
+          三段式是網頁通用的動線習慣——找「這是什麼」看左上角，找工具與說明
+          看右上角，切換主要功能在中間，使用者不必先學才會用。
+
+          <h1> 仍然是全站唯一主標題（SEO 需要語意化標題），只是從整段視覺隱藏
+          改成「品牌名看得見、完整標語隱藏」：畫面上乾淨，爬蟲與螢幕報讀器
+          讀到的仍是完整的一句話。品牌可點擊，回到預設的家系圖畫面。 */}
+      <header className="top-navbar">
+        <div className="navbar-inner">
+          <h1 className="navbar-brand">
+            <button
+              type="button"
+              className="brand-btn"
+              onClick={() => setActiveTab('genogram')}
+              title="回到家系圖繪製畫面"
+            >
+              <span className="brand-title">Geno-Link</span>
+              <span className="brand-subtitle">線上家系圖</span>
+            </button>
+            <span className="sr-only">：社工、護理、諮商、個管等第一線工作者都適用的線上家系圖與個案紀錄產生器</span>
+          </h1>
+
+          <nav className="navbar-tabs" aria-label="功能切換">
+            <button
+              className={`tab-btn ${activeTab === 'genogram' ? 'active' : ''}`}
+              onClick={() => setActiveTab('genogram')}
+              aria-current={activeTab === 'genogram' ? 'page' : undefined}
+            >📊 家系圖繪製</button>
+            <button
+              className={`tab-btn ${activeTab === 'record' ? 'active' : ''}`}
+              onClick={() => setActiveTab('record')}
+              aria-current={activeTab === 'record' ? 'page' : undefined}
+            >📝 個案紀錄產生</button>
+          </nav>
+
+          <div className="navbar-actions">
+            <span className="app-version" title={`版本 ${__APP_VERSION__}`}>v{__APP_VERSION__}</span>
+            <button
+              className="help-btn"
+              onClick={() => setHelpOpen(true)}
+              title="使用說明（按 ? 也可開啟）"
+              aria-label="使用說明"
+            >?</button>
+          </div>
+        </div>
       </header>
-
-      {/* 頁籤列 */}
-      <div className="tab-nav">
-        <button className={`tab-btn ${activeTab === 'genogram' ? 'active' : ''}`} onClick={() => setActiveTab('genogram')}>📊 家系圖繪製</button>
-        <button className={`tab-btn ${activeTab === 'record' ? 'active' : ''}`} onClick={() => setActiveTab('record')}>📝 個案紀錄產生</button>
-
-        <span className="tab-nav-spacer" />
-        <button
-          className="help-btn"
-          onClick={() => setHelpOpen(true)}
-          title="使用說明（按 ? 也可開啟）"
-          aria-label="使用說明"
-        >?</button>
-      </div>
 
       <HelpDrawer open={helpOpen} onClose={() => setHelpOpen(false)} />
 
       {/* 頁籤一：家系圖（用 CSS display 控制，避免 unmount 丟失狀態）。
-          .tab-pane 撐滿 tab-nav 以下的剩餘高度，讓左側面板可以用
-          max-height:100% 精準貼齊視窗底部，不用猜測 tab-nav 實際渲染
+          .tab-pane 撐滿 top-navbar 以下的剩餘高度，讓左側面板可以用
+          max-height:100% 精準貼齊視窗底部，不用猜測導覽列實際渲染
           高度（不同系統的中文字型度量不一樣，猜的像素值在別人的電腦上
           會不準）。 */}
       <div className="tab-pane" style={{ display: activeTab === 'genogram' ? 'flex' : 'none' }}>
