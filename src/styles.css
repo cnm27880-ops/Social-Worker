@@ -110,12 +110,15 @@ body {
   .btn-action { height: 28px; font-size: 12px; }
   .btn-emboss { height: 24px; font-size: 11.5px; }
 }
-.panel h2 { font-size: 17px; color: var(--ink); margin-bottom: 14px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+/* margin-bottom 拿掉：.panel 現在是 flex column + gap，這裡的 h2
+ * 是 .record-form.panel 底下的區塊標題（直接子層），間距已經由 gap
+ * 統一控制，留著 margin-bottom 只會跟 gap 疊加，把面板撐得更高。 */
+.panel h2 { font-size: 17px; color: var(--ink); padding-bottom: 8px; border-bottom: 1px solid var(--line); }
 
 /* ===== 面板頂列：標題 + 顯示年齡切換 + 操作按鈕 ===== */
 .panel-header {
   display: flex; justify-content: space-between; align-items: center;
-  gap: 12px; margin-bottom: 12px; padding-bottom: 10px;
+  gap: 12px; padding-bottom: 10px;
   border-bottom: 1px solid var(--line); position: relative;
 }
 .panel-header::after {
