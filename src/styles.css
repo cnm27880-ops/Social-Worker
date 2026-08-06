@@ -138,19 +138,102 @@ body {
   align-items: center; gap: 12px;
 }
 
-/* --- 左：品牌 --- */
+/* --- 左：品牌 ---
+ * 品牌是整個畫面唯一容許「有特效」的地方：它不是操作元件，動一下不會干擾
+ * 工作；其他按鈕與面板照舊保持安靜。特效也刻意都是「一次性」或「hover 才
+ * 動」，沒有無限迴圈的動畫——社工是整天開著這個畫面在做事的，角落有東西
+ * 一直閃會非常煩人。 */
 .navbar-brand { min-width: 0; }
 .brand-btn {
-  display: flex; align-items: baseline; gap: 8px;
-  /* 負 margin 抵銷自己的左內距，讓「Geno-Link」的字緣對齊版心左界，
+  display: flex; align-items: center; gap: 9px;
+  /* 負 margin 抵銷自己的左內距，讓品牌標記的左緣對齊版心左界，
    * hover 時仍有一塊舒服的點擊底色。 */
   padding: 4px 8px; margin-left: -8px;
   border: 0; background: transparent; border-radius: var(--r-xs);
-  cursor: pointer; text-align: left; transition: background 0.2s;
+  cursor: pointer; text-align: left;
+  transition: background 0.25s ease;
 }
 .brand-btn:hover { background: var(--wash-warm); }
-.brand-title { font-size: 19px; font-weight: 800; color: var(--ink); letter-spacing: 0.2px; }
-.brand-subtitle { font-size: 12.5px; font-weight: 500; color: var(--ink-faint); white-space: nowrap; }
+
+/* 品牌標記：方形—連線—圓形。載入時照著手繪家系圖的順序演一次——兩個符號
+ * 先各自浮現，中間的關係線再從方形那端畫到圓形那端（stroke-dashoffset 由
+ * 線長收到 0，就是「筆尖走過去」的效果）。hover 時線條加粗、圓形往外挪一
+ * 點點，像是被牽動了一下。 */
+.brand-mark { flex-shrink: 0; overflow: visible; }
+.brand-mark rect, .brand-mark circle, .brand-mark line {
+  fill: none; stroke-width: 2; stroke-linecap: round;
+  transition: stroke 0.25s ease, stroke-width 0.25s ease, transform 0.35s cubic-bezier(0.34, 1.3, 0.64, 1);
+}
+.brand-mark-sq {
+  stroke: var(--dust-d); transform-origin: 10px 11.5px;
+  animation: brand-pop 0.45s cubic-bezier(0.34, 1.5, 0.64, 1) 0.05s 1 backwards;
+}
+.brand-mark-ci {
+  stroke: var(--clay-d); transform-origin: 34.5px 12px;
+  animation: brand-pop 0.45s cubic-bezier(0.34, 1.5, 0.64, 1) 0.2s 1 backwards;
+}
+.brand-mark-link {
+  stroke: var(--ink-faint);
+  /* 線長 14（x 從 15 到 29），dasharray 給滿長度才能整條收放。 */
+  stroke-dasharray: 14;
+  animation: brand-link-draw 0.55s ease-out 0.42s 1 backwards;
+}
+.brand-btn:hover .brand-mark-link { stroke: var(--sand-d); stroke-width: 2.6; }
+.brand-btn:hover .brand-mark-sq   { stroke: var(--dust); }
+.brand-btn:hover .brand-mark-ci   { stroke: var(--clay); transform: translateX(1.5px) scale(1.06); }
+@keyframes brand-pop {
+  from { opacity: 0; transform: scale(0.5); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes brand-link-draw {
+  from { stroke-dashoffset: 14; }
+  to   { stroke-dashoffset: 0; }
+}
+
+/* 標題：文字本身填漸層（background-clip:text），色相走 dust→teal→clay
+ * 這條既有的莫蘭迪色帶，不引進新色。
+ *
+ * 亮帶（--sand-bd）刻意擺在漸層正中央：背景放大到 220% 寬，靜止在 0% 時
+ * 只看得到左半段、hover 停在 100% 時只看得到右半段，兩端都是壓得住白底的
+ * 深色——那條亮帶只有在「掃過去的瞬間」才會經過文字，所以平常讀起來對比
+ * 完全正常，只有動的那零點幾秒會閃一下光。整個效果是漸層位移做的，不是
+ * 真的疊一層亮片上去，字緣不會糊掉。 */
+.brand-title {
+  font-size: 19px; font-weight: 800; letter-spacing: 0.2px;
+  background-image: linear-gradient(
+    100deg,
+    var(--dust-d) 0%,
+    var(--teal-d) 20%,
+    var(--clay) 40%,
+    var(--sand-bd) 50%,
+    var(--clay) 60%,
+    var(--teal-d) 80%,
+    var(--dust-d) 100%
+  );
+  background-size: 220% 100%;
+  background-position: 0% 0;
+  -webkit-background-clip: text;
+          background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  transition: background-position 0.75s ease;
+  /* 只跑一次、跑完不留存（fill-mode 用預設的 none），結束後回到 0%，
+   * 剛好接回 hover 的 transition 起點，兩種效果不會互相打架。 */
+  animation: brand-sheen 2s ease-in-out 0.75s 1;
+}
+.brand-btn:hover .brand-title { background-position: 100% 0; }
+@keyframes brand-sheen {
+  0%   { background-position: 0% 0; }
+  55%  { background-position: 100% 0; }
+  100% { background-position: 0% 0; }
+}
+
+/* 副標：hover 時稍微亮起來，跟主標的漸層一起有反應，但不搶戲。 */
+.brand-subtitle {
+  font-size: 12.5px; font-weight: 500; color: var(--ink-faint); white-space: nowrap;
+  transition: color 0.25s ease;
+}
+.brand-btn:hover .brand-subtitle { color: var(--ink-soft); }
 
 /* --- 中：頁籤（膠囊切換鈕 Segmented Control）---
  * 淺色軌道 + 白色滑塊，選中狀態一眼可辨，又不像整顆實心色塊那樣搶戲。 */
@@ -172,13 +255,8 @@ body {
   box-shadow: 0 1px 3px rgba(74, 69, 61, 0.16);
 }
 
-/* --- 右：版本號 + 說明按鈕 --- */
+/* --- 右：說明按鈕 --- */
 .navbar-actions { justify-self: end; display: flex; align-items: center; gap: 10px; }
-.app-version {
-  padding: 2px 9px; border-radius: 999px;
-  background: var(--wash); border: 1px solid var(--line-soft);
-  color: var(--ink-faint); font-size: 12px; font-variant-numeric: tabular-nums;
-}
 
 /* 鍵盤操作看得見焦點（滑鼠點擊不會觸發 :focus-visible，不影響視覺）。 */
 .brand-btn:focus-visible, .tab-btn:focus-visible, .help-btn:focus-visible {
@@ -197,8 +275,8 @@ body {
   .navbar-tabs    { grid-area: tabs; justify-self: stretch; }
   .navbar-actions { grid-area: actions; }
   .tab-btn { flex: 1 1 0; padding: 8px 10px; font-size: 14px; }
-  /* 副標與版本號在窄螢幕上是可犧牲的資訊，先讓給頁籤與說明按鈕。 */
-  .brand-subtitle, .app-version { display: none; }
+  /* 副標在窄螢幕上是可犧牲的資訊，先讓給品牌名與說明按鈕。 */
+  .brand-subtitle { display: none; }
 }
 
 /* 兩個分頁內容的外層容器：切 tab 只切 display，維持元件不 unmount。
@@ -965,6 +1043,14 @@ svg { display: block; user-select: none; }
 @media (prefers-reduced-motion: reduce) {
   .help-overlay { transition: opacity 0.15s ease, visibility 0.15s; }
   .help-overlay.is-closed { transform: none; }
+  /* 系統設定「減少動態效果」的人（前庭功能敏感、看到位移會頭暈）就別掃光、
+   * 也別位移了。顏色照樣是漸層，只是不會動。 */
+  .brand-title { animation: none; transition: none; }
+  .brand-mark rect, .brand-mark circle, .brand-mark line {
+    animation: none; transition: stroke 0.25s ease;
+  }
+  .brand-mark-link { stroke-dasharray: none; }
+  .brand-btn:hover .brand-mark-ci { transform: none; }
 }
 /* 手機：整個視窗就這麼寬，抽屜滿版展開比較好讀 */
 @media (max-width: 560px) {

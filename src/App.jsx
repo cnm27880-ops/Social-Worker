@@ -52,6 +52,14 @@ const App = () => {
               onClick={() => setActiveTab('genogram')}
               title="回到家系圖繪製畫面"
             >
+              {/* 品牌標記就是家系圖最基本的一組符號：方形（男性）—連線—圓形（女性）。
+                  用產品本身的視覺語言當 logo，不另外找裝飾性圖示。
+                  aria-hidden：旁邊的文字已經講完品牌名，報讀器不需要再讀一次圖形。 */}
+              <svg className="brand-mark" viewBox="0 0 44 24" width="30" height="17" aria-hidden="true" focusable="false">
+                <line className="brand-mark-link" x1="15" y1="12" x2="29" y2="12" />
+                <rect className="brand-mark-sq" x="3" y="4" width="14" height="15" rx="1.5" />
+                <circle className="brand-mark-ci" cx="34.5" cy="12" r="7.5" />
+              </svg>
               <span className="brand-title">Geno-Link</span>
               <span className="brand-subtitle">線上家系圖</span>
             </button>
@@ -72,7 +80,6 @@ const App = () => {
           </nav>
 
           <div className="navbar-actions">
-            <span className="app-version" title={`版本 ${__APP_VERSION__}`}>v{__APP_VERSION__}</span>
             <button
               className="help-btn"
               onClick={() => setHelpOpen(true)}
