@@ -1077,3 +1077,8 @@ kbd {
 }
 .help-sym-desc { font-size: 12.5px; color: var(--ink-mid); margin-top: 3px; line-height: 1.6; }
 .help-sym-note { font-size: 11.5px; color: var(--ink-faint); margin-top: 3px; line-height: 1.65; }
+
+.help-faq-item { padding: 10px 0; border-top: 1px solid var(--line-soft); }
+.help-faq-item:first-of-type { border-top: none; padding-top: 2px; }
+.help-faq-item > b { display: block; font-size: 13px; color: var(--ink); line-height: 1.6; }
+.help-faq-item p { margin: 4px 0 0; font-size: 12.5px; }

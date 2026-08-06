@@ -39,7 +39,7 @@ const HelpDrawer = ({ open, onClose }) => {
         <div className="help-body">
           <section>
             <p className="help-intro">
-              Geno-Link 是專為<b>社工、護理師、諮商心理師、臨床心理師、學校輔導老師與長照個管師</b>設計的免費線上家系圖與生態圖（Ecomap）繪製工具。
+              <b>Geno-Link 線上家系圖網站</b>不僅是專業的家系圖繪製工具，亦支援<b>生態圖（Ecomap）繪製、家族樹系統圖與族譜圖譜建構</b>。專為社工、護理師、諮商心理師、輔導老師與長照個管師設計，能一鍵將家庭結構與家族樹轉換為個案紀錄文字與家庭評估報告。
             </p>
             <p className="help-intro">
               工具分為兩步：先在「📊 家系圖繪製」頁籤畫出家庭結構，再切到「📝 個案紀錄產生」
@@ -210,6 +210,18 @@ const HelpDrawer = ({ open, onClose }) => {
               <li>資料只存在<b>這台電腦的瀏覽器</b>（Local Storage），不會上傳到任何雲端伺服器；清除瀏覽器資料會一併清掉，
                   重要案件請匯出保存。</li>
             </ul>
+          </section>
+
+          <section>
+            <h3>常見問題 (FAQ)</h3>
+            <div className="help-faq-item">
+              <b>Q：Geno-Link 可以拿來畫一般的家族樹或族譜嗎？</b>
+              <p>可以！Geno-Link 除了符合標準社工家系圖規範，也很適合用來繪製家族樹、族譜與家庭關係圖譜，畫面清爽且支援高畫質圖檔匯出。</p>
+            </div>
+            <div className="help-faq-item">
+              <b>Q：什麼是家系圖與生態圖（Ecomap）連動功能？</b>
+              <p>Geno-Link 是全方位的線上家系圖網站，能讓您在同一畫布上同步繪製家庭系統圖與外部社會資源的生態圖，並自動生成文字評估紀錄。</p>
+            </div>
           </section>
         </div>
       </aside>
