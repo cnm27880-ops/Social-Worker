@@ -15,8 +15,14 @@ const App = () => {
   /* 全螢幕切換。手機畫面本來就窄，收掉瀏覽器網址列與工具列能多出可觀的
    * 畫布高度；iPhone 版 Safari 不支援時改用提示引導「加入主畫面」。 */
   const fsFallback = useCallback((msg) => window.alert(msg), []);
-  const { active: fsActive, supported: fsSupported, toggle: toggleFullscreen } =
-    useFullscreen(fsFallback);
+  const {
+    active: fsActive, supported: fsSupported, standalone: fsStandalone,
+    toggle: toggleFullscreen,
+  } = useFullscreen(fsFallback);
+  /* 不支援 Fullscreen API、又已經以獨立 App 執行（iPhone 使用者照著提示
+   * 加入主畫面之後就是這個狀態）：畫面上已經沒有瀏覽器介面可以再收，
+   * 按鈕留著只會給出一句做不到的建議，直接收掉。 */
+  const showFsBtn = fsSupported || !fsStandalone;
 
   /* 「?」開啟說明書；輸入框內不攔截 */
   useEffect(() => {
@@ -79,20 +85,23 @@ const App = () => {
           </nav>
 
           <div className="navbar-actions">
-            {/* 不支援的裝置照樣把按鈕留著：按下去會給「加入主畫面」的替代做法，
-                比整顆消失讓人不知道有沒有這功能好。狀態靠 aria-pressed 與
-                .is-on 表達，圖示維持同一個字符，不會因字型缺字而變成空白框。 */}
-            <button
-              className={`icon-btn ${fsActive ? 'is-on' : ''}`}
-              onClick={toggleFullscreen}
-              title={
-                fsActive ? '退出全螢幕'
-                  : fsSupported ? '全螢幕模式'
-                  : '全螢幕模式（此裝置不支援，點擊看替代做法）'
-              }
-              aria-label={fsActive ? '退出全螢幕' : '進入全螢幕'}
-              aria-pressed={fsActive}
-            >⛶</button>
+            {/* 不支援的裝置照樣把按鈕留著（除非已是獨立 App）：按下去會給
+                「加入主畫面」的替代做法，比整顆消失讓人不知道有沒有這功能好。
+                狀態靠 aria-pressed 與 .is-on 表達，圖示維持同一個字符，
+                不會因字型缺字而變成空白框。 */}
+            {showFsBtn && (
+              <button
+                className={`icon-btn ${fsActive ? 'is-on' : ''}`}
+                onClick={toggleFullscreen}
+                title={
+                  fsActive ? '退出全螢幕'
+                    : fsSupported ? '全螢幕模式'
+                    : '全螢幕模式（此裝置不支援，點擊看替代做法）'
+                }
+                aria-label={fsActive ? '退出全螢幕' : '進入全螢幕'}
+                aria-pressed={fsActive}
+              >⛶</button>
+            )}
             <button
               className="help-btn"
               onClick={() => setHelpOpen(true)}

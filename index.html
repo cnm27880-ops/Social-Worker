@@ -2,7 +2,10 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- viewport-fit=cover：iOS 加入主畫面後以獨立 App 執行時，讓版面延伸到
+       瀏海與底部 Home 指示條所在的區域，再由 CSS 的 env(safe-area-inset-*)
+       把內容推回安全區。沒有這個參數，iPhone 橫置時左右會留下兩條黑邊。 -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="google-site-verification" content="lhBwfs2NVIE0L_mCyw2GeXIrREdyuhSZojYpc46avRk" />
   <meta name="google-adsense-account" content="ca-pub-6882558578775746">
 
@@ -13,7 +16,10 @@
   <link rel="canonical" href="https://cnm27880-ops.github.io/Social-Worker/">
   <!-- max-image-preview:large：允許 Google 在搜尋結果顯示大尺寸預覽圖（縮圖出現在結果右側的必要條件） -->
   <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
-  <meta name="theme-color" content="#3b82f6">
+  <!-- 與 manifest 的 theme_color 一致：標題列／狀態列會被染成這個顏色，
+       用介面本身的燕麥底色，獨立 App 模式下看起來才像同一個畫面的延伸
+       （原本的藍色是舊調色盤留下的，與現在的燕麥白介面接不起來）。 -->
+  <meta name="theme-color" content="#FDFBF7">
 
   <!-- ===== Open Graph（Facebook / LINE / Threads 分享預覽） ===== -->
   <meta property="og:type" content="website">
@@ -37,6 +43,24 @@
   <meta name="twitter:image:alt" content="Geno-Link 線上家系圖產生器預覽圖">
 
   <link rel="icon" type="image/svg+xml" href="./icon.svg" />
+
+  <!-- ===== PWA／iOS「加入主畫面」全螢幕 App 體驗 =====
+       iPhone 版 Safari 不支援 Fullscreen API，唯一的全螢幕途徑是「加入主畫面」
+       後以獨立 App 開啟——但那要頁面自己備妥下面這幾項，否則加到主畫面只會
+       開一個帶網址列的普通分頁。 -->
+  <link rel="manifest" href="./manifest.webmanifest">
+  <!-- iOS 會忽略 manifest 的 icons，只認 apple-touch-icon，且只吃 PNG。
+       這張是滿版直角圖，圓角遮罩由 iOS 自己套；若留透明圓角，iOS 會把
+       四個角填成黑色。 -->
+  <link rel="apple-touch-icon" href="./apple-touch-icon.png">
+  <!-- iOS 17.4 以前不讀 manifest 的 display，要靠這個舊的私有 meta 才會
+       以獨立 App（無網址列）開啟；新版 iOS 與 Android 則讀下面的標準版。 -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <!-- default：狀態列維持不透明淺底深字，與本站的燕麥／白色介面相稱，
+       內容也不會被時間與電量圖示壓到。 -->
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Geno-Link">
 
   <!-- ===== Google 結構化資料（JSON-LD） =====
        image 依 Google 建議同時提供 1:1、4:3、16:9 三種比例，

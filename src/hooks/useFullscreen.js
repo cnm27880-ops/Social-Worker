@@ -30,6 +30,24 @@ const isSupported = () =>
   typeof document !== 'undefined' && !!requestOn(document.documentElement);
 
 /**
+ * 是否已經以獨立 App 執行（從主畫面圖示開啟，沒有網址列）。
+ *
+ * 這件事對 iPhone 特別重要：它不支援 Fullscreen API，「加入主畫面」就是
+ * 它唯一的全螢幕途徑；使用者照做之後畫面已經沒有瀏覽器介面可收，這時再
+ * 叫他去「加入主畫面」就變成鬼打牆，所以要偵測出來把按鈕收掉。
+ *
+ * navigator.standalone 是 iOS 的私有屬性；display-mode 媒體查詢則是
+ * Android／桌機 PWA 的標準做法，兩個都問才涵蓋得完整。
+ */
+const isStandalone = () => {
+  if (typeof window === 'undefined') return false;
+  if (window.navigator.standalone === true) return true;
+  return ['standalone', 'fullscreen', 'minimal-ui'].some(
+    (mode) => window.matchMedia(`(display-mode: ${mode})`).matches
+  );
+};
+
+/**
  * 全螢幕切換。
  *
  * 回傳的 active 以瀏覽器事件為準而不是自己記帳——使用者按 Esc、或用系統
@@ -42,6 +60,7 @@ const isSupported = () =>
 export const useFullscreen = (onUnsupported) => {
   const [active, setActive] = useState(() => !!currentElement());
   const [supported] = useState(isSupported);
+  const [standalone, setStandalone] = useState(isStandalone);
 
   useEffect(() => {
     const sync = () => setActive(!!currentElement());
@@ -53,9 +72,22 @@ export const useFullscreen = (onUnsupported) => {
     };
   }, []);
 
+  /* display-mode 會在執行中改變（例如桌機 PWA 從分頁「安裝」成獨立視窗），
+   * 監聽起來按鈕才不會停在安裝前的判斷。 */
+  useEffect(() => {
+    const mq = window.matchMedia('(display-mode: standalone)');
+    const sync = () => setStandalone(isStandalone());
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
+
   const toggle = useCallback(async () => {
+    /* 第一句是提示本身，第二段補上實際步驟——本站已備妥 manifest 與
+     * apple-touch-icon，照做就會得到沒有網址列的獨立 App，不是空頭支票。 */
     const notify = () => onUnsupported?.(
-      '提示：iOS 裝置可透過『加入主畫面』享受全螢幕 App 體驗'
+      '提示：iOS 裝置可透過『加入主畫面』享受全螢幕 App 體驗\n\n'
+      + '步驟：點 Safari 下方的「分享」圖示 → 選「加入主畫面」→ 之後從主畫面的 '
+      + 'Geno-Link 圖示開啟，即為無網址列的全螢幕模式。'
     );
 
     if (currentElement()) {
@@ -78,5 +110,5 @@ export const useFullscreen = (onUnsupported) => {
     }
   }, [onUnsupported]);
 
-  return { active, supported, toggle };
+  return { active, supported, standalone, toggle };
 };
