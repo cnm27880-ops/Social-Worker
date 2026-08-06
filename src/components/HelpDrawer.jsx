@@ -7,6 +7,15 @@ import { SymbolPreview } from './SymbolPreview';
  *
  * 滑過右上角圖示只顯示一行提示（由 title 屬性負責），點擊才開啟這個面板 ——
  * 一整頁說明需要能捲動、能邊看邊操作，hover 一離開就關掉會不好用。
+ *
+ * 版面：靠視窗右側滑出的抽屜（最寬 480px），不蓋住左側資料輸入面板與
+ * 畫布左半部，可以照著說明一步一步操作。關閉用右上角 × 或 Esc。
+ *
+ * 顯隱由 CSS class 控制，不在 !open 時 return null——說明書是全站文字
+ * 內容最完整的地方（家系圖符號、生態圖、個案紀錄用語），DOM 一直留著
+ * 爬蟲才抓得到；同時 transform 有起訖值，滑入／滑出動畫才跑得起來。
+ * 關閉狀態的 visibility:hidden 由 .is-closed 負責，裡面的按鈕與連結
+ * 不會被 Tab 聚焦到。
  */
 const HelpDrawer = ({ open, onClose }) => {
   useEffect(() => {
@@ -16,15 +25,12 @@ const HelpDrawer = ({ open, onClose }) => {
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
 
-  // 注意：取消 conditional return null，讓爬蟲能抓取 DOM 內的語意文字
   return (
-    <div 
-      className={`help-overlay ${open ? 'is-open' : 'is-closed'}`} 
-      onClick={onClose}
+    <div
+      className={`help-overlay ${open ? 'is-open' : 'is-closed'}`}
       aria-hidden={!open}
-      style={{ display: open ? 'block' : 'none' }} // 兼顧 DOM 存在與視覺顯隱
     >
-      <aside className="help-drawer" onClick={e => e.stopPropagation()} role="dialog" aria-label="使用說明">
+      <aside className="help-drawer" role="dialog" aria-label="使用說明" aria-modal="false">
         <header className="help-head">
           <h2>Geno-Link 使用說明與功能介紹</h2>
           <button className="help-close" onClick={onClose} aria-label="關閉說明">×</button>

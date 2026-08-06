@@ -52,6 +52,32 @@ body {
   background: var(--oat); color: var(--ink);
 }
 
+/* ===== 全域捲軸樣式 =====
+ * 系統預設捲軸（Windows 上約 15~17px 的灰色軌道）在燕麥底色上又寬又搶眼，
+ * 面板一旦內容變長就像被切掉一條。改成 6px 圓角、軌道透明的細捲軸：
+ *   - 軌道透明 → 沒有內容溢出時完全看不出來，也不會在捲軸欄預留位（見
+ *     .panel 的 scrollbar-gutter）的地方留下一條灰帶。
+ *   - 拇指用邊框色系（#cbd5e1 / hover #94a3b8），在白卡片與燕麥底上都看得見。
+ * Firefox 不支援 ::-webkit-scrollbar，用標準的 scrollbar-width/color 對應。 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1;
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: #94a3b8;
+}
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
 /* App 最外層容器：撐滿視窗高度，用 flex column 把「固定高度的標頭列」
  * 與「吃掉剩餘空間的分頁內容」分開。原本 body 直接 padding，.panel 再用
  * calc(100vh - 一個猜出來的像素值) 去扣掉上面 tab-nav 佔用的高度——但
@@ -63,6 +89,18 @@ body {
  * 的高度，不用再猜。 */
 .app-shell {
   display: flex; flex-direction: column; min-height: 100vh; padding: 12px;
+}
+/* 桌機（雙欄）：外殼鎖在視窗高度內，讓「該捲的東西自己捲」。
+ * 只寫 min-height 的話，面板內容一長（子代很多、家屬卡片一堆），整個
+ * .app-shell 就跟著長高、改由瀏覽器右側的整頁捲軸負責——頁籤列與畫布
+ * 會一起被捲走，面板的 max-height:100% 也因為母層變高而失去意義。
+ * 鎖定高度後，超出的部分回到面板自己的 overflow-y:auto 處理，捲動時
+ * 頁籤列與畫布留在原位。手機是直排（面板在上、畫布在下），本來就需要
+ * 整頁捲動，所以這條只在 ≥768px 生效。
+ * 100dvh 讓行動版瀏覽器的網址列收合時高度跟著變，不支援的瀏覽器
+ * 退回上一行的 100vh。 */
+@media (min-width: 768px) {
+  .app-shell { height: 100vh; height: 100dvh; }
 }
 
 /* 網站標頭：唯一的 h1。畫面上視覺隱藏（screen-reader-only）：不佔版面，
@@ -99,11 +137,24 @@ body {
    * 讓 .panel 不會被拉伸，只是拿這個高度當上限；畫布（.canvas-wrap）
    * 依然可以照內容自然長高、讓整個頁面捲動，兩欄各自獨立。 */
   max-height: 100%;
+  /* 只在內容真的超出可視高度時才長出捲軸——不寫死 height，也不用
+   * overflow-y:scroll（那會永遠掛一條捲軸，即使下面還有一大片空白）。 */
   overflow-y: auto;
+  /* overflow-x 必須明確關掉。CSS 規則是：只要有一軸不是 visible，另一軸
+   * 的 visible 就會被當成 auto——所以單寫 overflow-y:auto 時，overflow-x
+   * 其實是 auto。面板裡只要有任何一個元素寬出 1~2px（下拉選單、長案件
+   * 名稱、輸入框的 border），底下就會冒出一條水平捲軸，那條捲軸自己又吃
+   * 掉十幾px 高度，反過來把垂直捲軸也擠出來——「明明還有空白卻有捲軸」
+   * 多半是這樣來的。橫向一律裁掉，內容自己換行。 */
+  overflow-x: hidden;
+  /* min-height:0 讓 .panel 當 flex item 時可以縮到比內容矮，
+   * max-height 才真的擋得住（否則內容會把它撐過上限）。 */
+  min-height: 0;
   display: flex; flex-direction: column; justify-content: space-between; gap: 10px;
-  /* 固定保留卷軸欄寬度：懸浮提示框（ⓘ、符號說明）用 position:absolute
+  /* 固定保留捲軸欄寬度：懸浮提示框（ⓘ、符號說明）用 position:absolute
    * 掛在面板內，展開時會讓可捲動內容的高度多出一點，捲軸因此忽隱忽現，
-   * 每次都把右側內容擠進擠出、看起來像在抖動。先佔位就不會再跳動。 */
+   * 每次都把右側內容擠進擠出、看起來像在抖動。先佔位就不會再跳動——
+   * 現在捲軸只有 6px 且軌道透明，這條預留欄在視覺上不留任何痕跡。 */
   scrollbar-gutter: stable;
 }
 /* 手機（<768px）時 .app-layout 是直排，.panel 跟 .canvas-wrap share
@@ -162,15 +213,26 @@ body {
 .infotip:hover .infotip-mark,
 .infotip:focus-visible .infotip-mark { color: var(--dust-d); }
 .infotip:focus-visible { border-radius: 50%; box-shadow: 0 0 0 2px rgba(127, 148, 166, 0.35); }
+/* 收起狀態一定要用 display:none，不能只靠 visibility:hidden。
+ *
+ * 氣泡是 position:absolute 掛在各區塊標題下方（top: 100% + 7px），
+ * visibility:hidden 的元素「看不見但仍然有版面」，最後一張卡片的氣泡就
+ * 一路伸到面板可視範圍底下——面板的 scrollHeight 因此永遠比 clientHeight
+ * 多出十幾px，於是「明明下面還有空白，右邊卻掛著一條捲軸」。display:none
+ * 的元素不參與捲動範圍計算，捲軸就只在真的有內容溢出時才出現。
+ *
+ * 淡入動畫靠 transition-behavior: allow-discrete + @starting-style 保留；
+ * 不支援的舊瀏覽器只是變成直接顯示／隱藏，功能不受影響。 */
 .infotip-bubble {
+  display: none;
   position: absolute; z-index: 60; top: calc(100% + 7px); left: 0; right: 0;
   padding: 8px 10px; border-radius: 10px 2px 10px 2px;
   background: var(--ink); color: #FBF9F4;
   font-size: 11.5px; font-weight: 500; line-height: 1.7; letter-spacing: 0.2px;
   text-align: left; white-space: normal;
   box-shadow: var(--shadow-pop);
-  opacity: 0; visibility: hidden; transform: translateY(-3px);
-  transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
+  opacity: 0; transform: translateY(-3px);
+  transition: opacity 0.15s ease, transform 0.15s ease, display 0.15s allow-discrete;
   pointer-events: none;
 }
 /* 氣泡的定位基準：有標題列就貼著標題列，沒有就退回整張卡片 */
@@ -178,7 +240,11 @@ body {
 .quick-tool-header, .snap-pop-head { position: relative; }
 
 .infotip:hover .infotip-bubble,
-.infotip:focus-visible .infotip-bubble { opacity: 1; visibility: visible; transform: translateY(0); }
+.infotip:focus-visible .infotip-bubble { display: block; opacity: 1; transform: translateY(0); }
+@starting-style {
+  .infotip:hover .infotip-bubble,
+  .infotip:focus-visible .infotip-bubble { opacity: 0; transform: translateY(-3px); }
+}
 
 /* ===== 凹凸感切換按鈕（年齡） =====
  * 關閉時浮起（上緣高光＋下緣陰影），開啟時整顆壓進去（內陰影＋填色）。
@@ -783,14 +849,43 @@ svg { display: block; user-select: none; }
 }
 .help-btn:hover { background: var(--dust); color: #fff; border-color: var(--dust); }
 
+/* 說明書抽屜：靠右側滑出，只佔右邊一條（最寬 480px），不再是蓋滿整個
+ * 視窗的遮罩。說明書是「邊看邊操作」用的——左側資料輸入面板與畫布左半
+ * 部要保持看得到、點得到，所以這裡沒有半透明黑幕，也不攔截底下的點擊。
+ *
+ * 顯隱一律用 class 切換（.is-open / .is-closed）而不是在 React 端
+ * return null：DOM 一直存在，說明書裡的關鍵字（家系圖、生態圖、社工、
+ * 個案紀錄…）爬蟲抓得到，同時 transform 才有起訖值可以做滑入動畫。
+ * 關閉時 visibility:hidden + pointer-events:none，鍵盤 Tab 不會跑進去，
+ * 螢幕報讀器也不會讀到隱藏內容。 */
 .help-overlay {
-  position: fixed; inset: 0; z-index: 200;
-  background: rgba(74, 69, 61, 0.34);
+  position: fixed;
+  top: 0; bottom: 0;
+  right: 0; left: auto;
+  z-index: 200;
+  width: min(480px, 100%);
+  max-width: 480px;
+  background: transparent;
   display: flex; justify-content: flex-end;
+  transition: transform 0.28s cubic-bezier(0.22, 0.61, 0.36, 1),
+              opacity 0.2s ease,
+              visibility 0.28s;
+}
+.help-overlay.is-open   { transform: translateX(0);    opacity: 1; visibility: visible; }
+.help-overlay.is-closed { transform: translateX(100%); opacity: 0; visibility: hidden; pointer-events: none; }
+/* 會暈眩的使用者：只留淡入淡出，不做位移 */
+@media (prefers-reduced-motion: reduce) {
+  .help-overlay { transition: opacity 0.15s ease, visibility 0.15s; }
+  .help-overlay.is-closed { transform: none; }
+}
+/* 手機：整個視窗就這麼寬，抽屜滿版展開比較好讀 */
+@media (max-width: 560px) {
+  .help-overlay { width: 100%; max-width: 100%; }
 }
 .help-drawer {
-  width: min(560px, 100%); height: 100%;
+  width: 100%; max-width: 480px; height: 100%;
   background: var(--oat); display: flex; flex-direction: column;
+  border-left: 1px solid var(--line);
   box-shadow: -12px 0 40px -12px rgba(74, 69, 61, 0.38);
 }
 .help-head {
