@@ -103,18 +103,181 @@ body {
   .app-shell { height: 100vh; height: 100dvh; }
 }
 
-/* 網站標頭：唯一的 h1。畫面上視覺隱藏（screen-reader-only）：不佔版面，
- * 但 DOM 裡還在，搜尋引擎與螢幕報讀器一樣讀得到，SEO 效果不受影響。 */
-.site-header {
+/* 視覺隱藏但留在 DOM：不佔版面，搜尋引擎與螢幕報讀器照樣讀得到。
+ * 導覽列的 h1 用它藏起完整標語，只露出品牌名，SEO 效果不受影響。 */
+.sr-only {
   position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
   overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
 }
 
-/* 頂部頁籤導覽列 */
-.tab-nav { display: flex; gap: 10px; margin-bottom: 16px; border-bottom: 1px solid var(--line); padding-bottom: 8px; max-width: 1500px; margin-left: auto; margin-right: auto; flex: 0 0 auto; }
-.tab-btn { padding: 10px 20px; font-size: 16px; font-weight: bold; border: none; background: transparent; color: var(--ink-soft); cursor: pointer; border-radius: var(--r-sm); transition: all 0.2s; }
-.tab-btn:hover { background: var(--wash-warm); color: var(--dust-d); }
-.tab-btn.active { background: var(--dust); color: #fff; box-shadow: 0 2px 8px -4px rgba(111, 130, 150, 0.6); }
+/* ===== 頂端全寬導覽列 =====
+ * 左品牌／中頁籤／右輔助功能的三段式配置。給它純白底 + 一條底線，
+ * 「上方選單區」與「下方操作畫布區」就有明確的視覺分界，頁籤不會像
+ * 以前那樣浮在燕麥底色上顯得突兀。 */
+.top-navbar {
+  flex: 0 0 auto;
+  /* .app-shell 有 12px 內距，導覽列要真的「全寬」貼到視窗左右兩邊，
+   * 得用等量的負 margin 把那圈內距抵銷掉——底線才會橫貫整個畫面，
+   * 而不是左右各短一截。下緣的 12px 是導覽列與下方內容的間距。 */
+  margin: -12px -12px 12px;
+  /* 左右內距刻意跟 .app-shell 的 12px 一致：品牌名的字緣、說明按鈕的右緣
+   * 才會跟下方面板卡片與畫布切齊成同一條版心線，不會差幾像素看起來歪掉。 */
+  padding: 8px 12px;
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+  box-shadow: 0 1px 2px rgba(74, 69, 61, 0.04);
+}
+
+/* 內容跟著 .app-layout 一樣鎖在 1500px 內置中，寬螢幕上品牌與說明按鈕
+ * 才會跟下面的面板／畫布切齊，不會被推到螢幕最邊緣。
+ * 1fr auto 1fr：左右兩欄等寬，中間頁籤就會停在畫面正中央——不受品牌
+ * 名或右側按鈕多寡影響（用 space-between 的話中間那組會被推歪）。 */
+.navbar-inner {
+  width: 100%; max-width: 1500px; margin: 0 auto;
+  display: grid; grid-template-columns: 1fr auto 1fr;
+  align-items: center; gap: 12px;
+}
+
+/* --- 左：品牌 ---
+ * 品牌是整個畫面唯一容許「有特效」的地方：它不是操作元件，動一下不會干擾
+ * 工作；其他按鈕與面板照舊保持安靜。特效也刻意都是「一次性」或「hover 才
+ * 動」，沒有無限迴圈的動畫——社工是整天開著這個畫面在做事的，角落有東西
+ * 一直閃會非常煩人。 */
+.navbar-brand { min-width: 0; }
+.brand-btn {
+  display: flex; align-items: center; gap: 9px;
+  /* 負 margin 抵銷自己的左內距，讓品牌標記的左緣對齊版心左界，
+   * hover 時仍有一塊舒服的點擊底色。 */
+  padding: 4px 8px; margin-left: -8px;
+  border: 0; background: transparent; border-radius: var(--r-xs);
+  cursor: pointer; text-align: left;
+  transition: background 0.25s ease;
+}
+.brand-btn:hover { background: var(--wash-warm); }
+
+/* 品牌標記：方形—連線—圓形。載入時照著手繪家系圖的順序演一次——兩個符號
+ * 先各自浮現，中間的關係線再從方形那端畫到圓形那端（stroke-dashoffset 由
+ * 線長收到 0，就是「筆尖走過去」的效果）。hover 時線條加粗、圓形往外挪一
+ * 點點，像是被牽動了一下。 */
+.brand-mark { flex-shrink: 0; overflow: visible; }
+.brand-mark rect, .brand-mark circle, .brand-mark line {
+  fill: none; stroke-width: 2; stroke-linecap: round;
+  transition: stroke 0.25s ease, stroke-width 0.25s ease, transform 0.35s cubic-bezier(0.34, 1.3, 0.64, 1);
+}
+.brand-mark-sq {
+  stroke: var(--dust-d); transform-origin: 10px 11.5px;
+  animation: brand-pop 0.45s cubic-bezier(0.34, 1.5, 0.64, 1) 0.05s 1 backwards;
+}
+.brand-mark-ci {
+  stroke: var(--clay-d); transform-origin: 34.5px 12px;
+  animation: brand-pop 0.45s cubic-bezier(0.34, 1.5, 0.64, 1) 0.2s 1 backwards;
+}
+.brand-mark-link {
+  stroke: var(--ink-faint);
+  /* 線長 14（x 從 15 到 29），dasharray 給滿長度才能整條收放。 */
+  stroke-dasharray: 14;
+  animation: brand-link-draw 0.55s ease-out 0.42s 1 backwards;
+}
+.brand-btn:hover .brand-mark-link { stroke: var(--sand-d); stroke-width: 2.6; }
+.brand-btn:hover .brand-mark-sq   { stroke: var(--dust); }
+.brand-btn:hover .brand-mark-ci   { stroke: var(--clay); transform: translateX(1.5px) scale(1.06); }
+@keyframes brand-pop {
+  from { opacity: 0; transform: scale(0.5); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes brand-link-draw {
+  from { stroke-dashoffset: 14; }
+  to   { stroke-dashoffset: 0; }
+}
+
+/* 標題：文字本身填漸層（background-clip:text），色相走 dust→teal→clay
+ * 這條既有的莫蘭迪色帶，不引進新色。
+ *
+ * 亮帶（--sand-bd）刻意擺在漸層正中央：背景放大到 220% 寬，靜止在 0% 時
+ * 只看得到左半段、hover 停在 100% 時只看得到右半段，兩端都是壓得住白底的
+ * 深色——那條亮帶只有在「掃過去的瞬間」才會經過文字，所以平常讀起來對比
+ * 完全正常，只有動的那零點幾秒會閃一下光。整個效果是漸層位移做的，不是
+ * 真的疊一層亮片上去，字緣不會糊掉。 */
+.brand-title {
+  font-size: 19px; font-weight: 800; letter-spacing: 0.2px;
+  background-image: linear-gradient(
+    100deg,
+    var(--dust-d) 0%,
+    var(--teal-d) 20%,
+    var(--clay) 40%,
+    var(--sand-bd) 50%,
+    var(--clay) 60%,
+    var(--teal-d) 80%,
+    var(--dust-d) 100%
+  );
+  background-size: 220% 100%;
+  background-position: 0% 0;
+  -webkit-background-clip: text;
+          background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  transition: background-position 0.75s ease;
+  /* 只跑一次、跑完不留存（fill-mode 用預設的 none），結束後回到 0%，
+   * 剛好接回 hover 的 transition 起點，兩種效果不會互相打架。 */
+  animation: brand-sheen 2s ease-in-out 0.75s 1;
+}
+.brand-btn:hover .brand-title { background-position: 100% 0; }
+@keyframes brand-sheen {
+  0%   { background-position: 0% 0; }
+  55%  { background-position: 100% 0; }
+  100% { background-position: 0% 0; }
+}
+
+/* 副標：hover 時稍微亮起來，跟主標的漸層一起有反應，但不搶戲。 */
+.brand-subtitle {
+  font-size: 12.5px; font-weight: 500; color: var(--ink-faint); white-space: nowrap;
+  transition: color 0.25s ease;
+}
+.brand-btn:hover .brand-subtitle { color: var(--ink-soft); }
+
+/* --- 中：頁籤（膠囊切換鈕 Segmented Control）---
+ * 淺色軌道 + 白色滑塊，選中狀態一眼可辨，又不像整顆實心色塊那樣搶戲。 */
+.navbar-tabs {
+  justify-self: center;
+  display: flex; gap: 4px;
+  padding: 4px; border-radius: var(--r-sm);
+  background: var(--wash-warm); border: 1px solid var(--line-soft);
+}
+.tab-btn {
+  padding: 7px 18px; font-size: 15px; font-weight: 700; white-space: nowrap;
+  border: none; background: transparent; color: var(--ink-soft);
+  cursor: pointer; border-radius: var(--r-xs);
+  transition: background 0.2s, color 0.2s, box-shadow 0.2s;
+}
+.tab-btn:hover { color: var(--dust-d); }
+.tab-btn.active {
+  background: var(--card); color: var(--ink);
+  box-shadow: 0 1px 3px rgba(74, 69, 61, 0.16);
+}
+
+/* --- 右：說明按鈕 --- */
+.navbar-actions { justify-self: end; display: flex; align-items: center; gap: 10px; }
+
+/* 鍵盤操作看得見焦點（滑鼠點擊不會觸發 :focus-visible，不影響視覺）。 */
+.brand-btn:focus-visible, .tab-btn:focus-visible, .help-btn:focus-visible {
+  outline: 2px solid var(--dust); outline-offset: 2px;
+}
+
+/* 手機：改成上下兩列——上列品牌與說明按鈕，下列頁籤佔滿整條寬度。
+ * 三段擠在一行的話中文頁籤會被壓到換行或溢出。 */
+@media (max-width: 767px) {
+  .navbar-inner {
+    grid-template-columns: 1fr auto;
+    grid-template-areas: 'brand actions' 'tabs tabs';
+    row-gap: 8px;
+  }
+  .navbar-brand   { grid-area: brand; }
+  .navbar-tabs    { grid-area: tabs; justify-self: stretch; }
+  .navbar-actions { grid-area: actions; }
+  .tab-btn { flex: 1 1 0; padding: 8px 10px; font-size: 14px; }
+  /* 副標在窄螢幕上是可犧牲的資訊，先讓給品牌名與說明按鈕。 */
+  .brand-subtitle { display: none; }
+}
 
 /* 兩個分頁內容的外層容器：切 tab 只切 display，維持元件不 unmount。
  * flex:1 + min-height:0 讓它精確吃滿 .app-shell 扣掉 tab-nav 之後的
@@ -172,6 +335,9 @@ body {
  * 門檻刻意抓得比常見筆電可視高度略高一點，涵蓋「1080p 螢幕但瀏覽器
  * 沒開滿」這類常見情境。 */
 @media (max-height: 960px) {
+  /* 導覽列也一起壓一階：短視窗下每一列高度都要省給下面的面板與畫布。 */
+  .top-navbar { padding-top: 5px; padding-bottom: 5px; }
+  .tab-btn { padding-top: 6px; padding-bottom: 6px; }
   .panel { padding: 12px; gap: 6px; }
   .section, .quick-tool-panel, .fam-card { padding: 8px 10px !important; }
   .case-bar-main { padding: 4px 6px; }
@@ -840,12 +1006,12 @@ svg { display: block; user-select: none; }
 .sym-ghost svg rect, .sym-ghost svg line, .sym-ghost svg path { stroke: #fff; }
 
 /* ===== 說明書 ===== */
-.tab-nav-spacer { flex: 1 1 auto; }
 .help-btn {
-  width: 30px; height: 30px; flex-shrink: 0; align-self: center;
+  width: 32px; height: 32px; flex-shrink: 0;
   display: inline-flex; align-items: center; justify-content: center;
   border: 1px solid var(--line); border-radius: 50%; background: var(--card);
   color: var(--ink-soft); font-size: 15px; font-weight: 800; cursor: pointer;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
 }
 .help-btn:hover { background: var(--dust); color: #fff; border-color: var(--dust); }
 
@@ -877,6 +1043,14 @@ svg { display: block; user-select: none; }
 @media (prefers-reduced-motion: reduce) {
   .help-overlay { transition: opacity 0.15s ease, visibility 0.15s; }
   .help-overlay.is-closed { transform: none; }
+  /* 系統設定「減少動態效果」的人（前庭功能敏感、看到位移會頭暈）就別掃光、
+   * 也別位移了。顏色照樣是漸層，只是不會動。 */
+  .brand-title { animation: none; transition: none; }
+  .brand-mark rect, .brand-mark circle, .brand-mark line {
+    animation: none; transition: stroke 0.25s ease;
+  }
+  .brand-mark-link { stroke-dasharray: none; }
+  .brand-btn:hover .brand-mark-ci { transform: none; }
 }
 /* 手機：整個視窗就這麼寬，抽屜滿版展開比較好讀 */
 @media (max-width: 560px) {
