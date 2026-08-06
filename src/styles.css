@@ -145,8 +145,8 @@ body {
  * 一直閃會非常煩人。 */
 .navbar-brand { min-width: 0; }
 .brand-btn {
-  display: flex; align-items: center; gap: 9px;
-  /* 負 margin 抵銷自己的左內距，讓品牌標記的左緣對齊版心左界，
+  display: flex; align-items: baseline; gap: 9px;
+  /* 負 margin 抵銷自己的左內距，讓「Geno-Link」的字緣對齊版心左界，
    * hover 時仍有一塊舒服的點擊底色。 */
   padding: 4px 8px; margin-left: -8px;
   border: 0; background: transparent; border-radius: var(--r-xs);
@@ -155,49 +155,17 @@ body {
 }
 .brand-btn:hover { background: var(--wash-warm); }
 
-/* 品牌標記：方形—連線—圓形。載入時照著手繪家系圖的順序演一次——兩個符號
- * 先各自浮現，中間的關係線再從方形那端畫到圓形那端（stroke-dashoffset 由
- * 線長收到 0，就是「筆尖走過去」的效果）。hover 時線條加粗、圓形往外挪一
- * 點點，像是被牽動了一下。 */
-.brand-mark { flex-shrink: 0; overflow: visible; }
-.brand-mark rect, .brand-mark circle, .brand-mark line {
-  fill: none; stroke-width: 2; stroke-linecap: round;
-  transition: stroke 0.25s ease, stroke-width 0.25s ease, transform 0.35s cubic-bezier(0.34, 1.3, 0.64, 1);
-}
-.brand-mark-sq {
-  stroke: var(--dust-d); transform-origin: 10px 11.5px;
-  animation: brand-pop 0.45s cubic-bezier(0.34, 1.5, 0.64, 1) 0.05s 1 backwards;
-}
-.brand-mark-ci {
-  stroke: var(--clay-d); transform-origin: 34.5px 12px;
-  animation: brand-pop 0.45s cubic-bezier(0.34, 1.5, 0.64, 1) 0.2s 1 backwards;
-}
-.brand-mark-link {
-  stroke: var(--ink-faint);
-  /* 線長 14（x 從 15 到 29），dasharray 給滿長度才能整條收放。 */
-  stroke-dasharray: 14;
-  animation: brand-link-draw 0.55s ease-out 0.42s 1 backwards;
-}
-.brand-btn:hover .brand-mark-link { stroke: var(--sand-d); stroke-width: 2.6; }
-.brand-btn:hover .brand-mark-sq   { stroke: var(--dust); }
-.brand-btn:hover .brand-mark-ci   { stroke: var(--clay); transform: translateX(1.5px) scale(1.06); }
-@keyframes brand-pop {
-  from { opacity: 0; transform: scale(0.5); }
-  to   { opacity: 1; transform: scale(1); }
-}
-@keyframes brand-link-draw {
-  from { stroke-dashoffset: 14; }
-  to   { stroke-dashoffset: 0; }
-}
-
 /* 標題：文字本身填漸層（background-clip:text），色相走 dust→teal→clay
  * 這條既有的莫蘭迪色帶，不引進新色。
  *
  * 亮帶（--sand-bd）刻意擺在漸層正中央：背景放大到 220% 寬，靜止在 0% 時
  * 只看得到左半段、hover 停在 100% 時只看得到右半段，兩端都是壓得住白底的
- * 深色——那條亮帶只有在「掃過去的瞬間」才會經過文字，所以平常讀起來對比
+ * 深色——那條亮帶只有在「滑過去的瞬間」才會經過文字，所以平常讀起來對比
  * 完全正常，只有動的那零點幾秒會閃一下光。整個效果是漸層位移做的，不是
- * 真的疊一層亮片上去，字緣不會糊掉。 */
+ * 真的疊一層亮片上去，字緣不會糊掉。
+ *
+ * 沒有載入動畫：進站的第一眼應該是「畫面已經準備好了」，不是等它演完。
+ * 掃光只在 hover 時發生——使用者主動把游標移過來，才給他那個回饋。 */
 .brand-title {
   font-size: 19px; font-weight: 800; letter-spacing: 0.2px;
   background-image: linear-gradient(
@@ -217,20 +185,21 @@ body {
   color: transparent;
   -webkit-text-fill-color: transparent;
   transition: background-position 0.75s ease;
-  /* 只跑一次、跑完不留存（fill-mode 用預設的 none），結束後回到 0%，
-   * 剛好接回 hover 的 transition 起點，兩種效果不會互相打架。 */
-  animation: brand-sheen 2s ease-in-out 0.75s 1;
 }
 .brand-btn:hover .brand-title { background-position: 100% 0; }
-@keyframes brand-sheen {
-  0%   { background-position: 0% 0; }
-  55%  { background-position: 100% 0; }
-  100% { background-position: 0% 0; }
-}
 
-/* 副標：hover 時稍微亮起來，跟主標的漸層一起有反應，但不搶戲。 */
+/* 副標：跟主標一樣走粗體，只是小一號、色淺一階——這樣它是「主標的一部分」
+ * 而不是黏在旁邊的一行小字，整組品牌看起來才是一個完整的鎖定組合。
+ * hover 時再暗一階，跟主標的掃光一起有反應，但不搶戲。 */
 .brand-subtitle {
-  font-size: 12.5px; font-weight: 500; color: var(--ink-faint); white-space: nowrap;
+  font-size: 13px; font-weight: 700; color: var(--ink-faint); white-space: nowrap;
+  letter-spacing: 0.3px;
+  /* 兩段文字對齊基線時，中文看起來會比英文低一截——中文字身有一小段落在
+   * 基線之下，而「Geno-Link」剛好一個下伸筆畫都沒有，整串字的墨色全在
+   * 基線之上。也就是說，基線對齊了，但「看起來的中線」沒對齊。
+   * 往上推 0.15em（13px 字級約 2px），讓兩段文字的墨色重心落在同一條
+   * 水平線上。用 em 不寫死 px，日後調字級比例會自己跟著走。 */
+  position: relative; top: -0.15em;
   transition: color 0.25s ease;
 }
 .brand-btn:hover .brand-subtitle { color: var(--ink-soft); }
@@ -1043,14 +1012,10 @@ svg { display: block; user-select: none; }
 @media (prefers-reduced-motion: reduce) {
   .help-overlay { transition: opacity 0.15s ease, visibility 0.15s; }
   .help-overlay.is-closed { transform: none; }
-  /* 系統設定「減少動態效果」的人（前庭功能敏感、看到位移會頭暈）就別掃光、
-   * 也別位移了。顏色照樣是漸層，只是不會動。 */
-  .brand-title { animation: none; transition: none; }
-  .brand-mark rect, .brand-mark circle, .brand-mark line {
-    animation: none; transition: stroke 0.25s ease;
-  }
-  .brand-mark-link { stroke-dasharray: none; }
-  .brand-btn:hover .brand-mark-ci { transform: none; }
+  /* 系統設定「減少動態效果」的人（前庭功能敏感、看到動態會不舒服）就別掃光。
+   * 顏色照樣是漸層，只是 hover 時不會跑。 */
+  .brand-title { transition: none; }
+  .brand-btn:hover .brand-title { background-position: 0% 0; }
 }
 /* 手機：整個視窗就這麼寬，抽屜滿版展開比較好讀 */
 @media (max-width: 560px) {
