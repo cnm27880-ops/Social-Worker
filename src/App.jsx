@@ -35,7 +35,7 @@ const App = () => {
   const disabledIds = useMemo(() => idsWithAttr(doc.nodeAttrs, 'disabled'), [doc.nodeAttrs]);
 
   return (
-    <div>
+    <div className="app-shell">
       {/* 網站標頭：唯一的 <h1>，畫面上維持低調的標語列，但把「這是什麼、給誰用」
           講清楚——SEO 需要語意化的主標題，新用戶也需要一眼知道自己找對地方了。 */}
       <header className="site-header">
@@ -58,8 +58,12 @@ const App = () => {
 
       <HelpDrawer open={helpOpen} onClose={() => setHelpOpen(false)} />
 
-      {/* 頁籤一：家系圖（用 CSS display 控制，避免 unmount 丟失狀態） */}
-      <div style={{ display: activeTab === 'genogram' ? 'block' : 'none' }}>
+      {/* 頁籤一：家系圖（用 CSS display 控制，避免 unmount 丟失狀態）。
+          .tab-pane 撐滿 tab-nav 以下的剩餘高度，讓左側面板可以用
+          max-height:100% 精準貼齊視窗底部，不用猜測 tab-nav 實際渲染
+          高度（不同系統的中文字型度量不一樣，猜的像素值在別人的電腦上
+          會不準）。 */}
+      <div className="tab-pane" style={{ display: activeTab === 'genogram' ? 'flex' : 'none' }}>
         <GenogramTab
           doc={doc}
           setField={setField}
@@ -87,7 +91,7 @@ const App = () => {
       </div>
 
       {/* 頁籤二：個案紀錄產生器（同樣用 CSS display 控制） */}
-      <div style={{ display: activeTab === 'record' ? 'block' : 'none' }}>
+      <div className="tab-pane" style={{ display: activeTab === 'record' ? 'flex' : 'none' }}>
         <RecordTab
           gen2Cfg={doc.gen2Cfg}
           indexId={doc.indexId}

@@ -49,36 +49,56 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
   font-family: 'Segoe UI', 'Microsoft JhengHei', sans-serif;
-  background: var(--oat); color: var(--ink); padding: 12px;
+  background: var(--oat); color: var(--ink);
 }
 
-/* 網站標頭：唯一的 h1。原本做成可見的標語列，但它會把 .panel 往下推——
- * .panel 的 max-height 是抓視窗高度算的，標頭一佔位，面板下緣就被
- * 切出畫面外。改成視覺上隱藏（screen-reader-only）：畫面不佔版面，但
- * DOM 裡還在，搜尋引擎與螢幕報讀器一樣讀得到，SEO 效果不受影響。 */
+/* App 最外層容器：撐滿視窗高度，用 flex column 把「固定高度的標頭列」
+ * 與「吃掉剩餘空間的分頁內容」分開。原本 body 直接 padding，.panel 再用
+ * calc(100vh - 一個猜出來的像素值) 去扣掉上面 tab-nav 佔用的高度——但
+ * tab-nav 的實際渲染高度會因中文字型度量而異（不同作業系統、不同字型
+ * 後援清單，同一段文字量出來的高度不保證一樣），猜的像素值在別人的電腦
+ * 上就可能不準，於是面板下緣沒對齊、又跑出捲軸。改成讓瀏覽器自己算：
+ * padding 移到這裡，min-height 撐滿視窗，.tab-pane 用 flex:1 吃掉
+ * tab-nav 以外的剩餘高度，.panel 再用 max-height:100% 貼著那個已經算好
+ * 的高度，不用再猜。 */
+.app-shell {
+  display: flex; flex-direction: column; min-height: 100vh; padding: 12px;
+}
+
+/* 網站標頭：唯一的 h1。畫面上視覺隱藏（screen-reader-only）：不佔版面，
+ * 但 DOM 裡還在，搜尋引擎與螢幕報讀器一樣讀得到，SEO 效果不受影響。 */
 .site-header {
   position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
   overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
 }
 
 /* 頂部頁籤導覽列 */
-.tab-nav { display: flex; gap: 10px; margin-bottom: 16px; border-bottom: 1px solid var(--line); padding-bottom: 8px; max-width: 1500px; margin-left: auto; margin-right: auto; }
+.tab-nav { display: flex; gap: 10px; margin-bottom: 16px; border-bottom: 1px solid var(--line); padding-bottom: 8px; max-width: 1500px; margin-left: auto; margin-right: auto; flex: 0 0 auto; }
 .tab-btn { padding: 10px 20px; font-size: 16px; font-weight: bold; border: none; background: transparent; color: var(--ink-soft); cursor: pointer; border-radius: var(--r-sm); transition: all 0.2s; }
 .tab-btn:hover { background: var(--wash-warm); color: var(--dust-d); }
 .tab-btn.active { background: var(--dust); color: #fff; box-shadow: 0 2px 8px -4px rgba(111, 130, 150, 0.6); }
 
-.app-layout { display: flex; flex-direction: column; gap: 12px; max-width: 1500px; margin: 0 auto; }
+/* 兩個分頁內容的外層容器：切 tab 只切 display，維持元件不 unmount。
+ * flex:1 + min-height:0 讓它精確吃滿 .app-shell 扣掉 tab-nav 之後的
+ * 剩餘高度——這個高度是瀏覽器實際排版算出來的，不是猜的。 */
+/* min-width:0 這個補丁很重要：讓 .tab-pane 變成 flex item 之後，瀏覽器
+ * 預設的「自動最小寬度」會拿裡面內容（例如家系圖畫布的 SVG，寬度可能
+ * 上百甚至上千像素）當作下限，寧可把整個頁面撐寬也不縮——手機寬度下
+ * 就會整排被推出螢幕外。加上 min-width:0 讓它可以縮到比內容窄，超出
+ * 的部分交回 .canvas-wrap 本來就有的 overflow:auto 自己處理。 */
+.tab-pane { flex: 1 1 auto; min-height: 0; min-width: 0; flex-direction: column; }
+
+.app-layout { display: flex; flex-direction: column; gap: 12px; max-width: 1500px; width: 100%; margin: 0 auto; flex: 1 1 auto; min-height: 0; min-width: 0; }
 @media (min-width: 768px) { .app-layout { flex-direction: row; align-items: flex-start; } }
 
 .panel {
   background: var(--card); padding: 18px; border-radius: var(--r-card);
   border: 1px solid var(--line); box-shadow: var(--shadow); flex: 0 0 350px;
-  /* 面板上方還有 body 的上下 padding（12+12）與 .tab-nav 那一列（高度
-   * 加上 margin-bottom 約 66px），這些是固定像素、不隨視窗高度縮放，
-   * 扣掉後面板下緣才會真的貼齊視窗底部，「儲存草稿」不會被推出可視
-   * 範圍外——只算 body padding（40px）並不夠，那一版仍然會被 tab-nav
-   * 的高度多推出去一截。 */
-  max-height: calc(100vh - 100px);
+  /* .app-layout 的高度現在是 .tab-pane 精確算出來的「剩餘可視高度」，
+   * 面板貼著 100% 就好，不用再猜要扣掉幾個像素。align-items:flex-start
+   * 讓 .panel 不會被拉伸，只是拿這個高度當上限；畫布（.canvas-wrap）
+   * 依然可以照內容自然長高、讓整個頁面捲動，兩欄各自獨立。 */
+  max-height: 100%;
   overflow-y: auto;
   display: flex; flex-direction: column; justify-content: space-between; gap: 10px;
   /* 固定保留卷軸欄寬度：懸浮提示框（ⓘ、符號說明）用 position:absolute
@@ -86,11 +106,10 @@ body {
    * 每次都把右側內容擠進擠出、看起來像在抖動。先佔位就不會再跳動。 */
   scrollbar-gutter: stable;
 }
-/* 手機（<768px）時 .app-layout 是直排，flex-basis 的主軸換成垂直方向——
- * 350px 這時會變成「面板高度只有 350px」而不是原本桌面版的「面板寬度」，
- * 把面板硬壓成一個要在裡面滾動的小盒子，畫布反而被推到很下面。改成
- * flex-basis:auto 讓面板照內容自然撐高，寬度用滿版；高度上限也放寬，
- * 但仍留一點滾動空間避免面板比整個手機螢幕還高。 */
+/* 手機（<768px）時 .app-layout 是直排，.panel 跟 .canvas-wrap share
+ * 同一條垂直軸，面板不能再用「填滿整欄」的 100%（會把畫布擠到底下看
+ * 不到），改回一個固定比例上限，留一點滾動空間避免面板比整個手機
+ * 螢幕還高。 */
 @media (max-width: 767px) {
   .panel { flex: 0 0 auto; width: 100%; max-height: 65vh; }
   .canvas-wrap { min-height: 55vh; }
@@ -624,9 +643,12 @@ input::placeholder, textarea::placeholder { color: var(--ink-faint); font-weight
 .hint { font-size: 11px; color: var(--ink-soft); margin-top: 3px; }
 
 /* 紀錄產生器專用 UI */
-.record-layout { display: flex; flex-direction: column; gap: 16px; max-width: 1500px; margin: 0 auto; }
+.record-layout { display: flex; flex-direction: column; gap: 16px; max-width: 1500px; width: 100%; margin: 0 auto; flex: 1 1 auto; min-height: 0; min-width: 0; }
 @media (min-width: 768px) { .record-layout { flex-direction: row; align-items: stretch; } }
-.record-form { flex: 1; max-height: 90vh; overflow-y: auto; }
+/* 同 .panel：max-height 用 100% 貼齊 .tab-pane 算出來的實際剩餘高度，
+ * 不用猜固定像素。align-items:stretch 讓左右兩欄本來就同高，這裡只是
+ * 再加一層上限，家屬清單很長時內部捲動，不會把整頁撐爆。 */
+.record-form { flex: 1; max-height: 100%; overflow-y: auto; }
 .record-preview { flex: 1; background: var(--card); padding: 18px; border-radius: var(--r-card); border: 1px solid var(--line); box-shadow: var(--shadow); display: flex; flex-direction: column; }
 /* 只有紀錄本文那一塊要吃這組樣式；自由保存區的小輸入框用 .free-note-input */
 .record-preview > textarea { flex: 1; width: 100%; min-height: 500px; padding: 16px; border: 1px solid var(--line); border-radius: var(--r-sm); font-size: 16px; font-family: 'Times New Roman', 'DFKai-SB', 'BiauKai', serif; line-height: 1.8; resize: vertical; margin-bottom: 12px; background: var(--wash); color: var(--ink); }
@@ -699,7 +721,7 @@ input::placeholder, textarea::placeholder { color: var(--ink-faint); font-weight
 .link-card.eco { background: var(--dust-w); border-color: var(--dust-bd); }
 .link-card.annotation { background: var(--mauve-w); border-color: var(--mauve-bd); }
 
-.canvas-wrap { background: var(--card); border-radius: var(--r-card); border: 1px solid var(--line); box-shadow: var(--shadow); flex: 1; overflow: auto; position: relative; }
+.canvas-wrap { background: var(--card); border-radius: var(--r-card); border: 1px solid var(--line); box-shadow: var(--shadow); flex: 1; min-width: 0; overflow: auto; position: relative; }
 /* 畫布上節點／文字方塊／多邊形頂點都是長按拖曳操作，同樣要關掉手機的
  * 長按選字／callout，理由跟 .quick-mark-chip 一樣。 */
 .canvas-wrap svg {
