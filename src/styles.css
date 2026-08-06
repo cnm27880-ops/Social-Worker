@@ -194,6 +194,12 @@ body {
 .brand-subtitle {
   font-size: 13px; font-weight: 700; color: var(--ink-faint); white-space: nowrap;
   letter-spacing: 0.3px;
+  /* 兩段文字對齊基線時，中文看起來會比英文低一截——中文字身有一小段落在
+   * 基線之下，而「Geno-Link」剛好一個下伸筆畫都沒有，整串字的墨色全在
+   * 基線之上。也就是說，基線對齊了，但「看起來的中線」沒對齊。
+   * 往上推 0.15em（13px 字級約 2px），讓兩段文字的墨色重心落在同一條
+   * 水平線上。用 em 不寫死 px，日後調字級比例會自己跟著走。 */
+  position: relative; top: -0.15em;
   transition: color 0.25s ease;
 }
 .brand-btn:hover .brand-subtitle { color: var(--ink-soft); }
