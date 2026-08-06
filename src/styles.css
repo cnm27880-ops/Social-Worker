@@ -53,7 +53,7 @@ body {
 }
 
 /* 網站標頭：唯一的 h1。原本做成可見的標語列，但它會把 .panel 往下推——
- * .panel 的 max-height: 90vh 是抓視窗高度算的，標頭一佔位，面板下緣就被
+ * .panel 的 max-height 是抓視窗高度算的，標頭一佔位，面板下緣就被
  * 切出畫面外。改成視覺上隱藏（screen-reader-only）：畫面不佔版面，但
  * DOM 裡還在，搜尋引擎與螢幕報讀器一樣讀得到，SEO 效果不受影響。 */
 .site-header {
@@ -73,7 +73,14 @@ body {
 .panel {
   background: var(--card); padding: 18px; border-radius: var(--r-card);
   border: 1px solid var(--line); box-shadow: var(--shadow); flex: 0 0 350px;
-  max-height: 90vh; overflow-y: auto;
+  /* 面板上方還有 body 的上下 padding（12+12）與 .tab-nav 那一列（高度
+   * 加上 margin-bottom 約 66px），這些是固定像素、不隨視窗高度縮放，
+   * 扣掉後面板下緣才會真的貼齊視窗底部，「儲存草稿」不會被推出可視
+   * 範圍外——只算 body padding（40px）並不夠，那一版仍然會被 tab-nav
+   * 的高度多推出去一截。 */
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
+  display: flex; flex-direction: column; justify-content: space-between; gap: 10px;
   /* 固定保留卷軸欄寬度：懸浮提示框（ⓘ、符號說明）用 position:absolute
    * 掛在面板內，展開時會讓可捲動內容的高度多出一點，捲軸因此忽隱忽現，
    * 每次都把右側內容擠進擠出、看起來像在抖動。先佔位就不會再跳動。 */
@@ -87,6 +94,21 @@ body {
 @media (max-width: 767px) {
   .panel { flex: 0 0 auto; width: 100%; max-height: 65vh; }
   .canvas-wrap { min-height: 55vh; }
+}
+
+/* 短視窗／高縮放比（例如筆電、或視窗沒有全螢幕、瀏覽器工具列吃掉一截
+ * 高度）時，面板卡片本身的內距與間距再往下壓一階，盡量把「案件列／
+ * 儲存草稿」留在可視範圍內，減少需要在面板內捲動的機會。960px 這個
+ * 門檻刻意抓得比常見筆電可視高度略高一點，涵蓋「1080p 螢幕但瀏覽器
+ * 沒開滿」這類常見情境。 */
+@media (max-height: 960px) {
+  .panel { padding: 12px; gap: 6px; }
+  .section, .quick-tool-panel, .fam-card { padding: 8px 10px !important; }
+  .case-bar-main { padding: 4px 6px; }
+  .quick-tool-rows, .quick-mark-row { gap: 6px !important; }
+  input[type="text"] { height: 32px; font-size: 13px; }
+  .btn-action { height: 28px; font-size: 12px; }
+  .btn-emboss { height: 24px; font-size: 11.5px; }
 }
 .panel h2 { font-size: 17px; color: var(--ink); margin-bottom: 14px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
 
@@ -229,7 +251,7 @@ body {
 .split-btn > .btn-action:hover { transform: none; }
 
 /* ===== 案件列 ===== */
-.case-bar { position: relative; margin-bottom: 12px; }
+.case-bar { position: relative; }
 .case-bar-main {
   display: flex; align-items: center; gap: 5px;
   padding: 6px 8px; border-radius: var(--r-sm);
@@ -410,7 +432,6 @@ body {
 
 /* ===== 快捷操作工具列（瘦身質感優化版） ===== */
 .quick-tool-panel {
-  margin-bottom: 12px;
   padding: 10px 12px;
   background: var(--wash-warm);
   border: 1px solid var(--line);
@@ -568,7 +589,7 @@ body {
 
 /* ===== 卡片區塊 ===== */
 .section {
-  margin-bottom: 12px; padding: 10px 12px;
+  padding: 10px 12px;
   background: var(--card); border-radius: var(--r-card); border: 1px solid var(--line);
 }
 /* 卡片標題。三種擺法（直接放卡片裡／放在有 ⓘ 的標題列裡／單行卡片）
@@ -624,7 +645,7 @@ input::placeholder, textarea::placeholder { color: var(--ink-faint); font-weight
 .badge-add { display: flex; gap: 4px; align-items: center; margin-left: 4px; }
 .badge-add input[type="text"] { width: 80px; padding: 2px 6px; font-size: 12px; border-radius: 4px; }
 
-.fam-card { background: var(--card); border: 1px solid var(--line); border-left: 3px solid var(--dust); padding: 10px; border-radius: var(--r-sm); margin-bottom: 10px; }
+.fam-card { background: var(--card); border: 1px solid var(--line); border-left: 3px solid var(--dust); padding: 10px; border-radius: var(--r-sm); }
 .fam-card-g3 { border-left-color: var(--mauve); }
 .fam-title { font-size: 14px; font-weight: bold; color: var(--ink); margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between;}
 .fam-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
