@@ -60,7 +60,8 @@ const HelpDrawer = ({ open, onClose }) => {
                 <tr><td><kbd>W</kbd></td><td>切換「案主」標記模式</td></tr>
                 <tr><td><kbd>E</kbd></td><td>切換「同住」標記模式</td></tr>
                 <tr><td><kbd>Ctrl</kbd>＋<kbd>Z</kbd></td><td>復原</td></tr>
-                <tr><td><kbd>Ctrl</kbd>＋<kbd>Shift</kbd>＋<kbd>Z</kbd></td><td>重做</td></tr>
+                <tr><td><kbd>Ctrl</kbd>＋<kbd>Shift</kbd>＋<kbd>Z</kbd> 或 <kbd>Ctrl</kbd>＋<kbd>Y</kbd></td><td>重做</td></tr>
+                <tr><td><kbd>Enter</kbd></td><td>「同住」點繪模式下，圈滿 3 點以上時閉合範圍</td></tr>
                 <tr><td><kbd>Esc</kbd></td><td>取消目前的拖曳或繪製</td></tr>
                 <tr><td><kbd>?</kbd></td><td>開啟這份說明</td></tr>
               </tbody>
@@ -98,6 +99,10 @@ const HelpDrawer = ({ open, onClose }) => {
               <li><b>節點</b>：單擊依目前模式標記；雙擊可輸入年齡（需先開啟「年齡」）。</li>
               <li><b>狀態標籤</b>：點擊即可切到下一個狀態；滑鼠停在上面滾動滾輪也可以（且能雙向切換）。</li>
               <li><b>文字方塊</b>：單擊選取或縮放；雙擊直接打字，可按 Enter 換行。</li>
+              <li><b>拖曳時的對齊線</b>：拖動節點靠近其他節點的水平或垂直線時會自動吸附，
+                  並畫出<b>灰色虛線</b>；拖父母到「整排子女的正中央」（或拖子女到父母中點）
+                  則會吸上中線，虛線變成<b>綠色</b>——看到綠線就代表對準了，放開即可。
+                  子女人數變動時父母本來就會自動置中，這條線是位置被拉亂之後對回去用的。</li>
               <li><b>自由連線</b>：拖曳「🧩 自由擴充區」新增的個體去疊到目標人物上即產生連線；雙擊關係線可刪除。</li>
               <li><b>自由擴充區</b>：點「男性」「女性」「三角」「生態圖」按鈕即新增一個獨立個體到畫布上，
                   跟快捷列表「點選既有節點套用標記」是兩回事。</li>
@@ -144,6 +149,12 @@ const HelpDrawer = ({ open, onClose }) => {
               它們是畫布模式而不是符號標記，沿用原本點按鈕（或按快捷鍵）進入模式、
               再點人物套用的方式，就在快捷列表的上半段，跟符號列的 <kbd>A</kbd>／
               <kbd>S</kbd>／<kbd>D</kbd> 是各自獨立的開關。
+            </p>
+            <p className="help-note">
+              「同住」右邊的標籤可以切換兩種圈法（點一下切換，滾輪也可以）：
+              <b>自動</b>是點選要同住的人，系統自己框出範圍；<b>點繪</b>是自己在畫布上
+              一點一點圈出想要的形狀，圈滿 3 點以上按 <kbd>Enter</kbd> 閉合，
+              中途想重來按 <kbd>Esc</kbd> 清掉。範圍線預設是虛線，可以改成實線。
             </p>
             <p>
               所有套用都可以用 <kbd>Ctrl</kbd>＋<kbd>Z</kbd> 復原。

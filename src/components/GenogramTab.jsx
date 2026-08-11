@@ -189,13 +189,6 @@ const GenogramTab = ({
   const setG3 = (i, v) => applyGen2Cfg(gen2Cfg.map((d, j) => j === i ? { ...d, g3Str: v } : d));
   const toggleMulti = (i) => setGen2Cfg(p => p.map((d, j) => j === i ? { ...d, isMulti: !d.isMulti } : d));
 
-  /* 手動補救鍵：位置被拉亂時，一鍵把父母對回子女中央 */
-  const recenterG1 = () => {
-    const g1 = centeredG1(positions, gen2Cfg);
-    if (!g1) return;
-    setPositions(prev => ({ ...prev, fa: g1.fa, mo: g1.mo }));
-  };
-
   const addText = () => {
     const id = 'txt_' + Date.now();
     setTexts(prev => [...prev, { id, x: 300, y: 200, text: '文字', fontSize: 16, vertical: textDirection === 'vertical' }]);
@@ -245,7 +238,7 @@ const GenogramTab = ({
 
   const { nodes, lines } = useMemo(() => {
     const N = [], L = [];
-    // 版面幾何（含第一代夫妻自動置中）與「父母置中」按鈕共用同一份計算
+    // 版面幾何（含第一代夫妻自動置中）與子女變動時的重新置中共用同一份計算
     const { units, fX, mX } = computeMainLayout(gen2Cfg);
     N.push({ id: 'fa', gender: 'M', gen: 0, dx: fX, dy: GEN_Y[0], label: '父' }, { id: 'mo', gender: 'F', gen: 0, dx: mX, dy: GEN_Y[0], label: '母' });
     L.push({ id: 'ml-g1', type: 'marry', a: 'fa', b: 'mo', status: g1Status });
@@ -917,13 +910,11 @@ const GenogramTab = ({
         <div className="section">
           <div className="section-title-row">
             <label>第一代（父母）</label>
-            <InfoTip text="系統預設一對父母（■ 父、● 母）。右側標籤可點擊切換婚姻狀態，滑鼠停在上面滾動滾輪也可以。子女人數變動時，父母會自動對回整排子女的正中央；若位置被拉亂，按「置中」可一鍵對回：兩人回到同一高度、對齊子女中央，夫妻間距維持你自己拉過的寬度。手動拖曳時也會吸附中線（出現綠色虛線就是對準了）。" />
-            <button className="btn-soft tone-dust" onClick={recenterG1} style={{ marginLeft: 'auto' }}
-                    title="把父母對回整排子女的正中央">🎯 置中</button>
+            <InfoTip text="系統預設一對父母（■ 父、● 母）。右側標籤可點擊切換婚姻狀態，滑鼠停在上面滾動滾輪也可以。子女人數變動時，父母會自動對回整排子女的正中央；位置被拉亂時，手動拖曳會吸附中線，出現綠色虛線就是對準了。" />
             <span className="status-badge" data-status={g1Status}
                   onClick={cycleOnClick(G1_STATUSES, g1Status, setG1Status)}
                   ref={el => wheelRef(el, G1_STATUSES, g1Status, setG1Status)}
-                  style={{ marginLeft: '8px' }}>{G1_LABELS[g1Status]}</span>
+                  style={{ marginLeft: 'auto' }}>{G1_LABELS[g1Status]}</span>
           </div>
         </div>
 
