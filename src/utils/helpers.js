@@ -27,6 +27,63 @@ export function parseGenders(str) {
   return out;
 }
 
+/* 主家系（第一代夫妻＋第二代子女）的自動排版幾何。
+   畫布的版面計算與「父母置中」共用這一份，兩邊才不會各算各的中心點。 */
+export function computeMainLayout(gen2Cfg = []) {
+  const units = gen2Cfg.map((c, i) => {
+    const isMarried = c.partner !== 'none';
+    const g3 = isMarried ? parseGenders(c.g3Str) : [];
+    const w = !isMarried ? SIBLING_GAP
+      : Math.max(COUPLE_GAP + SZ, g3.length > 0 ? (g3.length - 1) * SIBLING_GAP + SZ : 0) + 50;
+    return { ...c, idx: i, g3, w, isMarried };
+  });
+  const totalW = units.reduce((s, u) => s + u.w, 0) || 200;
+  const originX = Math.max(120, 420 - totalW / 2);
+  const fX = originX + totalW / 2 - COUPLE_GAP / 2;
+  const mX = originX + totalW / 2 + COUPLE_GAP / 2;
+  const parentMidX = (fX + mX) / 2;
+  let cx = originX;
+  const placed = units.map(u => {
+    const midU = cx + u.w / 2;
+    const x = u.isMarried ? (units.length === 1 ? parentMidX : midU - COUPLE_GAP / 2) : midU;
+    const spouseX = !u.isMarried ? null
+      : (units.length === 1 ? parentMidX + COUPLE_GAP : midU + COUPLE_GAP / 2);
+    cx += u.w;
+    return { ...u, x, spouseX, midU };
+  });
+  return { units: placed, totalW, originX, fX, mX, parentMidX };
+}
+
+/* 第一代夫妻置中：把父母的中點對回「整排第二代子女」的中點，並讓兩人回到
+   同一個高度（婚姻線才不會是斜的）。夫妻間距沿用使用者自己拉過的寬度；
+   子女若被手動搬過，父母也跟著同樣的位移，不會被拉回預設欄位。
+   已經是置中狀態（或還沒有第二代）就回傳 null，呼叫端不必寫入。 */
+export function centeredG1(positions = {}, gen2Cfg = []) {
+  if (gen2Cfg.length === 0) return null;
+  const { units, fX, mX, parentMidX } = computeMainLayout(gen2Cfg);
+  const spanMid = (xs) => (Math.min(...xs) + Math.max(...xs)) / 2;
+  const defMid = spanMid(units.map(u => u.x));
+  const actMid = spanMid(units.map((u, i) => positions[`c${i}`]?.x ?? u.x));
+  const targetMid = parentMidX + (actMid - defMid);
+
+  const faP = positions.fa, moP = positions.mo;
+  const gap = (faP && moP && moP.x - faP.x > 0) ? moP.x - faP.x : (mX - fX);
+  /* 高度取捨：兩人都被搬過 → 取平均，尊重使用者自己安排的高度；
+     只有一個被拉歪 → 對回另一個人所在的那一列（也就是預設的 G1 高度）。 */
+  const y = (faP && moP) ? Math.round((faP.y + moP.y) / 2) : GEN_Y[0];
+  const next = {
+    fa: { x: targetMid - gap / 2, y },
+    mo: { x: targetMid + gap / 2, y },
+  };
+  const same = (a, b) => !!a && Math.abs(a.x - b.x) < 0.5 && Math.abs(a.y - b.y) < 0.5;
+  // 父母都還在自動位置上，而且新算出來的也一樣 → 不必把座標寫死進 positions
+  if (!faP && !moP
+      && same({ x: fX, y: GEN_Y[0] }, next.fa)
+      && same({ x: mX, y: GEN_Y[0] }, next.mo)) return null;
+  if (same(faP, next.fa) && same(moP, next.mo)) return null;
+  return next;
+}
+
 // 圓潤平滑曲線魔法
 export function getSmoothPath(pts, closed = false) {
   if (pts.length < 2) return '';
