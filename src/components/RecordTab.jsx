@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import BadgeGroup from './BadgeGroup';
 import InfoTip from './InfoTip';
-import { getRelativeTitle, formatKidsText, G2_LABELS } from '../utils/helpers';
+import { getGen2Title, getIndexGen2Idx, formatKidsText, G2_LABELS, G1_LABELS } from '../utils/helpers';
 
 const DEFAULT_TAGS = {
   identity: ['一般民眾', '就養榮民', '非就養榮民', '榮眷', '遺眷'],
@@ -55,6 +55,12 @@ const RecordTab = ({
     if (id?.startsWith('c')) return gen2Cfg[parseInt(id.replace('c', ''))]?.gender;
     return null;
   };
+  /* 案主是不是第二代其中一人？是的話，其餘第二代要以手足（案兄／案姊／案弟／
+     案妹）而非子女稱呼，婚姻狀態與子嗣也要改讀案主自己那一格。 */
+  const selfIdx = getIndexGen2Idx(indexId, gen2Cfg);
+  const isGen2Index = selfIdx >= 0;
+  const titleOf = (i) => getGen2Title(i, gen2Cfg, indexId);
+
   /* ===== 紀錄產生器邏輯 ===== */
   const generatedText = useMemo(() => {
     let txt = `案主為${subjInfo.identity}`;
@@ -63,20 +69,29 @@ const RecordTab = ({
     if (subjInfo.lang) txt += `，${subjInfo.lang}溝通`;
     if (subjInfo.religion) txt += `，${subjInfo.religion}信仰`;
     if (subjInfo.disability) txt += `，${subjInfo.disability}`;
-    txt += `，${g1Status === 'married' ? '已婚' : '離婚'}`;
+    // 案主是第二代時，婚姻狀態要看案主自己的，不是第一代（案父母）的
+    txt += `，${isGen2Index ? (G2_LABELS[gen2Cfg[selfIdx].partner] || '未婚') : (g1Status === 'married' ? '已婚' : '離婚')}`;
 
     let cohabText = '獨居';
     if (indexId && cohabMembers.includes(indexId)) {
       const others = cohabMembers.filter(id => id !== indexId).map(id => {
         if (id === 'fa') return '案父';
         if (id === 'mo') return '案母';
-        if (id.startsWith('c')) {
+        if (/^c\d+$/.test(id)) {
           const idx = parseInt(id.replace('c',''));
-          if (idx >= 0 && idx < gen2Cfg.length) return getRelativeTitle(gen2Cfg[idx].gender, idx, gen2Cfg);
+          if (idx >= 0 && idx < gen2Cfg.length) return titleOf(idx);
           return '';
         }
-        if (id.startsWith('s')) return '案子女配偶';
-        if (id.startsWith('g')) return '案孫輩';
+        if (/^s\d+$/.test(id)) {
+          const idx = parseInt(id.replace('s',''));
+          if (!isGen2Index) return '案子女配偶';
+          if (idx === selfIdx) return getIndexGender(indexId) === 'M' ? '案妻' : '案夫';
+          return idx >= 0 && idx < gen2Cfg.length ? `${titleOf(idx)}之配偶` : '';
+        }
+        if (/^g\d+_\d+$/.test(id)) {
+          if (!isGen2Index) return '案孫輩';
+          return parseInt(id.slice(1).split('_')[0]) === selfIdx ? '案子女' : '案姪甥輩';
+        }
         return '';
       }).filter(Boolean);
       if (others.length > 0) cohabText = `與${others.join('、')}同住`;
@@ -85,19 +100,33 @@ const RecordTab = ({
     if (subjInfo.note) txt += `${subjInfo.note}；\n`;
     else txt += `；\n`;
 
-    // 統計原生家庭的子代總數
-    if (gen2Cfg.length > 0) {
-      const m = gen2Cfg.filter(c => c.gender === 'M').length;
-      const f = gen2Cfg.filter(c => c.gender === 'F').length;
+    const countKids = (list) => {
+      const m = list.filter(g => g === 'M').length;
+      const f = list.filter(g => g === 'F').length;
       let res = '育有';
       if (m > 0 && f > 0) res += `${m}子${f}女`;
       else if (m > 0) res += `${m}子`;
       else if (f > 0) res += `${f}女`;
-      txt += `${res}，`;
+      return res;
+    };
+
+    if (isGen2Index) {
+      // 案主自己的子嗣（第三代）
+      const own = gen2Cfg[selfIdx].g3Str;
+      if (own) txt += `${formatKidsText(own)}；\n`;
+      // 原生家庭：案父母的婚姻狀態與子代總數（含案主）
+      let originTxt = `案父母${G1_LABELS[g1Status] || '已婚'}`;
+      if (gen2Cfg.length > 0) originTxt += `，${countKids(gen2Cfg.map(c => c.gender))}`;
+      // 有手足才用逗號接下去，否則自成一句
+      txt += gen2Cfg.length > 1 ? `${originTxt}，` : `${originTxt}；\n`;
+    } else if (gen2Cfg.length > 0) {
+      // 統計原生家庭的子代總數
+      txt += `${countKids(gen2Cfg.map(c => c.gender))}，`;
     }
 
     gen2Cfg.forEach((c, i) => {
-      const title = getRelativeTitle(c.gender, i, gen2Cfg);
+      if (i === selfIdx) return; // 案主本人已於上方段落描述
+      const title = titleOf(i);
       const isDeceased = deceasedIds.includes(`c${i}`);
       if (isDeceased) {
         txt += `${title}已歿；`;
@@ -261,11 +290,16 @@ const RecordTab = ({
           <input type="text" value={subjInfo.note} onChange={e => setSubjInfo({...subjInfo, note: e.target.value})} placeholder="例：每月領取相關補助，或具其他特殊背景" />
         </div>
 
-        <h2 style={{ marginTop: '20px' }}>家屬動態清單 (由家系圖連動)</h2>
+        <h2 style={{ marginTop: '20px' }}>
+          家屬動態清單 (由家系圖連動)
+          {isGen2Index && <span className="ip-pill">案主為第二代，其餘第二代以手足稱謂呈現</span>}
+        </h2>
         {gen2Cfg.length === 0 && <div className="hint" style={{fontSize: '13px'}}>請先於「家系圖繪製」頁籤輸入第二代子女，這裡會自動產生填寫欄位喔！</div>}
+        {isGen2Index && gen2Cfg.length === 1 && <div className="hint" style={{fontSize: '13px'}}>案主本人的資料請填在上方「案主基本資料」，這裡只列出案主的手足。</div>}
 
         {gen2Cfg.map((c, i) => {
-          const title = getRelativeTitle(c.gender, i, gen2Cfg);
+          if (i === selfIdx) return null; // 案主本人的資料填在上方「案主基本資料」
+          const title = titleOf(i);
           const isDeceased = deceasedIds.includes(`c${i}`);
           const ext = famExtras[i] || { location: '', job: '', isPrimary: false, note: '' };
 

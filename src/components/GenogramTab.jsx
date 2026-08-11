@@ -3,7 +3,7 @@ import {
   SZ, R, COUPLE_GAP, SIBLING_GAP, GEN_Y, TEXT_FONT,
   G2_STATUSES, G2_LABELS, G1_STATUSES, G1_LABELS,
   TEXT_DIRS, TEXT_DIR_LABELS,
-  parseGenders, getSmoothPath, getRelativeTitle
+  parseGenders, getSmoothPath, getRelativeTitle, getGen2Title
 } from '../utils/helpers';
 import CaseBar from './CaseBar';
 import ImagePatchPanel from './ImagePatchPanel';
@@ -887,7 +887,7 @@ const GenogramTab = ({
               <div key={i}>
                 <div className="child-row">
                   <span className={`child-icon ${c.gender === 'M' ? 'm' : 'f'}`}>{c.gender === 'M' ? '■' : '●'}</span>
-                  <span className={`child-name ${c.gender === 'M' ? 'm' : 'f'}`}>{getRelativeTitle(c.gender, i, gen2Cfg)}</span>
+                  <span className={`child-name ${c.gender === 'M' ? 'm' : 'f'}`}>{getGen2Title(i, gen2Cfg, indexId)}</span>
                   <div className="chk-wrap">
                     <label><input type="checkbox" checked={c.isMulti || false} onChange={() => toggleMulti(i)} /> 多胞胎</label>
                     <span className="status-badge" data-status={c.partner || 'none'}
