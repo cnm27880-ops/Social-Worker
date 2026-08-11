@@ -8,8 +8,7 @@ Geno-Link 的 favicon 全套（6 張 PNG + 1 個多尺寸 ICO）都是從
 
 | 檔案 | 用途 |
 | --- | --- |
-| `favicon-master.png` | 2048×2048 主圖：燕麥白底 `#F5F4F0`、`#B08968` 圓角方形、白色 G |
-| `make-master.py` | 用 Pillow 純幾何重繪主圖（見下方「主圖來源」） |
+| `favicon-master.png` | 2048×2048 主圖：燕麥白底、`#B08968` 圓角方形、白色 G |
 | `generate-favicons.py` | 由主圖產出 `public/` 底下所有 favicon |
 
 ## 換圖 / 重新產生
@@ -56,9 +55,8 @@ python3 tools/favicon/generate-favicons.py --source ~/Downloads/new-icon.png
   16×16 會明顯糊；`generate-favicons.py` 改成先各自 LANCZOS 縮好，再以
   32-bit BGRA 的 BMP(DIB) 格式塞進 ICO 容器，相容性也最廣。
 
-## 主圖來源
+## 主圖
 
-`favicon-master.png` 目前是 `make-master.py` 用 Pillow 依照設計稿的配色與
-比例重繪出來的向量式圖形（圓角方形 + 幾何 G），不是原始設計檔的點陣輸出。
-若手上有原始的 2048×2048 PNG，直接覆蓋 `favicon-master.png` 再跑一次
-`generate-favicons.py` 就會換成正版，其餘完全不用動。
+`favicon-master.png` 是原始設計稿的 2048×2048 輸出，未經裁切或重壓，
+`public/` 底下所有 favicon 都由它產生。它本身帶 alpha 通道但整張不透明，
+產生器會照常壓平成 RGB。
