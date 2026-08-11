@@ -3,7 +3,8 @@ import {
   SZ, R, COUPLE_GAP, SIBLING_GAP, GEN_Y, TEXT_FONT,
   G2_STATUSES, G2_LABELS, G1_STATUSES, G1_LABELS,
   TEXT_DIRS, TEXT_DIR_LABELS,
-  parseGenders, getSmoothPath, getRelativeTitle
+  parseGenders, getSmoothPath, getRelativeTitle, getGen2Title,
+  computeMainLayout, centeredG1
 } from '../utils/helpers';
 import CaseBar from './CaseBar';
 import ImagePatchPanel from './ImagePatchPanel';
@@ -164,15 +165,36 @@ const GenogramTab = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [draftPoly, mode, cohabMode, quickIdx]);
 
-  const onGen2Change = (val) => {
-    setGen2Str(val);
-    const gs = parseGenders(val);
-    setGen2Cfg(prev => gs.map((g, i) => (prev[i] && prev[i].gender === g) ? prev[i] : { gender: g, partner: 'none', g3Str: '', isMulti: false }));
+  /* 第二代的人數／配偶／第三代一變動，整排子女的寬度就跟著變，父母原本停的
+   * 位置就不再是正中央。這裡把「改第二代」與「父母重新置中」寫成同一次更新：
+   * 一來位置自動跟上不用每次手動拉，二來復原（Ctrl+Z）是一步回到底。 */
+  const applyGen2Cfg = (nextCfg, patch = {}) => {
+    const g1 = centeredG1(positions, nextCfg);
+    patchDoc({
+      ...patch,
+      gen2Cfg: nextCfg,
+      ...(g1 ? { positions: { ...positions, fa: g1.fa, mo: g1.mo } } : {}),
+    }, 'gen2cfg');
   };
 
-  const changePartner = (i, status) => setGen2Cfg(p => p.map((d, j) => j === i ? { ...d, partner: status, g3Str: status === 'none' ? '' : d.g3Str } : d));
-  const setG3 = (i, v) => setGen2Cfg(p => p.map((d, j) => j === i ? { ...d, g3Str: v } : d));
+  const onGen2Change = (val) => {
+    const gs = parseGenders(val);
+    applyGen2Cfg(
+      gs.map((g, i) => (gen2Cfg[i] && gen2Cfg[i].gender === g) ? gen2Cfg[i] : { gender: g, partner: 'none', g3Str: '', isMulti: false }),
+      { gen2Str: val }
+    );
+  };
+
+  const changePartner = (i, status) => applyGen2Cfg(gen2Cfg.map((d, j) => j === i ? { ...d, partner: status, g3Str: status === 'none' ? '' : d.g3Str } : d));
+  const setG3 = (i, v) => applyGen2Cfg(gen2Cfg.map((d, j) => j === i ? { ...d, g3Str: v } : d));
   const toggleMulti = (i) => setGen2Cfg(p => p.map((d, j) => j === i ? { ...d, isMulti: !d.isMulti } : d));
+
+  /* 手動補救鍵：位置被拉亂時，一鍵把父母對回子女中央 */
+  const recenterG1 = () => {
+    const g1 = centeredG1(positions, gen2Cfg);
+    if (!g1) return;
+    setPositions(prev => ({ ...prev, fa: g1.fa, mo: g1.mo }));
+  };
 
   const addText = () => {
     const id = 'txt_' + Date.now();
@@ -223,24 +245,16 @@ const GenogramTab = ({
 
   const { nodes, lines } = useMemo(() => {
     const N = [], L = [];
-    const units = gen2Cfg.map((c, i) => {
-      const isMarried = c.partner !== 'none';
-      const g3 = isMarried ? parseGenders(c.g3Str) : [];
-      let w = !isMarried ? SIBLING_GAP : Math.max(COUPLE_GAP + SZ, g3.length > 0 ? (g3.length - 1) * SIBLING_GAP + SZ : 0) + 50;
-      return { ...c, idx: i, g3, w, isMarried };
-    });
-    const totalW = units.reduce((s, u) => s + u.w, 0) || 200;
-    const originX = Math.max(120, 420 - totalW / 2);
-    const fX = originX + totalW / 2 - COUPLE_GAP / 2, mX = originX + totalW / 2 + COUPLE_GAP / 2, parentMidX = (fX + mX) / 2;
+    // 版面幾何（含第一代夫妻自動置中）與「父母置中」按鈕共用同一份計算
+    const { units, fX, mX } = computeMainLayout(gen2Cfg);
     N.push({ id: 'fa', gender: 'M', gen: 0, dx: fX, dy: GEN_Y[0], label: '父' }, { id: 'mo', gender: 'F', gen: 0, dx: mX, dy: GEN_Y[0], label: '母' });
     L.push({ id: 'ml-g1', type: 'marry', a: 'fa', b: 'mo', status: g1Status });
 
-    let cx = originX; const g2ids = [];
+    const g2ids = [];
     units.forEach((u, i) => {
-      const cid = `c${i}`, midU = cx + u.w / 2;
+      const cid = `c${i}`;
       if (u.isMarried) {
-        const lx = units.length === 1 ? parentMidX : midU - COUPLE_GAP / 2;
-        const rx = units.length === 1 ? parentMidX + COUPLE_GAP : midU + COUPLE_GAP / 2;
+        const lx = u.x, rx = u.spouseX;
         const sid = `s${i}`, coupleMidX = (lx + rx) / 2;
         N.push({ id: cid, gender: u.gender, gen: 1, dx: lx, dy: GEN_Y[1], label: `${u.gender === 'M'?'子':'女'}${i+1}`, isMulti: u.isMulti });
         N.push({ id: sid, gender: u.gender === 'M'?'F':'M', gen: 1, dx: rx, dy: GEN_Y[1], label: '配偶' });
@@ -256,10 +270,9 @@ const GenogramTab = ({
           L.push({ id: `pc-c${i}`, type: 'pc', pa: cid, pb: sid, kids: g3ids });
         }
       } else {
-        N.push({ id: cid, gender: u.gender, gen: 1, dx: midU, dy: GEN_Y[1], label: `${u.gender === 'M'?'子':'女'}${i+1}`, isMulti: u.isMulti });
+        N.push({ id: cid, gender: u.gender, gen: 1, dx: u.x, dy: GEN_Y[1], label: `${u.gender === 'M'?'子':'女'}${i+1}`, isMulti: u.isMulti });
         g2ids.push(cid);
       }
-      cx += u.w;
     });
     if (g2ids.length > 0) L.push({ id: 'pc-g1', type: 'pc', pa: 'fa', pb: 'mo', kids: g2ids });
 
@@ -466,6 +479,10 @@ const GenogramTab = ({
     if (found) setTextResize({ id, startY: sp.y, startSize: found.fontSize });
   }, [svgPt, texts]);
 
+  /* 拖曳時的對齊參考線（純顯示，不進文件）：
+     { x, y, center } — center 為 true 代表吸在「中線」上（父母對子女中央等） */
+  const [snapGuide, setSnapGuide] = useState(null);
+
   const onMove = useCallback((e) => {
     const sp = svgPt(e);
     if (draftPoly.length > 0) setMousePos({ x: sp.x, y: sp.y });
@@ -489,6 +506,49 @@ const GenogramTab = ({
       }
     });
 
+    /* --- 中線磁吸 ---
+     * 一般的 12px 磁吸只能對齊「別人身上」，對不到兩人之間的中心點，所以
+     * 父母要擺在整排子女正中央時只能用目測。這裡替正在拖的人算出它該對齊的
+     * 中線：拖父母 → 讓夫妻中點落在子女整排的中央；拖子女 → 對齊父母中點。 */
+    const at = (id) => {
+      const p = positionsRef.current[id];
+      if (p) return p;
+      const n = nodes.find(v => v.id === id);
+      if (n) return { x: n.dx, y: n.dy };
+      const fn = freeNodesRef.current.find(v => v.id === id);
+      return fn ? { x: fn.x, y: fn.y } : null;
+    };
+    const centerSnaps = [];   // { nodeX: 節點要落在哪, guideX: 參考線畫在哪 }
+    lines.forEach(ln => {
+      if (ln.type !== 'pc' || !ln.kids || ln.kids.length === 0) return;
+      const kidPts = ln.kids.map(at).filter(Boolean);
+      if (kidPts.length === 0) return;
+      const kidXs = kidPts.map(p => p.x);
+      const kidsMid = (Math.min(...kidXs) + Math.max(...kidXs)) / 2;
+      if (ln.pa === drag.id || ln.pb === drag.id) {
+        const other = at(ln.pa === drag.id ? ln.pb : ln.pa);
+        if (other) centerSnaps.push({ nodeX: 2 * kidsMid - other.x, guideX: kidsMid });
+      }
+      if (ln.kids.includes(drag.id)) {
+        const pa = at(ln.pa), pb = at(ln.pb);
+        if (pa && pb) { const mid = (pa.x + pb.x) / 2; centerSnaps.push({ nodeX: mid, guideX: mid }); }
+      }
+    });
+
+    // 中線優先（14px），沒吸到才回到一般的 12px 對齊
+    const snapX = (val) => {
+      for (const cs of centerSnaps) if (Math.abs(val - cs.nodeX) < 14) return { v: cs.nodeX, guide: cs.guideX, center: true };
+      for (const p of allSnaps) if (Math.abs(val - p.x) < 12) return { v: p.x, guide: p.x, center: false };
+      return { v: val, guide: null, center: false };
+    };
+    const snapY = (val) => {
+      for (const p of allSnaps) if (Math.abs(val - p.y) < 12) return { v: p.y, guide: p.y };
+      return { v: val, guide: null };
+    };
+    const showGuide = (sx, sy) => setSnapGuide(
+      sx.guide == null && sy.guide == null ? null : { x: sx.guide, y: sy.guide, center: sx.center }
+    );
+
     if (drag.isFree) {
       let newX = sp.x - drag.ox, newY = sp.y - drag.oy;
       
@@ -510,26 +570,19 @@ const GenogramTab = ({
         }
       }
 
-      // 2. 沒吸到伴侶時，啟動 12px 全域磁吸 (對齊網格上其他人)
-      if (!matchedPartner) {
-        for (const p of allSnaps) {
-          if (Math.abs(newX - p.x) < 12) newX = p.x;
-          if (Math.abs(newY - p.y) < 12) newY = p.y;
-        }
-      }
+      // 2. 沒吸到伴侶時，啟動中線磁吸 + 12px 全域磁吸 (對齊網格上其他人)
+      const sx = snapX(newX);
+      const sy = matchedPartner ? { v: newY, guide: null } : snapY(newY);
+      newX = sx.v; newY = sy.v;
+      showGuide(sx, sy);
       setFreeNodes(prev => prev.map(fn => fn.id === drag.id ? { ...fn, x: newX, y: newY } : fn));
     } else {
-      // 原生節點：啟動 12px 全域磁吸
-      setPositions(prev => { 
-        let nX = sp.x - drag.ox, nY = sp.y - drag.oy; 
-        for (const p of allSnaps) { 
-          if (Math.abs(nX - p.x) < 12) nX = p.x; 
-          if (Math.abs(nY - p.y) < 12) nY = p.y; 
-        } 
-        return { ...prev, [drag.id]: { x: nX, y: nY } }; 
-      });
+      // 原生節點：中線磁吸 + 12px 全域磁吸
+      const sx = snapX(sp.x - drag.ox), sy = snapY(sp.y - drag.oy);
+      showGuide(sx, sy);
+      setPositions(prev => ({ ...prev, [drag.id]: { x: sx.v, y: sy.v } }));
     }
-  }, [drag, textDrag, textResize, dragVertex, draftPoly, svgPt, setFreeNodes, customLinks, nodes]);
+  }, [drag, textDrag, textResize, dragVertex, draftPoly, svgPt, setFreeNodes, customLinks, nodes, lines]);
 
   const onUp = useCallback(() => {
     if (drag && drag.isFree) {
@@ -565,7 +618,7 @@ const GenogramTab = ({
         }
       }
     }
-    setDragVertex(null); setDrag(null); setTextDrag(null); setTextResize(null);
+    setDragVertex(null); setDrag(null); setTextDrag(null); setTextResize(null); setSnapGuide(null);
   }, [drag, freeNodes, nodes, pos, customLinks, setCustomLinks, setFreeNodes]);
 
   const onClick = (e, id) => {
@@ -864,11 +917,13 @@ const GenogramTab = ({
         <div className="section">
           <div className="section-title-row">
             <label>第一代（父母）</label>
-            <InfoTip text="系統預設一對父母（■ 父、● 母）。右側標籤可點擊切換婚姻狀態，滑鼠停在上面滾動滾輪也可以。" />
+            <InfoTip text="系統預設一對父母（■ 父、● 母）。右側標籤可點擊切換婚姻狀態，滑鼠停在上面滾動滾輪也可以。子女人數變動時，父母會自動對回整排子女的正中央；若位置被拉亂，按「置中」可一鍵對回：兩人回到同一高度、對齊子女中央，夫妻間距維持你自己拉過的寬度。手動拖曳時也會吸附中線（出現綠色虛線就是對準了）。" />
+            <button className="btn-soft tone-dust" onClick={recenterG1} style={{ marginLeft: 'auto' }}
+                    title="把父母對回整排子女的正中央">🎯 置中</button>
             <span className="status-badge" data-status={g1Status}
                   onClick={cycleOnClick(G1_STATUSES, g1Status, setG1Status)}
                   ref={el => wheelRef(el, G1_STATUSES, g1Status, setG1Status)}
-                  style={{ marginLeft: 'auto' }}>{G1_LABELS[g1Status]}</span>
+                  style={{ marginLeft: '8px' }}>{G1_LABELS[g1Status]}</span>
           </div>
         </div>
 
@@ -887,7 +942,7 @@ const GenogramTab = ({
               <div key={i}>
                 <div className="child-row">
                   <span className={`child-icon ${c.gender === 'M' ? 'm' : 'f'}`}>{c.gender === 'M' ? '■' : '●'}</span>
-                  <span className={`child-name ${c.gender === 'M' ? 'm' : 'f'}`}>{getRelativeTitle(c.gender, i, gen2Cfg)}</span>
+                  <span className={`child-name ${c.gender === 'M' ? 'm' : 'f'}`}>{getGen2Title(i, gen2Cfg, indexId)}</span>
                   <div className="chk-wrap">
                     <label><input type="checkbox" checked={c.isMulti || false} onChange={() => toggleMulti(i)} /> 多胞胎</label>
                     <span className="status-badge" data-status={c.partner || 'none'}
@@ -1135,6 +1190,15 @@ const GenogramTab = ({
               return <g key={ln.id}>{els}</g>;
             } return null;
           })}
+
+          {/* 拖曳時的對齊參考線：綠色＝吸在中線上（例如父母正對子女中央），
+              灰藍＝一般的對齊到其他人。放開滑鼠就消失，不會被匯出。 */}
+          {snapGuide && (
+            <g pointerEvents="none">
+              {snapGuide.x != null && <line x1={snapGuide.x} y1="0" x2={snapGuide.x} y2={svgH} stroke={snapGuide.center ? '#10b981' : '#94a3b8'} strokeWidth="1.5" strokeDasharray="6,5" opacity="0.9" />}
+              {snapGuide.y != null && <line x1="0" y1={snapGuide.y} x2={svgW} y2={snapGuide.y} stroke="#94a3b8" strokeWidth="1.5" strokeDasharray="6,5" opacity="0.9" />}
+            </g>
+          )}
 
           {/* === 所有節點 (原生 + 自由人物) 共用渲染 === */}
           {[
