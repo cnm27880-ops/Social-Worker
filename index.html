@@ -43,6 +43,16 @@
   <meta name="twitter:image:alt" content="Geno-Link 線上家系圖產生器預覽圖">
 
   <link rel="icon" type="image/svg+xml" href="./icon.svg" />
+  <!-- SVG 之外再備一組 PNG：Safari 與部分 Windows 版瀏覽器不吃 SVG favicon，
+       而分頁列、書籤列、桌面捷徑各自會挑最接近自己需求的那個尺寸。最後那行
+       .ico（內含 16／32／48）是留給不讀 sizes、只會直接去要 /favicon.ico 的
+       舊瀏覽器與爬蟲。這幾張都由 tools/favicon/generate-favicons.py 產生。 -->
+  <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16x16.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="48x48" href="./favicon-48x48.png">
+  <link rel="icon" type="image/png" sizes="96x96" href="./favicon-96x96.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="./favicon-192x192.png">
+  <link rel="icon" href="./favicon.ico">
 
   <!-- ===== PWA／iOS「加入主畫面」全螢幕 App 體驗 =====
        iPhone 版 Safari 不支援 Fullscreen API，唯一的全螢幕途徑是「加入主畫面」
