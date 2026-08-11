@@ -3,9 +3,9 @@
 這是一套專為第一線工作者打造的**現代化家系圖繪製與紀錄生成工具**。
 結合直覺的圖形化操作與文字解析能力，解決實務上繪製複雜家庭結構（如重組家庭、多段婚姻）的痛點，並能把視覺化的家系圖一鍵轉換為專業的個案文字紀錄。
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
-![React](https://img.shields.io/badge/React-18.2.0-61DAFB?logo=react&logoColor=white)
-![Vite](https://img.shields.io/badge/Vite-5.4.2-646CFF?logo=vite&logoColor=white)
+![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)
+![React](https://img.shields.io/badge/React-18.3.1-61DAFB?logo=react&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-5.4.21-646CFF?logo=vite&logoColor=white)
 
 > **隱私優先**：全部在瀏覽器裡跑，沒有後端、不上傳任何資料。而且**預設不留痕跡** ——
 > 每次開啟網頁都是一張乾淨的空白畫布，只有你按下「儲存案件」，內容才會存進這台電腦的瀏覽器。
