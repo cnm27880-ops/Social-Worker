@@ -19,7 +19,7 @@ import {
   trianglePath, triangleCrossLines,
   zigzagPoints, gapSegments, doubleLineSegments, hatchSegments, distToSegment, DISTANT_DASH,
 } from '../utils/symbols';
-import { INITIAL_DOC } from '../utils/caseDoc';
+import { INITIAL_DOC, alignGen2, remapGen2Keys } from '../utils/caseDoc';
 
 /* 獨立個體（懷孕／流產／死產）用的三角形半徑：跟人物節點（正方形／圓形）
  * 一樣大，畫布上才不會顯得特別小。 */
@@ -176,20 +176,30 @@ const GenogramTab = ({
    * 位置就不再是正中央。這裡把「改第二代」與「父母重新置中」寫成同一次更新：
    * 一來位置自動跟上不用每次手動拉，二來復原（Ctrl+Z）是一步回到底。 */
   const applyGen2Cfg = (nextCfg, patch = {}) => {
-    const g1 = centeredG1(positions, nextCfg);
+    /* patch 可能自己帶了一份搬遷過的 positions（見 onGen2Change）。置中要
+       算在那一份上面，否則下面補 fa/mo 時會用舊的整包蓋回去。 */
+    const basePositions = patch.positions ?? positions;
+    const g1 = centeredG1(basePositions, nextCfg);
     patchDoc({
       ...patch,
       gen2Cfg: nextCfg,
-      ...(g1 ? { positions: { ...positions, fa: g1.fa, mo: g1.mo } } : {}),
+      ...(g1 ? { positions: { ...basePositions, fa: g1.fa, mo: g1.mo } } : {}),
     }, 'gen2cfg');
   };
 
+  /* 子女清單變動：先把新舊索引對位，再讓每個人的設定與所有以索引為 key 的
+     資料（標記、年齡、座標、同住、案主、家屬備註）跟著自己搬家。少了這一步，
+     在最前面插一個人就會讓後面每個人的已歿標記與備註各自跟錯人。 */
   const onGen2Change = (val) => {
     const gs = parseGenders(val);
-    applyGen2Cfg(
-      gs.map((g, i) => (gen2Cfg[i] && gen2Cfg[i].gender === g) ? gen2Cfg[i] : { gender: g, partner: 'none', g3Str: '', isMulti: false }),
-      { gen2Str: val }
-    );
+    const newToOld = alignGen2(gen2Cfg.map(c => c.gender), gs);
+    const nextCfg = gs.map((g, i) => {
+      const from = newToOld[i];
+      return from >= 0 && gen2Cfg[from]
+        ? gen2Cfg[from]
+        : { gender: g, partner: 'none', g3Str: '', isMulti: false };
+    });
+    applyGen2Cfg(nextCfg, { gen2Str: val, ...remapGen2Keys(doc, newToOld) });
   };
 
   const changePartner = (i, status) => applyGen2Cfg(gen2Cfg.map((d, j) => j === i ? { ...d, partner: status, g3Str: status === 'none' ? '' : d.g3Str } : d));

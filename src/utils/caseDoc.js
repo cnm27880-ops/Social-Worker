@@ -163,6 +163,101 @@ export const toggleLineAttr = (lineAttrs, lineId, key) => {
 };
 
 /* ===========================================================================
+ * 第二代改動時的索引搬遷
+ *
+ * 節點 id 是從陣列位置算出來的（c0、s0、g0_1、ml-c0…），famExtras 的第二代
+ * key 也是純索引。所以「女男男」改成「男女男男」時，同一個索引會突然代表
+ * 另一個人——已歿標記、家屬備註、年齡、座標全部留在原位，靜靜地跟錯人。
+ *
+ * 這裡不改 id 格式（那會讓所有既有存檔都要轉換），而是在子女清單變動的
+ * 那一刻，先算出新舊索引的對應，再把所有以索引為 key 的資料一起搬過去。
+ * =========================================================================== */
+
+/**
+ * 用最長共同子序列對位新舊的性別序列，回傳 newIndex → oldIndex 的陣列
+ * （對不到的位置是 -1，代表那是新增的人）。
+ * 性別相同才可能對到——插一個男孩進「女男男」的最前面，原本三個人會整批
+ * 往後對到 1、2、3，而不是留在原位被當成別人。
+ */
+export const alignGen2 = (oldGenders = [], newGenders = []) => {
+  const n = oldGenders.length, m = newGenders.length;
+  const dp = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      dp[i][j] = oldGenders[i] === newGenders[j]
+        ? dp[i + 1][j + 1] + 1
+        : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    }
+  }
+  const newToOld = new Array(m).fill(-1);
+  let i = 0, j = 0;
+  while (i < n && j < m) {
+    if (oldGenders[i] === newGenders[j]) { newToOld[j] = i; i++; j++; }
+    else if (dp[i + 1][j] >= dp[i][j + 1]) i++;
+    else j++;
+  }
+  return newToOld;
+};
+
+/**
+ * 依對位結果搬移文件裡所有以第二代索引為 key 的資料，回傳可直接餵給
+ * patchDoc 的 patch。對不到的舊索引（人被刪掉了）連同資料一起丟棄。
+ * 與第二代無關的 key（ml-g1、擴充連線的 id、擴充子代的 famExtras）原樣保留。
+ */
+export const remapGen2Keys = (doc, newToOld) => {
+  const oldToNew = new Map();
+  newToOld.forEach((oldIdx, newIdx) => { if (oldIdx >= 0) oldToNew.set(oldIdx, newIdx); });
+
+  const mapId = (id) => {
+    if (typeof id !== 'string') return id;
+    let m;
+    if ((m = /^([cs])(\d+)$/.exec(id))) {
+      const to = oldToNew.get(Number(m[2]));
+      return to === undefined ? null : `${m[1]}${to}`;
+    }
+    if ((m = /^g(\d+)_(\d+)$/.exec(id))) {
+      const to = oldToNew.get(Number(m[1]));
+      return to === undefined ? null : `g${to}_${m[2]}`;
+    }
+    if ((m = /^ml-c(\d+)$/.exec(id))) {
+      const to = oldToNew.get(Number(m[1]));
+      return to === undefined ? null : `ml-c${to}`;
+    }
+    return id;
+  };
+
+  const remapObj = (obj) => {
+    const next = {};
+    for (const [k, v] of Object.entries(obj || {})) {
+      const nk = mapId(k);
+      if (nk !== null) next[nk] = v;
+    }
+    return next;
+  };
+
+  // famExtras：第二代的 key 是純數字，擴充子代的是 'lnk_c1' 這種字串
+  const famExtras = {};
+  for (const [k, v] of Object.entries(doc.famExtras || {})) {
+    if (/^\d+$/.test(k)) {
+      const to = oldToNew.get(Number(k));
+      if (to !== undefined) famExtras[to] = v;
+    } else {
+      famExtras[k] = v;
+    }
+  }
+
+  return {
+    nodeAttrs: remapObj(doc.nodeAttrs),
+    positions: remapObj(doc.positions),
+    ages: remapObj(doc.ages),
+    lineAttrs: remapObj(doc.lineAttrs),
+    famExtras,
+    cohabMembers: (doc.cohabMembers || []).map(mapId).filter(Boolean),
+    indexId: doc.indexId ? mapId(doc.indexId) : null,
+  };
+};
+
+/* ===========================================================================
  * 序列化 / 還原
  * =========================================================================== */
 
