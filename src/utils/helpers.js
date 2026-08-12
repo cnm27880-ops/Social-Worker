@@ -14,6 +14,56 @@ export const G1_LABELS = { married: '已婚', divorced: '離婚' };
 export const TEXT_DIRS = ['horizontal', 'vertical'];
 export const TEXT_DIR_LABELS = { horizontal: '橫式排版', vertical: '直式排版' };
 
+/* --- 關係線的兩種畫法 ---
+ * 家系圖沒有唯一的畫線規範：本站原本一律把婚姻線拉在兩人符號的正中央
+ * （中線式），而 McGoldrick 一系的教科書多半是從兩人符號的下緣各垂一小段、
+ * 在下方接成一條橫線，子女再從那條橫線往下（下緣式）。兩種都通行，但混在
+ * 同一張圖上會很明顯 —— 舊圖修補時尤其需要跟原圖對齊，不然新疊上去的線
+ * 跟底下那張圖就是兩套文法。 */
+export const LINE_STYLES = ['center', 'below'];
+export const LINE_STYLE_LABELS = { center: '中線式', below: '下緣式' };
+
+/** 下緣式：從符號下緣再往下這麼多，才拉那條橫線。 */
+export const MARRY_DROP = 22;
+
+/** 線寬選項。舊圖掃出來的線條通常比預設粗，對得起來才不會像貼上去的。 */
+export const LINE_WIDTHS = [1.5, 2, 2.5, 3];
+
+/**
+ * 婚姻線的幾何。
+ *
+ * 兩種畫法都回傳同一組欄位，讓「繪製」「命中判定」「關係品質記號的落點」
+ * 三件事共用同一份計算 —— 各自算的話，一切換畫法就會出現「線畫在這裡、
+ * 但要拖到那裡才貼得上」這種對不起來的狀況。
+ *
+ *   segs — 要畫的線段 [[x1, y1, x2, y2], ...]
+ *   hit  — 命中判定用的那一段（點選關係線、拖符號上去都用它）
+ *   mid  — 離婚／分居斜線的中心點
+ *   barY — 子女豎線該從哪個高度接下去
+ */
+export const marriageGeom = (a, b, style = 'center') => {
+  const [l, r] = a.x <= b.x ? [a, b] : [b, a];
+  if (style === 'below') {
+    const barY = Math.max(a.y, b.y) + R + MARRY_DROP;
+    return {
+      segs: [
+        [l.x, l.y + R, l.x, barY],
+        [l.x, barY, r.x, barY],
+        [r.x, r.y + R, r.x, barY],
+      ],
+      hit: [l.x, barY, r.x, barY],
+      mid: { x: (l.x + r.x) / 2, y: barY },
+      barY,
+    };
+  }
+  return {
+    segs: [[l.x + R, l.y, r.x - R, r.y]],
+    hit: [l.x + R, l.y, r.x - R, r.y],
+    mid: { x: (l.x + r.x) / 2, y: (l.y + r.y) / 2 },
+    barY: Math.max(l.y, r.y),
+  };
+};
+
 /* ===== 工具函數 ===== */
 
 // 支援 1,2 的性別解析器

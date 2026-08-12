@@ -17,11 +17,12 @@ const TIP = '把手邊已經畫好的家系圖（掃描或拍照）匯入當底�
  * 文件裡，所以兩者都能 Ctrl+Z 復原、都會跟著案件存檔與匯出。
  */
 const ImagePatchPanel = ({
-  bgImage, setBgImage,
+  bgImage, setBgImage, importBgImage,
   bgErase, setBgErase,
   eraseMode, setEraseMode,
   eraseWidth, setEraseWidth,
   bgAdjust, setBgAdjust,
+  mainFamily, setMainFamily,
 }) => {
   const fileRef = useRef(null);
   const [error, setError] = useState('');
@@ -34,8 +35,8 @@ const ImagePatchPanel = ({
     setError('');
     setBusy(true);
     try {
-      setBgImage(await loadBgImage(file));
-      setBgErase([]);             // 換底圖就不該留著上一張的擦除筆跡
+      // importBgImage 會順便判斷要不要收起主家系，並算成同一筆歷史
+      importBgImage(await loadBgImage(file));
     } catch (err) {
       setError(err.message || '匯入圖片失敗。');
     } finally {
@@ -104,6 +105,16 @@ const ImagePatchPanel = ({
                 : '已依原尺寸放上畫布，可按「定位」搬動與縮放'}
           </div>
 
+          {/* 主家系還在的話，那兩個預設符號就壓在舊圖上。匯入時已經動過手腳
+              （使用者自己建過家庭）才會走到這裡，所以只給按鈕、不自動收。 */}
+          {mainFamily && (
+            <div className="bg-origin bg-origin-warn">
+              畫布上還有自動排版的主家系，會壓在舊圖上。
+              <button className="btn-soft tone-dust btn-soft-xs" style={{ marginLeft: '6px' }}
+                      onClick={() => setMainFamily(false)}>隱藏主家系</button>
+            </div>
+          )}
+
           <div className="btn-row bg-tools">
             <button
               className={`btn-toggle ${bgAdjust ? 'on' : ''}`}
@@ -128,6 +139,7 @@ const ImagePatchPanel = ({
           {bgAdjust && (
             <div className="hint">
               拖曳底圖搬位置、拖四角縮放；方向鍵微調一格，Shift＋方向鍵一次 10 格，Esc 結束。
+              游標上的虛線圈是新符號的實際大小，可以拿來比對舊圖上的人物該縮到多大。
             </div>
           )}
 

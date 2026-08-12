@@ -917,6 +917,18 @@ input::placeholder, textarea::placeholder { color: var(--ink-faint); font-weight
   background: var(--wash-warm); border: 1px solid var(--line-soft); color: var(--ink-soft);
 }
 .bg-origin.is-self { background: var(--sage-w); border-color: var(--sage-bd); color: var(--sage-d); }
+.bg-origin.bg-origin-warn { background: var(--sand-w); border-color: var(--sand-bd); color: var(--sand-d); }
+.bg-origin .btn-soft-xs { vertical-align: baseline; }
+
+/* 舊圖修補模式下，主家系那三張卡收成這一張說明卡 */
+.section.main-family-off { background: var(--wash-warm); border-style: dashed; }
+
+/* 紀錄頁的模式提示：說明「為什麼自動敘述這麼短」，不是錯誤訊息 */
+.record-notice {
+  margin-bottom: 10px; padding: 8px 12px; border-radius: var(--r-xs);
+  font-size: 12px; line-height: 1.7;
+  background: var(--sand-w); border: 1px solid var(--sand-bd); color: var(--sand-d);
+}
 
 /* 紀錄產生器專用 UI */
 .record-layout { display: flex; flex-direction: column; gap: 16px; max-width: 1500px; width: 100%; margin: 0 auto; flex: 1 1 auto; min-height: 0; min-width: 0; }
