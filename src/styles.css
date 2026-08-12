@@ -712,6 +712,18 @@ body {
   letter-spacing: 0.3px;
 }
 
+/* 快捷鍵小抄：靠右填在標題列的空白處。用 --ink-soft 而不是更淡的
+   --ink-faint——後者在這張卡片的底色上量出來只有 4.06:1，10.5px 屬於小字，
+   AA 要求 4.5:1，不夠。--ink-soft 在同一個底色上是 6.3:1。 */
+.quick-key-legend {
+  margin-left: auto;
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--ink-soft);
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
+
 .quick-tool-title::before {
   content: ''; 
   width: 3px; 

@@ -837,7 +837,10 @@ const GenogramTab = ({
         <div className="quick-tool-panel">
           <div className="quick-tool-header">
             <span className="quick-tool-title">快捷列表</span>
-            <InfoTip text="案主 [Q]／同住 [W]／年齡 [E]：點按鈕（或按快捷鍵）進入模式，再點畫布上的人物套用；年齡模式下點人物就能直接輸入，填過的年齡會一直畫在節點上。下面的符號列可以直接拖到人物／婚姻線上放開套用，或按 [A] 進入選取、[S]／[D] 左右切換要套用的符號，選中後點畫布上的目標即可套用。要移除標記，把同一個符號再套一次就是取消。" />
+            <InfoTip text="點按鈕進入模式，再點畫布上的目標套用；年齡模式下點人物可直接輸入。下面的符號列可以拖到人物／婚姻線上放開，或先選取再點目標。要移除標記，把同一個符號再套一次就是取消。" />
+            {/* 快捷鍵小抄。按鈕上不再帶「[Q]」這種標示（三顆要並排在 276px 的
+                面板裡，帶標示會擠成兩行），改在標題列右邊這排淡灰小字補回來。 */}
+            <span className="quick-key-legend">Q案主 W同住 E年齡 A選取 SD左右</span>
             {/* 清除模式（mode === 'clear'）的邏輯完整保留在 onClick 分支與
                 clearNodeAttrs／clearLineAttr 裡，只是目前不給入口——擴充個體本來
                 就能雙擊刪除，原生節點的標記用「同一個符號再套一次」也能取消。
