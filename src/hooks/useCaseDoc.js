@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  INITIAL_DOC, toggleAttr, toggleLineAttr,
+  INITIAL_DOC, toggleAttr, toggleLineAttr, clearAttrs, clearLineAttr,
 } from '../utils/caseDoc';
 import {
   openLibrary, readCaseDoc, writeCaseDoc, writeIndex, touchCase,
@@ -185,6 +185,18 @@ export function useCaseDoc() {
     setDocRaw(prev => ({ ...prev, lineAttrs: toggleLineAttr(prev.lineAttrs, lineId, key) }));
   }, []);
 
+  /** 清掉一個節點身上的所有標記（「清除」模式點人物用） */
+  const clearNodeAttrsCb = useCallback((id) => {
+    pendingKey.current = `__clear_${id}`;
+    setDocRaw(prev => ({ ...prev, nodeAttrs: clearAttrs(prev.nodeAttrs, id) }));
+  }, []);
+
+  /** 清掉一條線的關係品質標記（「清除」模式點婚姻線用） */
+  const clearLineAttrCb = useCallback((lineId) => {
+    pendingKey.current = `__clearLine_${lineId}`;
+    setDocRaw(prev => ({ ...prev, lineAttrs: clearLineAttr(prev.lineAttrs, lineId) }));
+  }, []);
+
   /* =========================================================================
    * 案件管理
    *
@@ -339,6 +351,8 @@ export function useCaseDoc() {
     patchDoc,
     toggleNodeAttr,
     toggleLineAttr: toggleLineAttrCb,
+    clearNodeAttrs: clearNodeAttrsCb,
+    clearLineAttr: clearLineAttrCb,
 
 
     cases: index.list,

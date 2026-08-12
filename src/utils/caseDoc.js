@@ -114,6 +114,26 @@ export const toggleAttr = (nodeAttrs, id, attr) => {
 };
 
 /**
+ * 清掉單一節點身上的所有標記（死亡／身障／慢性病可以疊在同一個節點上，
+ * 要靠 toggleAttr 一個一個取消很麻煩）。「清除」模式用這個。
+ * 本來就沒有標記時回傳原物件，避免產生無意義的一筆復原紀錄。
+ */
+export const clearAttrs = (nodeAttrs, id) => {
+  if (!nodeAttrs[id]) return nodeAttrs;
+  const next = { ...nodeAttrs };
+  delete next[id];
+  return next;
+};
+
+/** 清掉一條線的關係品質標記。同樣沒有就原封不動回傳。 */
+export const clearLineAttr = (lineAttrs, lineId) => {
+  if (!(lineId in lineAttrs)) return lineAttrs;
+  const next = { ...lineAttrs };
+  delete next[lineId];
+  return next;
+};
+
+/**
  * 切換一條線的關係品質標記。跟 toggleAttr 不同的是這裡每條線只存單一值：
  * 拖同一個符號到同一條線上是取消，拖別的符號上去是直接取代。
  */

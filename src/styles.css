@@ -772,6 +772,9 @@ body {
 
 .quick-tool-btn.active.tone-blue   { background: var(--dust); }
 .quick-tool-btn.active.tone-amber  { background: var(--sand); }
+/* 年齡模式。少了這條，.active 只會把字改成白色而底色仍是 transparent，
+   按鈕一啟用就整顆消失在卡片底色裡。白字對 --teal 是 5.5:1，過 AA。 */
+.quick-tool-btn.active.tone-teal   { background: var(--teal); }
 
 /* 3. 狀態標籤（填滿、自動、虛線）：精緻 Tag 視覺，點擊開啟時發光浮起 */
 .quick-tool-row .status-badge {

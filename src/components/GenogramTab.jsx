@@ -34,7 +34,7 @@ const ecoRx = (text) => Math.max(35, (text?.length || 1) * 9 + 15);
 const ECO_RY = 28;
 
 const GenogramTab = ({
-  doc, setField, patchDoc, toggleNodeAttr, toggleLineAttr,
+  doc, setField, patchDoc, toggleNodeAttr, toggleLineAttr, clearNodeAttrs, clearLineAttr,
   cases, activeCaseId, activeCase, isSaved,
   switchCase, saveCase, renameCase, deleteCase, exportCase, importCase,
   snapshots, takeSnapshot, restoreSnapshot, removeSnapshot,
@@ -139,12 +139,16 @@ const GenogramTab = ({
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      /* 這裡全是單鍵快捷鍵，帶了 Ctrl／Cmd／Alt 的組合鍵不該落進來——
+       * 否則 Ctrl+A（全選）會順手把符號選取打開、Ctrl+S 會偷偷換掉選中的符號。 */
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
       const key = e.key.toLowerCase();
       const quickActive = mode !== null && QUICK_KEYS.includes(mode);
       /* A：開／關快捷列表選取狀態，從上次選到的位置繼續。
        * S／D：只有選取狀態開著時才移動焦點——沒開著按了也不該有反應，
        * 否則使用者搞不清楚現在到底選中了什麼。
-       * W／E：案主／同住模式切換，跟快捷列表選取是各自獨立的開關。 */
+       * W／E／R／Q：案主／同住／年齡／清除四個畫布模式。它們共用同一個
+       *   mode 狀態，所以天然互斥，不會出現「同時是年齡又是清除」。 */
       if (key === 'a') setMode(quickActive ? null : QUICK_KEYS[quickIdx]);
       if (key === 's' && quickActive) {
         const next = (quickIdx - 1 + QUICK_KEYS.length) % QUICK_KEYS.length;
@@ -156,6 +160,10 @@ const GenogramTab = ({
       }
       if (key === 'w') setMode(p => p === 'index' ? null : 'index');
       if (key === 'e') setMode(p => p === 'cohab' ? null : 'cohab');
+      /* 進入年齡模式順便把年齡打開——要輸入年齡卻看不到年齡是沒有意義的。
+       * 離開模式不會關掉顯示，年齡填完仍然留在畫布上。 */
+      if (key === 'r') setMode(p => { if (p !== 'age') setShowAgeMode(true); return p === 'age' ? null : 'age'; });
+      if (key === 'q') setMode(p => p === 'clear' ? null : 'clear');
       if (e.key === 'Enter' && mode === 'cohab' && cohabMode === 'poly' && draftPoly.length >= 3) {
         setPolygons(prev => [...prev, { id: 'pg_' + Date.now(), pts: draftPoly }]); setDraftPoly([]); setMousePos(null);
       }
@@ -620,6 +628,8 @@ const GenogramTab = ({
     if (nodeDragMoved.current) { nodeDragMoved.current = false; return; }
     if (mode === 'index') { setIndexId(p => p === id ? null : id); return; }
     if (mode === 'cohab' && cohabMode === 'auto') { setCohabMembers(p => p.includes(id) ? p.filter(m => m !== id) : [...p, id]); return; }
+    if (mode === 'age') { setEditingAgeId(id); return; }
+    if (mode === 'clear') { clearNodeAttrs(id); return; }
     // 快捷列表選中的符號若是「貼在人物身上」這一類，點節點即套用；
     // 關係線／獨立個體這兩類不在這裡處理（見 <svg> 的 onClick，這裡的
     // e.stopPropagation() 讓事件不會冒泡上去，剛好避免點到節點時誤觸那邊）。
@@ -829,16 +839,16 @@ const GenogramTab = ({
         <div className="quick-tool-panel">
           <div className="quick-tool-header">
             <span className="quick-tool-title">快捷列表</span>
-            <InfoTip text="案主 [W]／同住 [E]：點按鈕（或按快捷鍵）進入模式，再點畫布上的人物套用。下面的符號列可以直接拖到人物／婚姻線上放開套用，或按 [A] 進入選取、[S]／[D] 左右切換要套用的符號，選中後點畫布上的目標即可套用。" />
-            {/* 年齡是「畫布上要顯示什麼」的開關，跟這一區的標記模式同一類。
-                做成有凹凸感的按鈕：關閉時浮起、開啟時壓下去並填色，
-                原本的滑軌開關在暖色卡片上跟背景太接近，看不出開關狀態。 */}
+            <InfoTip text="案主 [W]／同住 [E]／年齡 [R]：點按鈕（或按快捷鍵）進入模式，再點畫布上的人物套用；年齡模式下點人物就能直接輸入。下面的符號列可以直接拖到人物／婚姻線上放開套用，或按 [A] 進入選取、[S]／[D] 左右切換要套用的符號，選中後點畫布上的目標即可套用。要移除標記有兩個方法：把同一個符號再套一次即取消，或用「清除 [Q]」模式點目標，一次清掉那個人物／婚姻線身上的所有標記。" />
+            {/* 清除模式：進入後點畫布上的人物或婚姻線，就清掉那個目標身上的
+                所有標記。原本這個位置是「年齡」，但年齡其實是個畫布模式而不是
+                顯示開關，已經搬到下面跟案主／同住同一列。 */}
             <button
-              className={`btn-emboss ${showAgeMode ? 'on' : ''}`}
-              onClick={() => setShowAgeMode(!showAgeMode)}
-              aria-pressed={showAgeMode}
-              title="切換是否在節點上顯示年齡"
-            >年齡</button>
+              className={`btn-emboss ${mode === 'clear' ? 'on' : ''}`}
+              onClick={() => setMode(m => m === 'clear' ? null : 'clear')}
+              aria-pressed={mode === 'clear'}
+              title="清除 [Q]：點人物或婚姻線，清掉該目標身上的所有標記"
+            >清除 [Q]</button>
           </div>
 
           <div className="quick-tool-rows">
@@ -872,6 +882,21 @@ const GenogramTab = ({
                       onClick={() => setCohabSolid(!cohabSolid)}
                       ref={el => wheelRef(el, [false, true], cohabSolid, setCohabSolid)}>
                   {cohabSolid ? '實線' : '虛線'}
+                </span>
+              </div>
+
+              {/* 年齡跟案主／同住是同一類的畫布模式：進入模式後點人物即輸入。
+                  旁邊的標籤管「畫布上要不要秀年齡」——填完年齡想收起來時用，
+                  跟模式本身是兩回事（進入模式會自動打開顯示）。 */}
+              <div className="quick-tool-row">
+                <button className={`quick-tool-btn tone-teal ${mode === 'age' ? 'active' : ''}`}
+                        onClick={() => setMode(m => { if (m !== 'age') setShowAgeMode(true); return m === 'age' ? null : 'age'; })}>
+                  年齡 [R]
+                </button>
+                <span className="status-badge" data-status={showAgeMode ? 'solid' : 'dashed'}
+                      onClick={() => setShowAgeMode(!showAgeMode)}
+                      ref={el => wheelRef(el, [false, true], showAgeMode, setShowAgeMode)}>
+                  {showAgeMode ? '顯示' : '隱藏'}
                 </span>
               </div>
             </div>
@@ -1079,6 +1104,13 @@ const GenogramTab = ({
              onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp} onPointerCancel={onUp}
              onClick={(e) => {
                setSelectedTextId(null); setSelectedPolyId(null);
+               /* 清除模式點在婚姻線上：清掉那條線的關係品質標記。點在人物上
+                  不會走到這裡（節點的 onClick 已經 stopPropagation 並自行處理）。 */
+               if (mode === 'clear') {
+                 const lineId = hitTestLine(svgPt(e));
+                 if (lineId) clearLineAttr(lineId);
+                 return;
+               }
                // 快捷列表選中「關係線」或「獨立個體」這兩類符號時，點畫布即套用
                // ——點在節點上不會走到這裡（onClick(e,id) 已經 stopPropagation）。
                const sym = mode && SYMBOL_MAP[mode];
@@ -1207,13 +1239,13 @@ const GenogramTab = ({
                  onPointerDown={e => onDown(e, nd.id)} onClick={e => onClick(e, nd.id)}
                  onDoubleClick={e => {
                    e.stopPropagation();
-                   if(showAgeMode) {
-                     setEditingAgeId(nd.id);
-                   } else if(nd.isFree) {
-                     if(window.confirm('確定要刪除這個擴充個體嗎？(相關連線也會一併刪除)')) {
-                       setCustomLinks(prev => prev.filter(l => l.sourceId !== nd.id && l.targetId !== nd.id));
-                       setFreeNodes(prev => prev.filter(fn => fn.id !== nd.id));
-                     }
+                   /* 雙擊固定代表「刪除擴充個體」，不再看年齡臉色——年齡已經是
+                      獨立模式（單擊輸入），原本「年齡開著就不能雙擊刪除」的衝突
+                      跟著消失。年齡模式下雙擊等於連點兩次，交給單擊處理就好。 */
+                   if (mode === 'age' || !nd.isFree) return;
+                   if (window.confirm('確定要刪除這個擴充個體嗎？(相關連線也會一併刪除)')) {
+                     setCustomLinks(prev => prev.filter(l => l.sourceId !== nd.id && l.targetId !== nd.id));
+                     setFreeNodes(prev => prev.filter(fn => fn.id !== nd.id));
                    }
                  }}>
                 {isDouble && (nd.gender === 'M'
