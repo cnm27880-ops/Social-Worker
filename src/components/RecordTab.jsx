@@ -11,6 +11,14 @@ const DEFAULT_TAGS = {
   disability: ['無身心障礙手冊', '有身心障礙手冊']
 };
 
+/* 教育程度接不接「學歷」兩個字：「不識字」「自學識字」本身已是完整敘述，
+   「不詳」要寫成「學歷不詳」才通順，其餘一律加後綴（國小學歷、大學以上學歷）。 */
+const eduText = (edu) => {
+  if (['不識字', '自學識字'].includes(edu)) return edu;
+  if (edu === '不詳') return '學歷不詳';
+  return `${edu}學歷`;
+};
+
 const getRankStr = (rank, total) => {
   if (total === 1 || rank === 1) return '長';
   if (rank === 2) return '次';
@@ -23,7 +31,7 @@ const RecordTab = ({
   gen2Cfg, indexId, g1Status, cohabMembers, deceasedIds, disabledIds = [], customLinks,
   /* 案主基本資料與家屬補充資訊住在案件文件裡（見 caseDoc.js），不是這裡的
      本地狀態——這樣「重置」清得到、Ctrl+Z 救得回、切換案件不會殘留上一份。 */
-  subjInfo, setSubjInfo, famExtras, setFamExtras,
+  subjInfo, setSubjInfo, famExtras, setFamExtras, recordEdit, setRecordEdit,
 }) => {
   /* --- 自訂標籤狀態 --- */
   const [tagOptions, setTagOptions] = useState(() => {
@@ -65,14 +73,17 @@ const RecordTab = ({
   const generatedText = useMemo(() => {
     let txt = `案主為${subjInfo.identity}`;
     if (subjInfo.job) txt += `，${subjInfo.job}`;
-    if (subjInfo.edu) txt += `，${subjInfo.edu}${['不識字', '自學識字'].includes(subjInfo.edu) ? '' : '學歷'}`;
+    if (subjInfo.edu) txt += `，${eduText(subjInfo.edu)}`;
     if (subjInfo.lang) txt += `，${subjInfo.lang}溝通`;
     if (subjInfo.religion) txt += `，${subjInfo.religion}信仰`;
     if (subjInfo.disability) txt += `，${subjInfo.disability}`;
     // 案主是第二代時，婚姻狀態要看案主自己的，不是第一代（案父母）的
     txt += `，${isGen2Index ? (G2_LABELS[gen2Cfg[selfIdx].partner] || '未婚') : (g1Status === 'married' ? '已婚' : '離婚')}`;
 
-    let cohabText = '獨居';
+    /* 沒指定案主就不知道是誰跟誰同住，整句略過。原本無條件預設「獨居」——
+       畫布上明明圈了同住範圍，只因為忘了指定案主，紀錄就斷言獨居，
+       而且是可以直接複製出去的錯誤敘述。 */
+    let cohabText = indexId ? '獨居' : null;
     if (indexId && cohabMembers.includes(indexId)) {
       const others = cohabMembers.filter(id => id !== indexId).map(id => {
         if (id === 'fa') return '案父';
@@ -96,9 +107,10 @@ const RecordTab = ({
       }).filter(Boolean);
       if (others.length > 0) cohabText = `與${others.join('、')}同住`;
     }
-    txt += `，${cohabText}。`;
+    txt += cohabText ? `，${cohabText}。` : `。`;
+    // 上一句已經用「。」收尾，沒有備註時直接換行——原本無條件補「；」會寫出「。；」
     if (subjInfo.note) txt += `${subjInfo.note}；\n`;
-    else txt += `；\n`;
+    else txt += `\n`;
 
     const countKids = (list) => {
       const m = list.filter(g => g === 'M').length;
@@ -129,7 +141,7 @@ const RecordTab = ({
       const title = titleOf(i);
       const isDeceased = deceasedIds.includes(`c${i}`);
       if (isDeceased) {
-        txt += `${title}已歿；`;
+        txt += `${title}已歿；\n`;   // 其餘分支都是「；\n」，這裡漏了換行會跟下一位擠成同一行
         return;
       }
       const isDisabled = disabledIds.includes(`c${i}`);
@@ -198,8 +210,25 @@ const RecordTab = ({
     return txt;
   }, [subjInfo, gen2Cfg, g1Status, cohabMembers, deceasedIds, disabledIds, famExtras, indexId, customLinks]);
 
+  /* 預覽可以直接改。recordEdit 非空＝使用者動過手，之後家系圖再變動也不會
+     覆蓋掉他寫的字（不然改一個節點就把整段心血洗掉）；按「還原」清空它，
+     預覽就回到跟著家系圖即時重算。複製與匯出一律拿眼前看到的這份。 */
+  const isManual = recordEdit !== '';
+  const displayText = isManual ? recordEdit : generatedText;
+
   const handleFamExtra = (idx, field, val) => {
     setFamExtras(prev => ({ ...prev, [idx]: { ...(prev[idx] || {}), [field]: val } }));
+  };
+
+  /* 主要聯絡人一份案件只會有一位：勾別人時先把其他人的清掉，
+     再勾同一位就是取消（維持 checkbox 的直覺，不必另外做「無」的選項）。 */
+  const setPrimaryContact = (idx, checked) => {
+    setFamExtras(prev => {
+      const next = {};
+      for (const [k, v] of Object.entries(prev)) next[k] = { ...v, isPrimary: false };
+      if (checked) next[idx] = { ...(next[idx] || {}), isPrimary: true };
+      return next;
+    });
   };
 
   const exportBackup = () => {
@@ -251,13 +280,13 @@ const RecordTab = ({
 
   const copyRecord = async () => {
     try {
-      await navigator.clipboard.writeText(generatedText);
+      await navigator.clipboard.writeText(displayText);
       flashCopyState('done');
       return;
     } catch {}
     try {
       const ta = document.createElement('textarea');
-      ta.value = generatedText;
+      ta.value = displayText;
       ta.style.cssText = 'position:fixed;top:-9999px;opacity:0';
       document.body.appendChild(ta);
       ta.select();
@@ -285,27 +314,27 @@ const RecordTab = ({
 
         <div className="section section-inline">
           <label>身分別</label>
-          <BadgeGroup options={tagOptions.identity} value={subjInfo.identity} onChange={v => setSubjInfo({...subjInfo, identity: v})} isEditing={isEditingTags} onAdd={t => handleAddTag('identity', t)} onRemove={t => handleRemoveTag('identity', t)} />
+          <BadgeGroup label="身分別" options={tagOptions.identity} value={subjInfo.identity} onChange={v => setSubjInfo({...subjInfo, identity: v})} isEditing={isEditingTags} onAdd={t => handleAddTag('identity', t)} onRemove={t => handleRemoveTag('identity', t)} />
         </div>
 
         <div className="section section-inline">
           <label>教育程度</label>
-          <BadgeGroup options={tagOptions.edu} value={subjInfo.edu} onChange={v => setSubjInfo({...subjInfo, edu: v})} isEditing={isEditingTags} onAdd={t => handleAddTag('edu', t)} onRemove={t => handleRemoveTag('edu', t)} />
+          <BadgeGroup label="教育程度" options={tagOptions.edu} value={subjInfo.edu} onChange={v => setSubjInfo({...subjInfo, edu: v})} isEditing={isEditingTags} onAdd={t => handleAddTag('edu', t)} onRemove={t => handleRemoveTag('edu', t)} />
         </div>
 
         <div className="section section-inline">
           <label>溝通語言</label>
-          <BadgeGroup options={tagOptions.lang} value={subjInfo.lang} onChange={v => setSubjInfo({...subjInfo, lang: v})} isEditing={isEditingTags} onAdd={t => handleAddTag('lang', t)} onRemove={t => handleRemoveTag('lang', t)} />
+          <BadgeGroup label="溝通語言" options={tagOptions.lang} value={subjInfo.lang} onChange={v => setSubjInfo({...subjInfo, lang: v})} isEditing={isEditingTags} onAdd={t => handleAddTag('lang', t)} onRemove={t => handleRemoveTag('lang', t)} />
         </div>
 
         <div className="section section-inline">
           <label>宗教信仰</label>
-          <BadgeGroup options={tagOptions.religion} value={subjInfo.religion} onChange={v => setSubjInfo({...subjInfo, religion: v})} isEditing={isEditingTags} onAdd={t => handleAddTag('religion', t)} onRemove={t => handleRemoveTag('religion', t)} />
+          <BadgeGroup label="宗教信仰" options={tagOptions.religion} value={subjInfo.religion} onChange={v => setSubjInfo({...subjInfo, religion: v})} isEditing={isEditingTags} onAdd={t => handleAddTag('religion', t)} onRemove={t => handleRemoveTag('religion', t)} />
         </div>
 
         <div className="section section-inline">
           <label>身障證明</label>
-          <BadgeGroup options={tagOptions.disability} value={subjInfo.disability} onChange={v => setSubjInfo({...subjInfo, disability: v})} isEditing={isEditingTags} onAdd={t => handleAddTag('disability', t)} onRemove={t => handleRemoveTag('disability', t)} />
+          <BadgeGroup label="身心障礙證明" options={tagOptions.disability} value={subjInfo.disability} onChange={v => setSubjInfo({...subjInfo, disability: v})} isEditing={isEditingTags} onAdd={t => handleAddTag('disability', t)} onRemove={t => handleRemoveTag('disability', t)} />
         </div>
 
         <div className="section">
@@ -336,7 +365,7 @@ const RecordTab = ({
               <div className="fam-title">
                 <span>{title} {isDeceased && <span className="tag-warn">(已歿)</span>}</span>
                 <label className="primary-contact">
-                  <input type="checkbox" tabIndex={-1} checked={ext.isPrimary} onChange={e => handleFamExtra(i, 'isPrimary', e.target.checked)} disabled={isDeceased} /> 主要聯絡人
+                  <input type="checkbox" tabIndex={-1} checked={ext.isPrimary} onChange={e => setPrimaryContact(i, e.target.checked)} disabled={isDeceased} /> 主要聯絡人
                 </label>
               </div>
 
@@ -388,7 +417,7 @@ const RecordTab = ({
                   <div className="fam-title">
                     <span>{title} {isDeceased && <span className="tag-warn">(已歿)</span>}</span>
                     <label className="primary-contact">
-                      <input type="checkbox" tabIndex={-1} checked={ext.isPrimary || false} onChange={e => handleFamExtra(kidKey, 'isPrimary', e.target.checked)} disabled={isDeceased} /> 主要聯絡人
+                      <input type="checkbox" tabIndex={-1} checked={ext.isPrimary || false} onChange={e => setPrimaryContact(kidKey, e.target.checked)} disabled={isDeceased} /> 主要聯絡人
                     </label>
                   </div>
                   {!isDeceased && (
@@ -440,8 +469,19 @@ const RecordTab = ({
 
       {/* 右側即時預覽區 */}
       <div className="record-preview">
-        <h2 className="record-preview-title">✨ 個案紀錄即時預覽</h2>
-        <textarea value={generatedText} readOnly style={{ minHeight: '250px' }} />
+        <h2 className="record-preview-title">
+          <span>✨ 個案紀錄{isManual ? '（已手動修改）' : '即時預覽'}</span>
+          {isManual && (
+            <button type="button" className="btn-restore" onClick={() => setRecordEdit('')}
+                    title="捨棄手動修改，回到跟著家系圖即時重算">↻ 還原成自動產生</button>
+          )}
+        </h2>
+        <textarea
+          value={displayText}
+          onChange={e => setRecordEdit(e.target.value)}
+          style={{ minHeight: '250px' }}
+          aria-label="個案紀錄內容，可直接編輯"
+        />
         <button onClick={copyRecord} className={`btn-copy ${copyState !== 'idle' ? `is-${copyState}` : ''}`}
                 aria-live="polite">
           {copyState === 'done' ? '✅ 已複製到剪貼簿'

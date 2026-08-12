@@ -162,6 +162,8 @@ const App = () => {
           setSubjInfo={setField('subjInfo')}
           famExtras={doc.famExtras}
           setFamExtras={setField('famExtras')}
+          recordEdit={doc.recordEdit}
+          setRecordEdit={setField('recordEdit')}
         />
       </div>
     </div>
