@@ -66,6 +66,17 @@ export const INITIAL_DOC = {
    * 而不是在上面塗白色 —— 塗白在去背 PNG 匯出時會留下白色筆跡。 */
   bgErase: [],
 
+  /* --- 個案紀錄產生器的填寫內容 ---
+   * 這兩塊原本是 RecordTab 自己的 useState，不在文件裡，於是「重置」碰不到
+   * 它們、Ctrl+Z 管不到、切換案件時上一份的內容還會留在欄位上。搬進文件之後
+   * 這三件事一次解決，也會跟著案件一起存檔與匯出。
+   * famExtras 的 key 是家屬代號（第二代用索引，第三代用 'c0k1' 這類字串）。 */
+  subjInfo: {
+    identity: '一般民眾', job: '', edu: '', lang: '',
+    religion: '', disability: '無身心障礙手冊', note: '',
+  },
+  famExtras: {},
+
   /* --- 影響輸出結果的繪圖選項 --- */
   cohabMode: 'auto',
   cohabSolid: false,

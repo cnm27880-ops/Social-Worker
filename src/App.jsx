@@ -158,6 +158,10 @@ const App = () => {
           deceasedIds={deceasedIds}
           disabledIds={disabledIds}
           customLinks={doc.customLinks}
+          subjInfo={doc.subjInfo}
+          setSubjInfo={setField('subjInfo')}
+          famExtras={doc.famExtras}
+          setFamExtras={setField('famExtras')}
         />
       </div>
     </div>

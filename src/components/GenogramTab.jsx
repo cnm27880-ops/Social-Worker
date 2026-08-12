@@ -19,6 +19,7 @@ import {
   trianglePath, triangleCrossLines,
   zigzagPoints, gapSegments, doubleLineSegments, hatchSegments, distToSegment, DISTANT_DASH,
 } from '../utils/symbols';
+import { INITIAL_DOC } from '../utils/caseDoc';
 
 /* 獨立個體（懷孕／流產／死產）用的三角形半徑：跟人物節點（正方形／圓形）
  * 一樣大，畫布上才不會顯得特別小。 */
@@ -821,14 +822,17 @@ const GenogramTab = ({
                 </ul>
               )}
             </div>
-            {/* 重置走 patchDoc，整批算一筆歷史，所以誤按可以用復原救回來 */}
+            {/* 重置走 patchDoc，整批算一筆歷史，所以誤按可以用復原救回來。
+                連個案紀錄的填寫內容一起清掉：這兩頁是同一份個案的兩種呈現，
+                只清畫布會讓下一位個案沿用到上一位的身分別與家屬備註。 */}
             <button className="btn-action btn-danger" onClick={() => {
-              if (!window.confirm('確定重置？重置後可用「復原」還原。')) return;
+              if (!window.confirm('確定重置？家系圖與個案紀錄都會清空，可用「復原」還原。')) return;
               patchDoc({
                 gen2Str: '', gen2Cfg: [], indexId: null, cohabMembers: [], nodeAttrs: {}, lineAttrs: {},
                 cohabSolid: false, polygons: [], texts: [], ages: {},
                 freeNodes: [], customLinks: [], positions: {}, ipStyle: 'filled',
                 bgImage: null, bgErase: [],
+                subjInfo: INITIAL_DOC.subjInfo, famExtras: {},
               }, '__reset');
             }}>重置</button>
           </div>

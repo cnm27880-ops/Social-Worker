@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import BadgeGroup from './BadgeGroup';
 import InfoTip from './InfoTip';
 import { getGen2Title, getIndexGen2Idx, formatKidsText, G2_LABELS, G1_LABELS } from '../utils/helpers';
@@ -20,7 +20,10 @@ const getRankStr = (rank, total) => {
 };
 
 const RecordTab = ({
-  gen2Cfg, indexId, g1Status, cohabMembers, deceasedIds, disabledIds = [], customLinks
+  gen2Cfg, indexId, g1Status, cohabMembers, deceasedIds, disabledIds = [], customLinks,
+  /* 案主基本資料與家屬補充資訊住在案件文件裡（見 caseDoc.js），不是這裡的
+     本地狀態——這樣「重置」清得到、Ctrl+Z 救得回、切換案件不會殘留上一份。 */
+  subjInfo, setSubjInfo, famExtras, setFamExtras,
 }) => {
   /* --- 自訂標籤狀態 --- */
   const [tagOptions, setTagOptions] = useState(() => {
@@ -37,11 +40,8 @@ const RecordTab = ({
     setTagOptions(p => ({ ...p, [category]: p[category].filter(t => t !== tagToRemove) }));
   };
 
-  /* --- 個案紀錄產生器專屬狀態 --- */
-  const [subjInfo, setSubjInfo] = useState({
-    identity: '一般民眾', job: '', edu: '', lang: '', religion: '', disability: '無身心障礙手冊', note: ''
-  });
-  const [famExtras, setFamExtras] = useState({}); // 儲存家屬的補充資訊 { index: { location, job, isPrimary, note } }
+  /* --- 個案紀錄產生器專屬狀態 ---
+     自由保存區是跨案件共用的常用短語，所以留在 localStorage，不進案件文件。 */
   const [savedNotes, setSavedNotes] = useState(() => {
     try { const saved = localStorage.getItem('genogram-savedNotes'); if (saved) return JSON.parse(saved); } catch {}
     return [''];
@@ -235,10 +235,38 @@ const RecordTab = ({
     e.target.value = '';
   };
 
-  const copyRecord = () => {
-    navigator.clipboard.writeText(generatedText).then(() => {
-      alert('✅ 個案紀錄已成功複製！');
-    });
+  /* 複製結果直接顯示在按鈕上，兩秒後復原。原本用 alert()——那是個必須用滑鼠
+     按掉的模態框，連續作業時每複製一次就被打斷一次。
+     writeText 在非 HTTPS 或使用者拒絕權限時會 reject，退回選取 textarea 的
+     老方法（execCommand），兩條路都失敗才顯示錯誤。 */
+  const [copyState, setCopyState] = useState('idle');
+  const copyTimer = useRef(null);
+  useEffect(() => () => clearTimeout(copyTimer.current), []);
+
+  const flashCopyState = (state) => {
+    setCopyState(state);
+    clearTimeout(copyTimer.current);
+    copyTimer.current = setTimeout(() => setCopyState('idle'), 2000);
+  };
+
+  const copyRecord = async () => {
+    try {
+      await navigator.clipboard.writeText(generatedText);
+      flashCopyState('done');
+      return;
+    } catch {}
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = generatedText;
+      ta.style.cssText = 'position:fixed;top:-9999px;opacity:0';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      flashCopyState(ok ? 'done' : 'fail');
+    } catch {
+      flashCopyState('fail');
+    }
   };
 
   return (
@@ -308,7 +336,7 @@ const RecordTab = ({
               <div className="fam-title">
                 <span>{title} {isDeceased && <span className="tag-warn">(已歿)</span>}</span>
                 <label className="primary-contact">
-                  <input type="checkbox" checked={ext.isPrimary} onChange={e => handleFamExtra(i, 'isPrimary', e.target.checked)} disabled={isDeceased} /> 主要聯絡人
+                  <input type="checkbox" tabIndex={-1} checked={ext.isPrimary} onChange={e => handleFamExtra(i, 'isPrimary', e.target.checked)} disabled={isDeceased} /> 主要聯絡人
                 </label>
               </div>
 
@@ -360,7 +388,7 @@ const RecordTab = ({
                   <div className="fam-title">
                     <span>{title} {isDeceased && <span className="tag-warn">(已歿)</span>}</span>
                     <label className="primary-contact">
-                      <input type="checkbox" checked={ext.isPrimary || false} onChange={e => handleFamExtra(kidKey, 'isPrimary', e.target.checked)} disabled={isDeceased} /> 主要聯絡人
+                      <input type="checkbox" tabIndex={-1} checked={ext.isPrimary || false} onChange={e => handleFamExtra(kidKey, 'isPrimary', e.target.checked)} disabled={isDeceased} /> 主要聯絡人
                     </label>
                   </div>
                   {!isDeceased && (
@@ -414,8 +442,11 @@ const RecordTab = ({
       <div className="record-preview">
         <h2 className="record-preview-title">✨ 個案紀錄即時預覽</h2>
         <textarea value={generatedText} readOnly style={{ minHeight: '250px' }} />
-        <button onClick={copyRecord} className="btn-copy">
-          📋 一鍵複製至剪貼簿
+        <button onClick={copyRecord} className={`btn-copy ${copyState !== 'idle' ? `is-${copyState}` : ''}`}
+                aria-live="polite">
+          {copyState === 'done' ? '✅ 已複製到剪貼簿'
+            : copyState === 'fail' ? '⚠️ 複製失敗，請手動選取上方文字'
+            : '📋 一鍵複製至剪貼簿'}
         </button>
 
         {/* 自由保存區 */}

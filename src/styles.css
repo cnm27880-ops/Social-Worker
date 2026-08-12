@@ -949,6 +949,12 @@ input::placeholder, textarea::placeholder { color: var(--ink-faint); font-weight
 }
 .btn-copy:hover { background: var(--sage-d); }
 
+/* 複製結果就顯示在按鈕本身，兩秒後復原——原本跳 alert()，那是個非得用滑鼠
+   按掉的模態框，連續作業時每複製一次就被打斷一次。成功維持原本的 sage 綠
+   （只是壓深一階表示剛按過），失敗才換成警示色。 */
+.btn-copy.is-done { background: var(--sage-d); }
+.btn-copy.is-fail { background: var(--clay); }
+
 .free-note-box { margin-top: 20px; padding: 16px; background: var(--wash); border: 1px solid var(--line); border-radius: var(--r-card); }
 .free-note-title { margin: 0 0 12px; font-size: 16px; color: var(--ink); }
 .free-note-input {
