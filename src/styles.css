@@ -697,8 +697,14 @@ body {
   margin-bottom: 8px;
 }
 
-.quick-tool-header .btn-emboss { 
-  margin-left: auto; 
+.quick-tool-header .btn-emboss {
+  margin-left: auto;
+}
+
+/* 標題列右側的模式組（年齡）。跟下面那組共用 .quick-tool-row 的卡片外觀，
+   看起來才是同一類東西，只是因為寬度不夠而擺在標題列。 */
+.quick-tool-header .quick-tool-row {
+  margin-left: auto;
 }
 
 .quick-tool-title {

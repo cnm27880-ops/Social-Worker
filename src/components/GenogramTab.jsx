@@ -147,8 +147,8 @@ const GenogramTab = ({
       /* A：開／關快捷列表選取狀態，從上次選到的位置繼續。
        * S／D：只有選取狀態開著時才移動焦點——沒開著按了也不該有反應，
        * 否則使用者搞不清楚現在到底選中了什麼。
-       * W／E／R／Q：案主／同住／年齡／清除四個畫布模式。它們共用同一個
-       *   mode 狀態，所以天然互斥，不會出現「同時是年齡又是清除」。 */
+       * Q／W／E：案主／同住／年齡三個畫布模式，共用同一個 mode 狀態，
+       *   所以天然互斥。清除模式（'clear'）目前沒有入口，見面板那段註解。 */
       if (key === 'a') setMode(quickActive ? null : QUICK_KEYS[quickIdx]);
       if (key === 's' && quickActive) {
         const next = (quickIdx - 1 + QUICK_KEYS.length) % QUICK_KEYS.length;
@@ -158,12 +158,11 @@ const GenogramTab = ({
         const next = (quickIdx + 1) % QUICK_KEYS.length;
         setQuickIdx(next); setMode(QUICK_KEYS[next]);
       }
-      if (key === 'w') setMode(p => p === 'index' ? null : 'index');
-      if (key === 'e') setMode(p => p === 'cohab' ? null : 'cohab');
+      if (key === 'q') setMode(p => p === 'index' ? null : 'index');
+      if (key === 'w') setMode(p => p === 'cohab' ? null : 'cohab');
       /* 進入年齡模式順便把年齡打開——要輸入年齡卻看不到年齡是沒有意義的。
        * 離開模式不會關掉顯示，年齡填完仍然留在畫布上。 */
-      if (key === 'r') setMode(p => { if (p !== 'age') setShowAgeMode(true); return p === 'age' ? null : 'age'; });
-      if (key === 'q') setMode(p => p === 'clear' ? null : 'clear');
+      if (key === 'e') setMode(p => { if (p !== 'age') setShowAgeMode(true); return p === 'age' ? null : 'age'; });
       if (e.key === 'Enter' && mode === 'cohab' && cohabMode === 'poly' && draftPoly.length >= 3) {
         setPolygons(prev => [...prev, { id: 'pg_' + Date.now(), pts: draftPoly }]); setDraftPoly([]); setMousePos(null);
       }
@@ -839,27 +838,40 @@ const GenogramTab = ({
         <div className="quick-tool-panel">
           <div className="quick-tool-header">
             <span className="quick-tool-title">快捷列表</span>
-            <InfoTip text="案主 [W]／同住 [E]／年齡 [R]：點按鈕（或按快捷鍵）進入模式，再點畫布上的人物套用；年齡模式下點人物就能直接輸入。下面的符號列可以直接拖到人物／婚姻線上放開套用，或按 [A] 進入選取、[S]／[D] 左右切換要套用的符號，選中後點畫布上的目標即可套用。要移除標記有兩個方法：把同一個符號再套一次即取消，或用「清除 [Q]」模式點目標，一次清掉那個人物／婚姻線身上的所有標記。" />
-            {/* 清除模式：進入後點畫布上的人物或婚姻線，就清掉那個目標身上的
-                所有標記。原本這個位置是「年齡」，但年齡其實是個畫布模式而不是
-                顯示開關，已經搬到下面跟案主／同住同一列。 */}
-            <button
-              className={`btn-emboss ${mode === 'clear' ? 'on' : ''}`}
-              onClick={() => setMode(m => m === 'clear' ? null : 'clear')}
-              aria-pressed={mode === 'clear'}
-              title="清除 [Q]：點人物或婚姻線，清掉該目標身上的所有標記"
-            >清除 [Q]</button>
+            <InfoTip text="案主 [Q]／同住 [W]／年齡 [E]：點按鈕（或按快捷鍵）進入模式，再點畫布上的人物套用；年齡模式下點人物就能直接輸入，右邊的標籤控制年齡要不要顯示在畫布上。下面的符號列可以直接拖到人物／婚姻線上放開套用，或按 [A] 進入選取、[S]／[D] 左右切換要套用的符號，選中後點畫布上的目標即可套用。要移除標記，把同一個符號再套一次就是取消。" />
+            {/* 年齡跟案主／同住是同一類的畫布模式（進入後點人物即輸入），
+                但它擺在標題列而不是下面那一組——面板內容寬只有 276px，三顆
+                模式按鈕加四個狀態標籤要 383px，硬排在同一組一定會擠成兩行。
+                標題列本來就空著 200px，剛好收得下，也是年齡原本待的位置。
+                右邊的標籤管「畫布上要不要秀年齡」，跟模式本身是兩回事
+                （進入模式會自動打開顯示）。
+
+                順帶一提：清除模式（mode === 'clear'）的邏輯完整保留在 onClick
+                分支與 clearNodeAttrs／clearLineAttr 裡，只是目前不給入口。
+                要放回來就在這裡再加一顆按鈕，並在快捷鍵那段補一行
+                （Q／W／E 已被案主／同住／年齡用掉，得另挑一個鍵）。 */}
+            <div className="quick-tool-row">
+              <button className={`quick-tool-btn tone-teal ${mode === 'age' ? 'active' : ''}`}
+                      onClick={() => setMode(m => { if (m !== 'age') setShowAgeMode(true); return m === 'age' ? null : 'age'; })}>
+                年齡 [E]
+              </button>
+              <span className="status-badge" data-status={showAgeMode ? 'solid' : 'dashed'}
+                    onClick={() => setShowAgeMode(!showAgeMode)}
+                    ref={el => wheelRef(el, [false, true], showAgeMode, setShowAgeMode)}>
+                {showAgeMode ? '顯示' : '隱藏'}
+              </span>
+            </div>
           </div>
 
           <div className="quick-tool-rows">
             {/* 案主／同住：沿用既有的「點按鈕進入模式→點人物套用」，快捷鍵
-                分別是 W／E，跟下面符號列的 A/S/D 是各自獨立的開關。
+                分別是 Q／W，跟下面符號列的 A/S/D 是各自獨立的開關。
                 兩個放同一列——面板夠寬，分兩列只是白白多佔一行高度。 */}
             <div className="quick-tool-row-group">
               <div className="quick-tool-row">
                 <button className={`quick-tool-btn tone-blue ${mode === 'index' ? 'active' : ''}`}
                         onClick={() => setMode(mode === 'index' ? null : 'index')}>
-                  案主 [W]
+                  案主 [Q]
                 </button>
                 <span className="status-badge" data-status={ipStyle}
                       onClick={() => setIpStyle(ipStyle === 'filled' ? 'double' : 'filled')}
@@ -871,7 +883,7 @@ const GenogramTab = ({
               <div className="quick-tool-row">
                 <button className={`quick-tool-btn tone-amber ${mode === 'cohab' ? 'active' : ''}`}
                         onClick={() => setMode(mode === 'cohab' ? null : 'cohab')}>
-                  同住 [E]
+                  同住 [W]
                 </button>
                 <span className="status-badge" data-status={cohabMode}
                       onClick={() => setCohabMode(cohabMode === 'auto' ? 'poly' : 'auto')}
@@ -885,20 +897,6 @@ const GenogramTab = ({
                 </span>
               </div>
 
-              {/* 年齡跟案主／同住是同一類的畫布模式：進入模式後點人物即輸入。
-                  旁邊的標籤管「畫布上要不要秀年齡」——填完年齡想收起來時用，
-                  跟模式本身是兩回事（進入模式會自動打開顯示）。 */}
-              <div className="quick-tool-row">
-                <button className={`quick-tool-btn tone-teal ${mode === 'age' ? 'active' : ''}`}
-                        onClick={() => setMode(m => { if (m !== 'age') setShowAgeMode(true); return m === 'age' ? null : 'age'; })}>
-                  年齡 [R]
-                </button>
-                <span className="status-badge" data-status={showAgeMode ? 'solid' : 'dashed'}
-                      onClick={() => setShowAgeMode(!showAgeMode)}
-                      ref={el => wheelRef(el, [false, true], showAgeMode, setShowAgeMode)}>
-                  {showAgeMode ? '顯示' : '隱藏'}
-                </span>
-              </div>
             </div>
           </div>
 
