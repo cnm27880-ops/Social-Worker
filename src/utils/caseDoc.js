@@ -77,6 +77,12 @@ export const INITIAL_DOC = {
   },
   famExtras: {},
 
+  /* 使用者手動改過的紀錄全文。空字串＝沒改過，預覽就照家系圖即時重新產生；
+     一旦有內容就以這份為準，家系圖再變動也不會覆蓋掉手寫的字。
+     用 '' 而不是 null 當「沒改過」：migrateDoc 會比對 typeof，fallback 是
+     null 的話存回來的字串會被判定型別不符而丟掉。 */
+  recordEdit: '',
+
   /* --- 影響輸出結果的繪圖選項 --- */
   cohabMode: 'auto',
   cohabSolid: false,

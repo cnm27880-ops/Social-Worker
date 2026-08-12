@@ -832,7 +832,7 @@ const GenogramTab = ({
                 cohabSolid: false, polygons: [], texts: [], ages: {},
                 freeNodes: [], customLinks: [], positions: {}, ipStyle: 'filled',
                 bgImage: null, bgErase: [],
-                subjInfo: INITIAL_DOC.subjInfo, famExtras: {},
+                subjInfo: INITIAL_DOC.subjInfo, famExtras: {}, recordEdit: '',
               }, '__reset');
             }}>重置</button>
           </div>
