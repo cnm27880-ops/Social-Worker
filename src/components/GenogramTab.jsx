@@ -838,14 +838,21 @@ const GenogramTab = ({
           <div className="quick-tool-header">
             <span className="quick-tool-title">快捷列表</span>
             <InfoTip text="點按鈕進入模式，再點畫布上的目標套用；年齡模式下點人物可直接輸入。下面的符號列可以拖到人物／婚姻線上放開，或先選取再點目標。要移除標記，把同一個符號再套一次就是取消。" />
-            {/* 快捷鍵小抄。按鈕上不再帶「[Q]」這種標示（三顆要並排在 276px 的
-                面板裡，帶標示會擠成兩行），改在標題列右邊這排淡灰小字補回來。 */}
-            <span className="quick-key-legend">Q案主 W同住 E年齡 A選取 SD左右</span>
             {/* 清除模式（mode === 'clear'）的邏輯完整保留在 onClick 分支與
                 clearNodeAttrs／clearLineAttr 裡，只是目前不給入口——擴充個體本來
                 就能雙擊刪除，原生節點的標記用「同一個符號再套一次」也能取消。
                 要放回來就在這裡加一顆按鈕，並在快捷鍵那段補一行
                 （Q／W／E 已被案主／同住／年齡用掉，得另挑一個鍵）。 */}
+          </div>
+
+          {/* 快捷鍵小抄。按鈕上不再帶「[Q]」這種標示（三顆要並排在 276px 的
+              面板裡，帶標示會擠成兩行），改用這排淡灰小字補回來。自成一行而
+              不是塞在標題列右邊：這串量起來 255px，標題列扣掉標題與 ⓘ 只剩
+              195px，硬塞會撐破面板。 */}
+          <div className="quick-key-legend">
+            {[['Q', '案主'], ['W', '同住'], ['E', '年齡'], ['A', '啟用符號列'], ['S/D', '切換符號']].map(([k, label]) => (
+              <span key={k}>[{k}]{label}</span>
+            ))}
           </div>
 
           <div className="quick-tool-rows">
