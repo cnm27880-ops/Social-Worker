@@ -72,7 +72,8 @@ export const INITIAL_DOC = {
   ipStyle: 'filled',
   textDirection: 'horizontal',
   extColorMode: 'black',
-  showAgeMode: false,
+  /* showAgeMode 已移除：年齡改成填了就一直畫在節點上，沒有隱藏狀態。
+     舊案件檔裡殘留的這個 key 不會被讀到，載入時安靜忽略即可。 */
 };
 
 /** 文件裡所有欄位名稱（不含版本號）。 */
@@ -110,6 +111,26 @@ export const toggleAttr = (nodeAttrs, id, attr) => {
   const kept = attrs.includes(attr) ? attrs.filter(a => a !== attr) : [...attrs, attr];
   const next = { ...nodeAttrs };
   if (kept.length) next[id] = kept; else delete next[id];
+  return next;
+};
+
+/**
+ * 清掉單一節點身上的所有標記（死亡／身障／慢性病可以疊在同一個節點上，
+ * 要靠 toggleAttr 一個一個取消很麻煩）。「清除」模式用這個。
+ * 本來就沒有標記時回傳原物件，避免產生無意義的一筆復原紀錄。
+ */
+export const clearAttrs = (nodeAttrs, id) => {
+  if (!nodeAttrs[id]) return nodeAttrs;
+  const next = { ...nodeAttrs };
+  delete next[id];
+  return next;
+};
+
+/** 清掉一條線的關係品質標記。同樣沒有就原封不動回傳。 */
+export const clearLineAttr = (lineAttrs, lineId) => {
+  if (!(lineId in lineAttrs)) return lineAttrs;
+  const next = { ...lineAttrs };
+  delete next[lineId];
   return next;
 };
 

@@ -697,9 +697,10 @@ body {
   margin-bottom: 8px;
 }
 
-.quick-tool-header .btn-emboss { 
-  margin-left: auto; 
+.quick-tool-header .btn-emboss {
+  margin-left: auto;
 }
+
 
 .quick-tool-title {
   display: inline-flex; 
@@ -710,6 +711,24 @@ body {
   color: var(--ink);
   letter-spacing: 0.3px;
 }
+
+/* 快捷鍵小抄：標題列下方獨立一行。用 --ink-soft 而不是更淡的 --ink-faint
+   ——後者在這張卡片的底色上量出來只有 4.06:1，10.5px 屬於小字，AA 要求
+   4.5:1，不夠。--ink-soft 在同一個底色上是 6.35:1。 */
+.quick-key-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 5px;
+  margin: -2px 0 8px;
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--ink-soft);
+  letter-spacing: 0.2px;
+}
+
+/* 每一項自己不斷字，要換行是換在項目之間——320px 以下的手機容器只有 238px，
+   整串 255px 放不下，用 nowrap 會被截斷並撐破面板。 */
+.quick-key-legend > span { white-space: nowrap; }
 
 .quick-tool-title::before {
   content: ''; 
@@ -747,9 +766,11 @@ body {
 
 /* 2. 主按鈕瘦身：縮減內距，改用 6px 順眼微圓角 */
 .quick-tool-btn {
-  border: none; 
+  border: none;
   cursor: pointer;
-  padding: 3px 8px; 
+  /* 左右 6px 而不是 8px：案主／同住／年齡三顆要並排在同一行，面板內容寬
+     只有 276px，8px 時三組量起來 277px 剛好溢出 1px 而換行。 */
+  padding: 3px 6px;
   font-size: 12px; 
   font-weight: 600;
   border-radius: 6px; 
@@ -772,6 +793,9 @@ body {
 
 .quick-tool-btn.active.tone-blue   { background: var(--dust); }
 .quick-tool-btn.active.tone-amber  { background: var(--sand); }
+/* 年齡模式。少了這條，.active 只會把字改成白色而底色仍是 transparent，
+   按鈕一啟用就整顆消失在卡片底色裡。白字對 --teal 是 5.5:1，過 AA。 */
+.quick-tool-btn.active.tone-teal   { background: var(--teal); }
 
 /* 3. 狀態標籤（填滿、自動、虛線）：精緻 Tag 視覺，點擊開啟時發光浮起 */
 .quick-tool-row .status-badge {

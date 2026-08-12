@@ -34,7 +34,7 @@ const ecoRx = (text) => Math.max(35, (text?.length || 1) * 9 + 15);
 const ECO_RY = 28;
 
 const GenogramTab = ({
-  doc, setField, patchDoc, toggleNodeAttr, toggleLineAttr,
+  doc, setField, patchDoc, toggleNodeAttr, toggleLineAttr, clearNodeAttrs, clearLineAttr,
   cases, activeCaseId, activeCase, isSaved,
   switchCase, saveCase, renameCase, deleteCase, exportCase, importCase,
   snapshots, takeSnapshot, restoreSnapshot, removeSnapshot,
@@ -106,7 +106,6 @@ const GenogramTab = ({
   const extColorMode = doc.extColorMode,      setExtColorMode = setField('extColorMode');
 
   /* --- 年齡與文字編輯狀態 --- */
-  const showAgeMode = doc.showAgeMode,        setShowAgeMode = setField('showAgeMode');
   const ages = doc.ages,                      setAges = setField('ages');
   const [editingAgeId, setEditingAgeId] = useState(null);
   const [editingTextId, setEditingTextId] = useState(null);
@@ -139,12 +138,16 @@ const GenogramTab = ({
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      /* 這裡全是單鍵快捷鍵，帶了 Ctrl／Cmd／Alt 的組合鍵不該落進來——
+       * 否則 Ctrl+A（全選）會順手把符號選取打開、Ctrl+S 會偷偷換掉選中的符號。 */
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
       const key = e.key.toLowerCase();
       const quickActive = mode !== null && QUICK_KEYS.includes(mode);
       /* A：開／關快捷列表選取狀態，從上次選到的位置繼續。
        * S／D：只有選取狀態開著時才移動焦點——沒開著按了也不該有反應，
        * 否則使用者搞不清楚現在到底選中了什麼。
-       * W／E：案主／同住模式切換，跟快捷列表選取是各自獨立的開關。 */
+       * Q／W／E：案主／同住／年齡三個畫布模式，共用同一個 mode 狀態，
+       *   所以天然互斥。清除模式（'clear'）目前沒有入口，見面板那段註解。 */
       if (key === 'a') setMode(quickActive ? null : QUICK_KEYS[quickIdx]);
       if (key === 's' && quickActive) {
         const next = (quickIdx - 1 + QUICK_KEYS.length) % QUICK_KEYS.length;
@@ -154,8 +157,11 @@ const GenogramTab = ({
         const next = (quickIdx + 1) % QUICK_KEYS.length;
         setQuickIdx(next); setMode(QUICK_KEYS[next]);
       }
-      if (key === 'w') setMode(p => p === 'index' ? null : 'index');
-      if (key === 'e') setMode(p => p === 'cohab' ? null : 'cohab');
+      if (key === 'q') setMode(p => p === 'index' ? null : 'index');
+      if (key === 'w') setMode(p => p === 'cohab' ? null : 'cohab');
+      /* 進入年齡模式順便把年齡打開——要輸入年齡卻看不到年齡是沒有意義的。
+       * 離開模式不會關掉顯示，年齡填完仍然留在畫布上。 */
+      if (key === 'e') setMode(p => p === 'age' ? null : 'age');
       if (e.key === 'Enter' && mode === 'cohab' && cohabMode === 'poly' && draftPoly.length >= 3) {
         setPolygons(prev => [...prev, { id: 'pg_' + Date.now(), pts: draftPoly }]); setDraftPoly([]); setMousePos(null);
       }
@@ -620,6 +626,8 @@ const GenogramTab = ({
     if (nodeDragMoved.current) { nodeDragMoved.current = false; return; }
     if (mode === 'index') { setIndexId(p => p === id ? null : id); return; }
     if (mode === 'cohab' && cohabMode === 'auto') { setCohabMembers(p => p.includes(id) ? p.filter(m => m !== id) : [...p, id]); return; }
+    if (mode === 'age') { setEditingAgeId(id); return; }
+    if (mode === 'clear') { clearNodeAttrs(id); return; }
     // 快捷列表選中的符號若是「貼在人物身上」這一類，點節點即套用；
     // 關係線／獨立個體這兩類不在這裡處理（見 <svg> 的 onClick，這裡的
     // e.stopPropagation() 讓事件不會冒泡上去，剛好避免點到節點時誤觸那邊）。
@@ -829,27 +837,36 @@ const GenogramTab = ({
         <div className="quick-tool-panel">
           <div className="quick-tool-header">
             <span className="quick-tool-title">快捷列表</span>
-            <InfoTip text="案主 [W]／同住 [E]：點按鈕（或按快捷鍵）進入模式，再點畫布上的人物套用。下面的符號列可以直接拖到人物／婚姻線上放開套用，或按 [A] 進入選取、[S]／[D] 左右切換要套用的符號，選中後點畫布上的目標即可套用。" />
-            {/* 年齡是「畫布上要顯示什麼」的開關，跟這一區的標記模式同一類。
-                做成有凹凸感的按鈕：關閉時浮起、開啟時壓下去並填色，
-                原本的滑軌開關在暖色卡片上跟背景太接近，看不出開關狀態。 */}
-            <button
-              className={`btn-emboss ${showAgeMode ? 'on' : ''}`}
-              onClick={() => setShowAgeMode(!showAgeMode)}
-              aria-pressed={showAgeMode}
-              title="切換是否在節點上顯示年齡"
-            >年齡</button>
+            <InfoTip text="點按鈕進入模式，再點畫布上的目標套用；年齡模式下點人物可直接輸入。下面的符號列可以拖到人物／婚姻線上放開，或先選取再點目標。要移除標記，把同一個符號再套一次就是取消。" />
+            {/* 清除模式（mode === 'clear'）的邏輯完整保留在 onClick 分支與
+                clearNodeAttrs／clearLineAttr 裡，只是目前不給入口——擴充個體本來
+                就能雙擊刪除，原生節點的標記用「同一個符號再套一次」也能取消。
+                要放回來就在這裡加一顆按鈕，並在快捷鍵那段補一行
+                （Q／W／E 已被案主／同住／年齡用掉，得另挑一個鍵）。 */}
+          </div>
+
+          {/* 快捷鍵小抄。按鈕上不再帶「[Q]」這種標示（三顆要並排在 276px 的
+              面板裡，帶標示會擠成兩行），改用這排淡灰小字補回來。自成一行而
+              不是塞在標題列右邊：這串量起來 255px，標題列扣掉標題與 ⓘ 只剩
+              195px，硬塞會撐破面板。 */}
+          <div className="quick-key-legend">
+            {[['Q', '案主'], ['W', '同住'], ['E', '年齡'], ['A', '啟用符號列'], ['S/D', '切換符號']].map(([k, label]) => (
+              <span key={k}>[{k}]{label}</span>
+            ))}
           </div>
 
           <div className="quick-tool-rows">
-            {/* 案主／同住：沿用既有的「點按鈕進入模式→點人物套用」，快捷鍵
-                分別是 W／E，跟下面符號列的 A/S/D 是各自獨立的開關。
-                兩個放同一列——面板夠寬，分兩列只是白白多佔一行高度。 */}
+            {/* 案主／同住／年齡三個畫布模式，快捷鍵 Q／W／E，跟下面符號列的
+                A/S/D 是各自獨立的開關。三顆必須排在同一行——面板內容寬只有
+                276px，按鈕上若再帶「[Q]」這種快捷鍵標示，三組量起來要 343px，
+                光收內距最多降到 290px 還是會擠成兩行。所以標示改放 title
+                （滑過就看得到），ⓘ 與說明書也都列著。 */}
             <div className="quick-tool-row-group">
               <div className="quick-tool-row">
                 <button className={`quick-tool-btn tone-blue ${mode === 'index' ? 'active' : ''}`}
-                        onClick={() => setMode(mode === 'index' ? null : 'index')}>
-                  案主 [W]
+                        onClick={() => setMode(mode === 'index' ? null : 'index')}
+                        title="案主 [Q]：進入模式後點畫布上的人物指定案主">
+                  案主
                 </button>
                 <span className="status-badge" data-status={ipStyle}
                       onClick={() => setIpStyle(ipStyle === 'filled' ? 'double' : 'filled')}
@@ -860,8 +877,9 @@ const GenogramTab = ({
 
               <div className="quick-tool-row">
                 <button className={`quick-tool-btn tone-amber ${mode === 'cohab' ? 'active' : ''}`}
-                        onClick={() => setMode(mode === 'cohab' ? null : 'cohab')}>
-                  同住 [E]
+                        onClick={() => setMode(mode === 'cohab' ? null : 'cohab')}
+                        title="同住 [W]：進入模式後圈出同住範圍">
+                  同住
                 </button>
                 <span className="status-badge" data-status={cohabMode}
                       onClick={() => setCohabMode(cohabMode === 'auto' ? 'poly' : 'auto')}
@@ -873,6 +891,18 @@ const GenogramTab = ({
                       ref={el => wheelRef(el, [false, true], cohabSolid, setCohabSolid)}>
                   {cohabSolid ? '實線' : '虛線'}
                 </span>
+              </div>
+
+              {/* 年齡沒有狀態標籤：填過的年齡一律畫在節點上，沒有「隱藏」這個
+                  狀態，按鈕亮起來只代表「現在點人物是輸入年齡」。原本那顆顯示
+                  開關會讓下載的 PNG 跟著少掉年齡（匯出是直接序列化當下的 SVG），
+                  拿掉之後就不會有那個陷阱。 */}
+              <div className="quick-tool-row">
+                <button className={`quick-tool-btn tone-teal ${mode === 'age' ? 'active' : ''}`}
+                        onClick={() => setMode(m => m === 'age' ? null : 'age')}
+                        title="年齡 [E]：進入模式後點人物直接輸入年齡">
+                  年齡
+                </button>
               </div>
             </div>
           </div>
@@ -1079,6 +1109,13 @@ const GenogramTab = ({
              onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp} onPointerCancel={onUp}
              onClick={(e) => {
                setSelectedTextId(null); setSelectedPolyId(null);
+               /* 清除模式點在婚姻線上：清掉那條線的關係品質標記。點在人物上
+                  不會走到這裡（節點的 onClick 已經 stopPropagation 並自行處理）。 */
+               if (mode === 'clear') {
+                 const lineId = hitTestLine(svgPt(e));
+                 if (lineId) clearLineAttr(lineId);
+                 return;
+               }
                // 快捷列表選中「關係線」或「獨立個體」這兩類符號時，點畫布即套用
                // ——點在節點上不會走到這裡（onClick(e,id) 已經 stopPropagation）。
                const sym = mode && SYMBOL_MAP[mode];
@@ -1207,13 +1244,13 @@ const GenogramTab = ({
                  onPointerDown={e => onDown(e, nd.id)} onClick={e => onClick(e, nd.id)}
                  onDoubleClick={e => {
                    e.stopPropagation();
-                   if(showAgeMode) {
-                     setEditingAgeId(nd.id);
-                   } else if(nd.isFree) {
-                     if(window.confirm('確定要刪除這個擴充個體嗎？(相關連線也會一併刪除)')) {
-                       setCustomLinks(prev => prev.filter(l => l.sourceId !== nd.id && l.targetId !== nd.id));
-                       setFreeNodes(prev => prev.filter(fn => fn.id !== nd.id));
-                     }
+                   /* 雙擊固定代表「刪除擴充個體」，不再看年齡臉色——年齡已經是
+                      獨立模式（單擊輸入），原本「年齡開著就不能雙擊刪除」的衝突
+                      跟著消失。年齡模式下雙擊等於連點兩次，交給單擊處理就好。 */
+                   if (mode === 'age' || !nd.isFree) return;
+                   if (window.confirm('確定要刪除這個擴充個體嗎？(相關連線也會一併刪除)')) {
+                     setCustomLinks(prev => prev.filter(l => l.sourceId !== nd.id && l.targetId !== nd.id));
+                     setFreeNodes(prev => prev.filter(fn => fn.id !== nd.id));
                    }
                  }}>
                 {isDouble && (nd.gender === 'M'
@@ -1264,8 +1301,8 @@ const GenogramTab = ({
                   </foreignObject>
                 ) : (
                   <>
-                    {isIP && (!showAgeMode || !ageVal) && <text x="0" y="4" textAnchor="middle" fontSize="11" fontWeight={isIP && !isDouble ? 'normal' : 'bold'} fill={isDouble ? '#ef4444' : txtC} stroke={isIP && !isDouble ? '#1e293b' : 'white'} strokeWidth={isIP && !isDouble ? 0 : 3} paintOrder="stroke" strokeLinejoin="round" style={{fontFamily: TEXT_FONT, pointerEvents: 'none'}}>案主</text>}
-                    {showAgeMode && ageVal && <text x="0" y="4" textAnchor="middle" fontSize="13" fontWeight="bold" fill={txtC} stroke={isIP && !isDouble ? '#1e293b' : 'white'} strokeWidth={isIP && !isDouble ? 0 : 3} paintOrder="stroke" strokeLinejoin="round" style={{fontFamily: TEXT_FONT, pointerEvents: 'none'}}>{ageVal}</text>}
+                    {isIP && !ageVal && <text x="0" y="4" textAnchor="middle" fontSize="11" fontWeight={isIP && !isDouble ? 'normal' : 'bold'} fill={isDouble ? '#ef4444' : txtC} stroke={isIP && !isDouble ? '#1e293b' : 'white'} strokeWidth={isIP && !isDouble ? 0 : 3} paintOrder="stroke" strokeLinejoin="round" style={{fontFamily: TEXT_FONT, pointerEvents: 'none'}}>案主</text>}
+                    {ageVal && <text x="0" y="4" textAnchor="middle" fontSize="13" fontWeight="bold" fill={txtC} stroke={isIP && !isDouble ? '#1e293b' : 'white'} strokeWidth={isIP && !isDouble ? 0 : 3} paintOrder="stroke" strokeLinejoin="round" style={{fontFamily: TEXT_FONT, pointerEvents: 'none'}}>{ageVal}</text>}
                   </>
                 )}
                 {deceasedIds.includes(nd.id) && <g pointerEvents="none">
