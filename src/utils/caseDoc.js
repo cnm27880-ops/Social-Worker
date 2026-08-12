@@ -10,6 +10,8 @@
  * 同一份資料，所以只需要維護一種格式。
  * =========================================================================== */
 
+import { migrateBgPatch } from './bgImage';
+
 /** 文件格式版本。日後改變資料形狀時 +1，並在 migrateDoc 補上轉換。 */
 export const DOC_VERSION = 1;
 
@@ -53,7 +55,7 @@ export const INITIAL_DOC = {
 
   /* --- 舊圖修補（Image Overlay） ---
    * 匯入一張既有的家系圖當底圖，在上面疊符號、關係線與文字方塊。
-   * { src: dataURL, w, h, opacity, scale }
+   * { src: dataURL, w, h, x, y, scale, baseX, baseY, baseScale, opacity, fromApp, v }
    * src 存 dataURL 而不是 File／blob URL：blob URL 重新整理就失效，
    * 而底圖必須跟著案件一起存進案件庫、一起匯出成 .json。
    * 上傳時會先縮圖再轉 dataURL（見 utils/bgImage.js），避免把
@@ -61,7 +63,8 @@ export const INITIAL_DOC = {
   bgImage: null,
 
   /* --- 底圖橡皮擦筆跡 ---
-   * [{ id, w, pts: [[x, y], ...] }]
+   * [{ id, w, pts: [[x, y], ...] }]，座標與筆寬都是「圖片自身的像素」，
+   * 不是畫布座標 —— 底圖被拖動或縮放時，擦掉的地方才會跟著一起走。
    * 底圖是點陣圖，「擦掉」的做法是拿這些筆跡組成 SVG mask 把該處挖成透明，
    * 而不是在上面塗白色 —— 塗白在去背 PNG 匯出時會留下白色筆跡。 */
   bgErase: [],
@@ -291,6 +294,10 @@ export const migrateDoc = (raw) => {
   // 底圖與橡皮擦筆跡：形狀不對就當沒有。壞掉的一筆不該讓整張畫布打不開
   if (doc.bgImage && typeof doc.bgImage.src !== 'string') doc.bgImage = null;
   doc.bgErase = doc.bgErase.filter(st => st && Array.isArray(st.pts) && st.pts.length > 0);
+  // v1 的底圖沒有 x/y，筆跡也還存在畫布座標；換算成目前的格式（見 utils/bgImage.js）
+  const bgPatch = migrateBgPatch(doc.bgImage, doc.bgErase);
+  doc.bgImage = bgPatch.bgImage;
+  doc.bgErase = bgPatch.bgErase;
 
   return doc;
 };

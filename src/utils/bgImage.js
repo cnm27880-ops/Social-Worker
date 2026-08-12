@@ -22,23 +22,59 @@
  *   所以不會像 gzip 方案那樣需要在「開啟案件」時多一段非同步解壓縮，
  *   也就不會有畫面卡住等解壓縮、或解壓縮失敗導致底圖開不了的風險。
  *   瀏覽器不支援 WebP 編碼時會安靜地退回 JPEG／PNG，行為不變。
+ *
+ * --- 底圖的座標模型（v2）---
+ *   { src, w, h,            // w/h 是縮圖後的「原始像素」尺寸
+ *     x, y, scale,          // 目前擺在畫布上的位置與倍率
+ *     baseX, baseY, baseScale,  // 匯入當下算出來的擺法，供「重設」用
+ *     opacity, fromApp, v }
+ *
+ *   擦除筆跡（doc.bgErase）存的是「圖片自身的像素座標」，不是畫布座標。
+ *   這樣底圖被拖動或縮放時，擦掉的地方會跟著一起走 —— 存畫布座標的話，
+ *   一移動底圖，擦痕就留在原地變成畫布上的破洞。
  * =========================================================================== */
 
-/** 縮圖後的最長邊上限。 */
+import { readOriginMeta } from './imageMeta';
+
+/** 底圖的資料格式版本；v1 沒有 x/y，擦除筆跡也還存在畫布座標。 */
+export const BG_SCHEMA = 2;
+
+/** 一般圖片縮圖後的最長邊上限。 */
 export const MAX_EDGE = 1600;
 
-/** 底圖在畫布上的落點：稍微內縮，讓使用者看得出它是一張底圖而不是背景色。 */
+/**
+ * 認得出是本站下載的圖時放寬到 2400px。
+ * 本站的 PNG 是 3 倍圖，一張 800 單位寬的家系圖會匯出成 2400px；
+ * 硬壓回 1600px 會讓「下載後再匯入修補」這條路每繞一圈就糊一次。
+ * 線稿的壓縮率很好，多出來的像素換算成 WebP 只多幾十 KB。
+ */
+export const MAX_EDGE_SELF = 2400;
+
+/**
+ * 沒有來源資訊時，自動把長邊縮到這個畫布單位數。
+ * 人物符號是 36 單位、手足間距 100 單位，一張三代家系圖大約 600–900 單位寬，
+ * 所以掃描檔套進來也該落在這個量級 —— 直接用原始像素當畫布單位（舊版行為）
+ * 會讓一張 1600px 的掃描圖變成畫布上的 1600 單位，比自己畫的符號大三倍。
+ */
+export const FIT_EDGE = 900;
+
+/** 底圖在畫布上的預設落點：稍微內縮，讓使用者看得出它是一張底圖而不是背景色。 */
 export const BG_X = 40;
 export const BG_Y = 40;
 
-export const DEFAULT_OPACITY = 0.55;
-export const DEFAULT_SCALE = 1;
+/** 「舊圖修補」的成品是那張舊圖本身，所以預設不打淡；要描圖再自己拉透明度。 */
+export const DEFAULT_OPACITY = 1;
+
+export const MIN_SCALE = 0.05;
+export const MAX_SCALE = 8;
 
 const ACCEPTED = ['image/png', 'image/jpeg', 'image/webp'];
 
 /** WebP 品質；PNG 掃描線稿轉過來也用得到，WebP 原生支援透明。 */
 const WEBP_QUALITY = 0.82;
 const JPEG_QUALITY = 0.85;
+
+export const clampScale = (s) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, s));
 
 /**
  * 把縮圖後的 canvas 編碼成 dataURL，優先用 WebP（同品質下通常比 JPEG
@@ -50,6 +86,19 @@ const encodeCanvas = (canvas, keepAlpha) => {
   const webp = canvas.toDataURL('image/webp', WEBP_QUALITY);
   if (webp.startsWith('data:image/webp')) return webp;
   return keepAlpha ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', JPEG_QUALITY);
+};
+
+/**
+ * 決定新匯入的圖要擺在哪、放多大。
+ *
+ * origin 是從圖檔裡讀回來的裁切框（見 utils/imageMeta.js）—— 只有本站
+ * 自己下載的 PNG／JPG 才有。有它就能一比一放回原本的位置與大小，
+ * 「下載 → 之後再匯入修補」整條路才會對得起來。
+ */
+const placementFor = (origin, w, h) => {
+  if (origin) return { x: origin.x, y: origin.y, scale: clampScale(origin.w / w) };
+  // 不放大：小圖硬撐到 FIT_EDGE 只會糊掉，維持原尺寸反而好描
+  return { x: BG_X, y: BG_Y, scale: clampScale(Math.min(1, FIT_EDGE / Math.max(w, h))) };
 };
 
 /**
@@ -65,10 +114,13 @@ export const loadBgImage = (file) => new Promise((resolve, reject) => {
   const reader = new FileReader();
   reader.onerror = () => reject(new Error('讀取檔案失敗，請再試一次。'));
   reader.onload = () => {
+    const origin = readOriginMeta(reader.result);
+
     const img = new Image();
     img.onerror = () => reject(new Error('這個檔案不是能開啟的圖片。'));
     img.onload = () => {
-      const ratio = Math.min(1, MAX_EDGE / Math.max(img.width, img.height));
+      const maxEdge = origin ? MAX_EDGE_SELF : MAX_EDGE;
+      const ratio = Math.min(1, maxEdge / Math.max(img.width, img.height));
       const w = Math.round(img.width * ratio);
       const h = Math.round(img.height * ratio);
 
@@ -83,11 +135,15 @@ export const loadBgImage = (file) => new Promise((resolve, reject) => {
       if (!keepAlpha) { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, h); }
       ctx.drawImage(img, 0, 0, w, h);
 
+      const { x, y, scale } = placementFor(origin, w, h);
       resolve({
+        v: BG_SCHEMA,
         src: encodeCanvas(canvas, keepAlpha),
         w, h,
+        x, y, scale,
+        baseX: x, baseY: y, baseScale: scale,
         opacity: DEFAULT_OPACITY,
-        scale: DEFAULT_SCALE,
+        fromApp: !!origin,
       });
     };
     img.src = reader.result;
@@ -99,5 +155,39 @@ export const loadBgImage = (file) => new Promise((resolve, reject) => {
 export const bgImageBox = (bg) => {
   if (!bg) return null;
   const scale = bg.scale || 1;
-  return { x: BG_X, y: BG_Y, w: bg.w * scale, h: bg.h * scale };
+  return { x: bg.x ?? BG_X, y: bg.y ?? BG_Y, w: bg.w * scale, h: bg.h * scale };
+};
+
+/** 面板上的「大小」以匯入當下為 100%，使用者才有一個看得懂的基準。 */
+export const bgZoomPct = (bg) => Math.round((bg.scale / (bg.baseScale || bg.scale || 1)) * 100);
+export const bgScaleFromPct = (bg, pct) => clampScale((bg.baseScale || bg.scale || 1) * pct / 100);
+
+/**
+ * 把舊版（v1）的底圖與擦除筆跡升級成目前的格式。
+ *
+ * v1 的底圖固定釘在 (40, 40)、只有一個 scale，擦除筆跡存的是畫布座標。
+ * 新版底圖可以自由搬動與縮放，筆跡因此改存圖片自身的像素座標；這裡把
+ * 舊筆跡除以當時的倍率、扣掉當時的落點，換算回去，舊案件打開來擦痕
+ * 仍然蓋在同一個位置上。
+ */
+export const migrateBgPatch = (bgImage, bgErase = []) => {
+  if (!bgImage) return { bgImage: null, bgErase: [] };
+  if (bgImage.v === BG_SCHEMA) return { bgImage, bgErase };
+
+  const scale = bgImage.scale || 1;
+  return {
+    bgImage: {
+      ...bgImage,
+      v: BG_SCHEMA,
+      x: BG_X, y: BG_Y, scale,
+      baseX: BG_X, baseY: BG_Y, baseScale: scale,
+      opacity: bgImage.opacity ?? DEFAULT_OPACITY,
+      fromApp: false,
+    },
+    bgErase: bgErase.map(st => ({
+      ...st,
+      w: Math.max(1, (st.w || 24) / scale),
+      pts: st.pts.map(([x, y]) => [(x - BG_X) / scale, (y - BG_Y) / scale]),
+    })),
+  };
 };

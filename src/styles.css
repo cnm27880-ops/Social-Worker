@@ -458,8 +458,9 @@ body {
   color: #fff; cursor: pointer; white-space: nowrap; line-height: 1.35;
   transition: filter 0.15s ease, background 0.15s ease;
 }
-.btn-soft:hover { filter: brightness(0.92); }
-.btn-soft:active { filter: brightness(0.86); }
+.btn-soft:hover:not(:disabled) { filter: brightness(0.92); }
+.btn-soft:active:not(:disabled) { filter: brightness(0.86); }
+.btn-soft:disabled { opacity: 0.4; cursor: default; }
 .btn-soft-xs { padding: 3px 9px; font-size: 11px; font-weight: 600; }
 .btn-soft-wide { flex: 1; padding: 8px; font-size: 13px; text-align: center; margin: 0; }
 .btn-soft.tone-dust  { background: var(--dust); }
@@ -895,6 +896,27 @@ input[type="text"]:focus { border-color: var(--dust); box-shadow: 0 0 0 2px rgba
 input::placeholder, textarea::placeholder { color: var(--ink-faint); font-weight: 400; }
 
 .hint { font-size: 11px; color: var(--ink-soft); margin-top: 3px; }
+
+/* ===== 舊圖修補面板 =====
+ * 面板內容寬只有 276px，所以每一列都是「標籤－滑桿－數值」的三欄式：
+ * 標籤與數值各自固定寬度，中間的滑桿吃掉剩下的空間，三列才會對齊成一欄。 */
+.bg-slider { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.bg-slider > span { flex: 0 0 40px; font-size: 12px; font-weight: 600; color: var(--ink-mid); }
+.bg-slider > input[type="range"] { flex: 1 1 auto; min-width: 0; accent-color: var(--dust); }
+.bg-slider > b { flex: 0 0 40px; text-align: right; font-size: 11px; font-weight: 700; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+
+.bg-tools { margin-top: 8px; flex-wrap: wrap; }
+
+.bg-erase-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
+
+/* 匯入結果的一行回饋。認得出是本站下載的圖時換成綠色，使用者才知道
+ * 「位置跟大小已經幫你對好了」，不會又去手動調一次。 */
+.bg-origin {
+  margin-top: 6px; padding: 5px 8px; border-radius: var(--r-xs);
+  font-size: 11px; line-height: 1.5;
+  background: var(--wash-warm); border: 1px solid var(--line-soft); color: var(--ink-soft);
+}
+.bg-origin.is-self { background: var(--sage-w); border-color: var(--sage-bd); color: var(--sage-d); }
 
 /* 紀錄產生器專用 UI */
 .record-layout { display: flex; flex-direction: column; gap: 16px; max-width: 1500px; width: 100%; margin: 0 auto; flex: 1 1 auto; min-height: 0; min-width: 0; }
