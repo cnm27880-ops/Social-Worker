@@ -72,7 +72,8 @@ export const INITIAL_DOC = {
   ipStyle: 'filled',
   textDirection: 'horizontal',
   extColorMode: 'black',
-  showAgeMode: false,
+  /* showAgeMode 已移除：年齡改成填了就一直畫在節點上，沒有隱藏狀態。
+     舊案件檔裡殘留的這個 key 不會被讀到，載入時安靜忽略即可。 */
 };
 
 /** 文件裡所有欄位名稱（不含版本號）。 */

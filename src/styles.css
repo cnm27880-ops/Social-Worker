@@ -701,11 +701,6 @@ body {
   margin-left: auto;
 }
 
-/* 標題列右側的模式組（年齡）。跟下面那組共用 .quick-tool-row 的卡片外觀，
-   看起來才是同一類東西，只是因為寬度不夠而擺在標題列。 */
-.quick-tool-header .quick-tool-row {
-  margin-left: auto;
-}
 
 .quick-tool-title {
   display: inline-flex; 
@@ -753,9 +748,11 @@ body {
 
 /* 2. 主按鈕瘦身：縮減內距，改用 6px 順眼微圓角 */
 .quick-tool-btn {
-  border: none; 
+  border: none;
   cursor: pointer;
-  padding: 3px 8px; 
+  /* 左右 6px 而不是 8px：案主／同住／年齡三顆要並排在同一行，面板內容寬
+     只有 276px，8px 時三組量起來 277px 剛好溢出 1px 而換行。 */
+  padding: 3px 6px;
   font-size: 12px; 
   font-weight: 600;
   border-radius: 6px; 
