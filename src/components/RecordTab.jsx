@@ -80,7 +80,10 @@ const RecordTab = ({
     // 案主是第二代時，婚姻狀態要看案主自己的，不是第一代（案父母）的
     txt += `，${isGen2Index ? (G2_LABELS[gen2Cfg[selfIdx].partner] || '未婚') : (g1Status === 'married' ? '已婚' : '離婚')}`;
 
-    let cohabText = '獨居';
+    /* 沒指定案主就不知道是誰跟誰同住，整句略過。原本無條件預設「獨居」——
+       畫布上明明圈了同住範圍，只因為忘了指定案主，紀錄就斷言獨居，
+       而且是可以直接複製出去的錯誤敘述。 */
+    let cohabText = indexId ? '獨居' : null;
     if (indexId && cohabMembers.includes(indexId)) {
       const others = cohabMembers.filter(id => id !== indexId).map(id => {
         if (id === 'fa') return '案父';
@@ -104,7 +107,7 @@ const RecordTab = ({
       }).filter(Boolean);
       if (others.length > 0) cohabText = `與${others.join('、')}同住`;
     }
-    txt += `，${cohabText}。`;
+    txt += cohabText ? `，${cohabText}。` : `。`;
     // 上一句已經用「。」收尾，沒有備註時直接換行——原本無條件補「；」會寫出「。；」
     if (subjInfo.note) txt += `${subjInfo.note}；\n`;
     else txt += `\n`;
@@ -311,27 +314,27 @@ const RecordTab = ({
 
         <div className="section section-inline">
           <label>身分別</label>
-          <BadgeGroup options={tagOptions.identity} value={subjInfo.identity} onChange={v => setSubjInfo({...subjInfo, identity: v})} isEditing={isEditingTags} onAdd={t => handleAddTag('identity', t)} onRemove={t => handleRemoveTag('identity', t)} />
+          <BadgeGroup label="身分別" options={tagOptions.identity} value={subjInfo.identity} onChange={v => setSubjInfo({...subjInfo, identity: v})} isEditing={isEditingTags} onAdd={t => handleAddTag('identity', t)} onRemove={t => handleRemoveTag('identity', t)} />
         </div>
 
         <div className="section section-inline">
           <label>教育程度</label>
-          <BadgeGroup options={tagOptions.edu} value={subjInfo.edu} onChange={v => setSubjInfo({...subjInfo, edu: v})} isEditing={isEditingTags} onAdd={t => handleAddTag('edu', t)} onRemove={t => handleRemoveTag('edu', t)} />
+          <BadgeGroup label="教育程度" options={tagOptions.edu} value={subjInfo.edu} onChange={v => setSubjInfo({...subjInfo, edu: v})} isEditing={isEditingTags} onAdd={t => handleAddTag('edu', t)} onRemove={t => handleRemoveTag('edu', t)} />
         </div>
 
         <div className="section section-inline">
           <label>溝通語言</label>
-          <BadgeGroup options={tagOptions.lang} value={subjInfo.lang} onChange={v => setSubjInfo({...subjInfo, lang: v})} isEditing={isEditingTags} onAdd={t => handleAddTag('lang', t)} onRemove={t => handleRemoveTag('lang', t)} />
+          <BadgeGroup label="溝通語言" options={tagOptions.lang} value={subjInfo.lang} onChange={v => setSubjInfo({...subjInfo, lang: v})} isEditing={isEditingTags} onAdd={t => handleAddTag('lang', t)} onRemove={t => handleRemoveTag('lang', t)} />
         </div>
 
         <div className="section section-inline">
           <label>宗教信仰</label>
-          <BadgeGroup options={tagOptions.religion} value={subjInfo.religion} onChange={v => setSubjInfo({...subjInfo, religion: v})} isEditing={isEditingTags} onAdd={t => handleAddTag('religion', t)} onRemove={t => handleRemoveTag('religion', t)} />
+          <BadgeGroup label="宗教信仰" options={tagOptions.religion} value={subjInfo.religion} onChange={v => setSubjInfo({...subjInfo, religion: v})} isEditing={isEditingTags} onAdd={t => handleAddTag('religion', t)} onRemove={t => handleRemoveTag('religion', t)} />
         </div>
 
         <div className="section section-inline">
           <label>身障證明</label>
-          <BadgeGroup options={tagOptions.disability} value={subjInfo.disability} onChange={v => setSubjInfo({...subjInfo, disability: v})} isEditing={isEditingTags} onAdd={t => handleAddTag('disability', t)} onRemove={t => handleRemoveTag('disability', t)} />
+          <BadgeGroup label="身心障礙證明" options={tagOptions.disability} value={subjInfo.disability} onChange={v => setSubjInfo({...subjInfo, disability: v})} isEditing={isEditingTags} onAdd={t => handleAddTag('disability', t)} onRemove={t => handleRemoveTag('disability', t)} />
         </div>
 
         <div className="section">
