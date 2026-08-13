@@ -29,6 +29,7 @@ const getRankStr = (rank, total) => {
 
 const RecordTab = ({
   gen2Cfg, indexId, g1Status, cohabMembers, deceasedIds, disabledIds = [], customLinks,
+  mainFamily = true,
   /* 案主基本資料與家屬補充資訊住在案件文件裡（見 caseDoc.js），不是這裡的
      本地狀態——這樣「重置」清得到、Ctrl+Z 救得回、切換案件不會殘留上一份。 */
   subjInfo, setSubjInfo, famExtras, setFamExtras, recordEdit, setRecordEdit,
@@ -476,6 +477,15 @@ const RecordTab = ({
                     title="捨棄手動修改，回到跟著家系圖即時重算">↻ 還原成自動產生</button>
           )}
         </h2>
+        {/* 舊圖修補模式下，畫布上的人物是自由擴充區的個體，沒有結構化的
+            親屬關係可讀，自動敘述會是空的或只剩案主一句 —— 與其讓使用者
+            以為是壞掉了，不如講清楚這裡要自己寫。 */}
+        {!mainFamily && (
+          <div className="record-notice">
+            目前是舊圖修補模式（主家系已停用）。畫布上的人物是自由擴充區的個體，
+            沒有可供推算的親屬結構，因此自動敘述只會帶出基本資料；家庭狀況請直接在下方編輯。
+          </div>
+        )}
         <textarea
           value={displayText}
           onChange={e => setRecordEdit(e.target.value)}

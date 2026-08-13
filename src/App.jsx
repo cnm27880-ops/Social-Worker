@@ -154,6 +154,7 @@ const App = () => {
           gen2Cfg={doc.gen2Cfg}
           indexId={doc.indexId}
           g1Status={doc.g1Status}
+          mainFamily={doc.mainFamily}
           cohabMembers={doc.cohabMembers}
           deceasedIds={deceasedIds}
           disabledIds={disabledIds}

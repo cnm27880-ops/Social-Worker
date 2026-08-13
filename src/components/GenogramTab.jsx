@@ -3,6 +3,7 @@ import {
   SZ, R, COUPLE_GAP, SIBLING_GAP, GEN_Y, TEXT_FONT,
   G2_STATUSES, G2_LABELS, G1_STATUSES, G1_LABELS,
   TEXT_DIRS, TEXT_DIR_LABELS,
+  LINE_STYLES, LINE_STYLE_LABELS, LINE_WIDTHS, marriageGeom,
   parseGenders, getSmoothPath, getRelativeTitle, getGen2Title,
   computeMainLayout, centeredG1
 } from '../utils/helpers';
@@ -10,7 +11,10 @@ import CaseBar from './CaseBar';
 import ImagePatchPanel from './ImagePatchPanel';
 import InfoTip from './InfoTip';
 import { SymbolPreview, loadUsage, bumpUsage } from './SymbolPreview';
-import { BG_X, BG_Y, bgImageBox } from '../utils/bgImage';
+import {
+  BG_X, BG_Y, bgImageBox, clampScale, DEFAULT_OPACITY,
+} from '../utils/bgImage';
+import { stampOriginMeta } from '../utils/imageMeta';
 import {
   SYMBOL_MAP, QUICK_KEYS, QUICK_SYMBOLS,
   halfPath, healthHalvesFor, divisionSegments, kinshipDashFor,
@@ -33,6 +37,21 @@ const EXT_COLOR_LABELS = { black: '一般', blue: '編輯' };
 
 const ecoRx = (text) => Math.max(35, (text?.length || 1) * 9 + 15);
 const ECO_RY = 28;
+
+/* 下載圖片的取樣倍率。列印與貼進 Word 都吃得下 3 倍圖，而這個數字也會
+ * 寫進圖檔的來源印子裡（見 utils/imageMeta.js），下次匯入修補時才對得回來。 */
+const EXPORT_SCALE = 3;
+
+/* 只服務編輯畫面、不該出現在成品裡的圖層（底圖定位框、橡皮擦游標圈…）。
+ * 下載與列印都是複製整棵 <svg>，所以複製完要先把這些拿掉。 */
+const NO_EXPORT = 'no-export';
+const stripEditorOnly = (svgEl) => {
+  svgEl.querySelectorAll(`.${NO_EXPORT}`).forEach(el => el.remove());
+  return svgEl;
+};
+
+/* 底圖定位框的四個角把手：[x 方向, y 方向]，-1 是左／上，1 是右／下。 */
+const BG_HANDLES = [[-1, -1], [1, -1], [-1, 1], [1, 1]];
 
 const GenogramTab = ({
   doc, setField, patchDoc, toggleNodeAttr, toggleLineAttr, clearNodeAttrs, clearLineAttr,
@@ -61,11 +80,20 @@ const GenogramTab = ({
   /* --- 舊圖修補 --- */
   const bgImage = doc.bgImage,          setBgImage = setField('bgImage');
   const bgErase = doc.bgErase,          setBgErase = setField('bgErase');
+  const mainFamily = doc.mainFamily,    setMainFamily = setField('mainFamily');
+
+  /* --- 關係線畫法 --- */
+  const lineStyle = doc.lineStyle,      setLineStyle = setField('lineStyle');
+  const lineWidth = doc.lineWidth,      setLineWidth = setField('lineWidth');
 
   /* --- 純 UI 暫態：不進復原、不存檔 --- */
   const [eraseMode, setEraseMode] = useState(false);
   const [eraseWidth, setEraseWidth] = useState(24);
   const [eraseDraft, setEraseDraft] = useState(null);   // 正在畫的那一筆
+  const [eraseCursor, setEraseCursor] = useState(null); // 橡皮擦的預覽圈（純顯示）
+  const [bgAdjust, setBgAdjust] = useState(false);      // 底圖定位模式
+  const [bgDrag, setBgDrag] = useState(null);           // 正在搬動／縮放底圖
+  const [bgCursor, setBgCursor] = useState(null);       // 定位模式的符號大小參考圈
   const [drag, setDrag] = useState(null);
   const [usage, setUsage] = useState(loadUsage);   // 符號使用次數：決定快捷列表內的排序
   const [mode, setMode] = useState(null);
@@ -166,11 +194,26 @@ const GenogramTab = ({
       if (e.key === 'Enter' && mode === 'cohab' && cohabMode === 'poly' && draftPoly.length >= 3) {
         setPolygons(prev => [...prev, { id: 'pg_' + Date.now(), pts: draftPoly }]); setDraftPoly([]); setMousePos(null);
       }
+      if (e.key === 'Enter' && bgAdjust) setBgAdjust(false);
       if (e.key === 'Escape' && draftPoly.length > 0) { setDraftPoly([]); setMousePos(null); }
+      if (e.key === 'Escape' && bgAdjust) setBgAdjust(false);
+      /* 定位模式下用方向鍵微調底圖：滑鼠拖曳最小就是一個像素的抖動，
+         要把舊圖跟已經畫好的符號對齊時，一格一格推才對得準。 */
+      if (bgAdjust && e.key.startsWith('Arrow')) {
+        e.preventDefault();
+        const d = e.shiftKey ? 10 : 1;
+        const dx = e.key === 'ArrowLeft' ? -d : e.key === 'ArrowRight' ? d : 0;
+        const dy = e.key === 'ArrowUp' ? -d : e.key === 'ArrowDown' ? d : 0;
+        setBgImage(p => p ? {
+          ...p,
+          x: Math.max(0, (p.x ?? BG_X) + dx),
+          y: Math.max(0, (p.y ?? BG_Y) + dy),
+        } : p);
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [draftPoly, mode, cohabMode, quickIdx]);
+  }, [draftPoly, mode, cohabMode, quickIdx, bgAdjust, setBgImage]);
 
   /* 第二代的人數／配偶／第三代一變動，整排子女的寬度就跟著變，父母原本停的
    * 位置就不再是正中央。這裡把「改第二代」與「父母重新置中」寫成同一次更新：
@@ -257,34 +300,39 @@ const GenogramTab = ({
     const N = [], L = [];
     // 版面幾何（含第一代夫妻自動置中）與子女變動時的重新置中共用同一份計算
     const { units, fX, mX } = computeMainLayout(gen2Cfg);
-    N.push({ id: 'fa', gender: 'M', gen: 0, dx: fX, dy: GEN_Y[0], label: '父' }, { id: 'mo', gender: 'F', gen: 0, dx: mX, dy: GEN_Y[0], label: '母' });
-    L.push({ id: 'ml-g1', type: 'marry', a: 'fa', b: 'mo', status: g1Status });
+    /* 舊圖修補模式（mainFamily === false）整組主家系都不產生：畫布上只剩
+       自由擴充區、文字方塊與底圖。下面的 customLinks 區塊照跑 —— 舊圖上的
+       人物就是靠它們加的，找不到主家系節點時會退回 freeNodes 的座標。 */
+    if (mainFamily) {
+      N.push({ id: 'fa', gender: 'M', gen: 0, dx: fX, dy: GEN_Y[0], label: '父' }, { id: 'mo', gender: 'F', gen: 0, dx: mX, dy: GEN_Y[0], label: '母' });
+      L.push({ id: 'ml-g1', type: 'marry', a: 'fa', b: 'mo', status: g1Status });
 
-    const g2ids = [];
-    units.forEach((u, i) => {
-      const cid = `c${i}`;
-      if (u.isMarried) {
-        const lx = u.x, rx = u.spouseX;
-        const sid = `s${i}`, coupleMidX = (lx + rx) / 2;
-        N.push({ id: cid, gender: u.gender, gen: 1, dx: lx, dy: GEN_Y[1], label: `${u.gender === 'M'?'子':'女'}${i+1}`, isMulti: u.isMulti });
-        N.push({ id: sid, gender: u.gender === 'M'?'F':'M', gen: 1, dx: rx, dy: GEN_Y[1], label: '配偶' });
-        L.push({ id: `ml-c${i}`, type: 'marry', a: cid, b: sid, status: u.partner });
-        g2ids.push(cid);
-        if (u.g3.length > 0) {
-          const g3Start = coupleMidX - ((u.g3.length - 1) * SIBLING_GAP) / 2, g3ids = [];
-          u.g3.forEach((g, j) => {
-            const gid = `g${i}_${j}`;
-            N.push({ id: gid, gender: g, gen: 2, dx: g3Start + j * SIBLING_GAP, dy: GEN_Y[2], label: `${g==='M'?'孫':'孫女'}${j+1}` });
-            g3ids.push(gid);
-          });
-          L.push({ id: `pc-c${i}`, type: 'pc', pa: cid, pb: sid, kids: g3ids });
+      const g2ids = [];
+      units.forEach((u, i) => {
+        const cid = `c${i}`;
+        if (u.isMarried) {
+          const lx = u.x, rx = u.spouseX;
+          const sid = `s${i}`, coupleMidX = (lx + rx) / 2;
+          N.push({ id: cid, gender: u.gender, gen: 1, dx: lx, dy: GEN_Y[1], label: `${u.gender === 'M'?'子':'女'}${i+1}`, isMulti: u.isMulti });
+          N.push({ id: sid, gender: u.gender === 'M'?'F':'M', gen: 1, dx: rx, dy: GEN_Y[1], label: '配偶' });
+          L.push({ id: `ml-c${i}`, type: 'marry', a: cid, b: sid, status: u.partner });
+          g2ids.push(cid);
+          if (u.g3.length > 0) {
+            const g3Start = coupleMidX - ((u.g3.length - 1) * SIBLING_GAP) / 2, g3ids = [];
+            u.g3.forEach((g, j) => {
+              const gid = `g${i}_${j}`;
+              N.push({ id: gid, gender: g, gen: 2, dx: g3Start + j * SIBLING_GAP, dy: GEN_Y[2], label: `${g==='M'?'孫':'孫女'}${j+1}` });
+              g3ids.push(gid);
+            });
+            L.push({ id: `pc-c${i}`, type: 'pc', pa: cid, pb: sid, kids: g3ids });
+          }
+        } else {
+          N.push({ id: cid, gender: u.gender, gen: 1, dx: u.x, dy: GEN_Y[1], label: `${u.gender === 'M'?'子':'女'}${i+1}`, isMulti: u.isMulti });
+          g2ids.push(cid);
         }
-      } else {
-        N.push({ id: cid, gender: u.gender, gen: 1, dx: u.x, dy: GEN_Y[1], label: `${u.gender === 'M'?'子':'女'}${i+1}`, isMulti: u.isMulti });
-        g2ids.push(cid);
-      }
-    });
-    if (g2ids.length > 0) L.push({ id: 'pc-g1', type: 'pc', pa: 'fa', pb: 'mo', kids: g2ids });
+      });
+      if (g2ids.length > 0) L.push({ id: 'pc-g1', type: 'pc', pa: 'fa', pb: 'mo', kids: g2ids });
+    }
 
     // === customLink kidsCfg → 整合為完全體節點 ===
     customLinks.forEach(lnk => {
@@ -332,7 +380,7 @@ const GenogramTab = ({
     });
 
     return { nodes: N, lines: L };
-  }, [gen2Cfg, g1Status, customLinks]); // freeNodes 改用 ref 讀取，避免每次拖曳觸發重算
+  }, [gen2Cfg, g1Status, customLinks, mainFamily]); // freeNodes 改用 ref 讀取，避免每次拖曳觸發重算
 
 
   const pos = useCallback((id) => {
@@ -390,12 +438,13 @@ const GenogramTab = ({
   const hitTestLine = useCallback((pt) => {
     let best = null, bestDist = 14; // 14px 內才算命中，太寬會誤觸到旁邊的線
     for (const seg of marriageLineSegs) {
-      const pa = pos(seg.a), pb = pos(seg.b);
-      const d = distToSegment(pt.x, pt.y, pa.x, pa.y, pb.x, pb.y);
+      // 用實際畫出來的那一段判定：下緣式的線在符號下方，拿中心連線判定會差一截
+      const [x1, y1, x2, y2] = marriageGeom(pos(seg.a), pos(seg.b), lineStyle).hit;
+      const d = distToSegment(pt.x, pt.y, x1, y1, x2, y2);
       if (d < bestDist) { bestDist = d; best = seg.id; }
     }
     return best;
-  }, [marriageLineSegs, pos]);
+  }, [marriageLineSegs, pos, lineStyle]);
 
   const startSymbolDrag = useCallback((e, key) => {
     e.preventDefault();
@@ -495,6 +544,29 @@ const GenogramTab = ({
 
   const onMove = useCallback((e) => {
     const sp = svgPt(e);
+    /* 底圖定位：搬動只改 x/y，拉角落則以對角為錨點等比縮放。
+       兩者都夾在 0 以上 —— <svg> 沒有負座標區，拖到框外的部分會直接看不見。 */
+    if (bgDrag && bgImage) {
+      if (bgDrag.kind === 'move') {
+        setBgImage(p => p ? {
+          ...p,
+          x: Math.max(0, Math.round(sp.x - bgDrag.ox)),
+          y: Math.max(0, Math.round(sp.y - bgDrag.oy)),
+        } : p);
+      } else {
+        const s = clampScale(Math.max(
+          Math.abs(sp.x - bgDrag.ax) / bgImage.w,
+          Math.abs(sp.y - bgDrag.ay) / bgImage.h,
+        ));
+        setBgImage(p => p ? {
+          ...p, scale: s,
+          x: Math.max(0, Math.round(bgDrag.sx > 0 ? bgDrag.ax : bgDrag.ax - p.w * s)),
+          y: Math.max(0, Math.round(bgDrag.sy > 0 ? bgDrag.ay : bgDrag.ay - p.h * s)),
+        } : p);
+      }
+      return;
+    }
+    if (bgAdjust) setBgCursor({ x: sp.x, y: sp.y });
     if (draftPoly.length > 0) setMousePos({ x: sp.x, y: sp.y });
     if (dragVertex) { setPolygons(p => p.map(pg => pg.id !== dragVertex.polyId ? pg : { ...pg, pts: pg.pts.map((pt, i) => i === dragVertex.index ? { x: sp.x - dragVertex.ox, y: sp.y - dragVertex.oy } : pt) })); return; }
     if (textResize) { setTexts(p => p.map(t => t.id === textResize.id ? { ...t, fontSize: Math.max(10, Math.min(72, Math.round(textResize.startSize + (sp.y - textResize.startY) * 0.3))) } : t)); return; }
@@ -592,7 +664,8 @@ const GenogramTab = ({
       showGuide(sx, sy);
       setPositions(prev => ({ ...prev, [drag.id]: { x: sx.v, y: sy.v } }));
     }
-  }, [drag, textDrag, textResize, dragVertex, draftPoly, svgPt, setFreeNodes, customLinks, nodes, lines]);
+  }, [drag, textDrag, textResize, dragVertex, draftPoly, svgPt, setFreeNodes, customLinks, nodes, lines,
+      bgDrag, bgImage, setBgImage, bgAdjust]);
 
   const onUp = useCallback(() => {
     if (drag && drag.isFree) {
@@ -629,6 +702,7 @@ const GenogramTab = ({
       }
     }
     setDragVertex(null); setDrag(null); setTextDrag(null); setTextResize(null); setSnapGuide(null);
+    setBgDrag(null);
   }, [drag, freeNodes, nodes, pos, customLinks, setCustomLinks, setFreeNodes]);
 
   const onClick = (e, id) => {
@@ -677,31 +751,54 @@ const GenogramTab = ({
     });
     texts.forEach(t => { const w = t.vertical ? t.fontSize * 1.5 : t.text.length * t.fontSize * 0.7, h = t.vertical ? t.text.length * t.fontSize * 1.2 : t.fontSize * 1.5; allXs.push(t.x - 4, t.x + (t.vertical ? t.fontSize * 1.5 : w)); allYs.push(t.y - (t.vertical ? 4 : t.fontSize + 4), t.y + (t.vertical ? h : 8)); });
     polygons.forEach(pg => pg.pts.forEach(pt => { allXs.push(pt.x); allYs.push(pt.y); }));
-    // 底圖也要進裁切範圍，否則下載/列印會把修補好的舊圖切掉
-    const bgBox = bgImageBox(bgImage);
-    if (bgBox) { allXs.push(bgBox.x, bgBox.x + bgBox.w); allYs.push(bgBox.y, bgBox.y + bgBox.h); }
     if (cohabitationBox && cohabitationBox.type === 'single') { allXs.push(cohabitationBox.x, cohabitationBox.x + cohabitationBox.w); allYs.push(cohabitationBox.y, cohabitationBox.y + cohabitationBox.h); }
     else if (cohabitationBox && cohabitationBox.type === 'poly') { cohabitationBox.points.forEach(pt => { allXs.push(pt.x); allYs.push(pt.y); }); }
-    if (allXs.length === 0) return null;
-    const minX = Math.min(...allXs) - PAD, minY = Math.min(...allYs) - PAD;
-    const w = Math.max(...allXs) + PAD - minX, h = Math.max(...allYs) + PAD - minY;
-    return { minX, minY, w, h };
+
+    // 底圖也要進裁切範圍，否則下載/列印會把修補好的舊圖切掉
+    const bgBox = bgImageBox(bgImage);
+    if (allXs.length === 0 && !bgBox) return null;
+
+    /* 只有「畫上去的東西」需要外加白邊；底圖不用 —— 一張圖的邊界本來就是
+       它自己的留白。對底圖再墊一次 40px 的話，「下載 → 匯入修補 → 再下載」
+       每繞一圈就會多長出一圈白邊，來回幾趟整張圖會越縮越小。 */
+    const span = (vals, lo, hi) => {
+      const drawn = vals.length > 0;
+      return {
+        min: Math.min(drawn ? Math.min(...vals) - PAD : Infinity, lo ?? Infinity),
+        max: Math.max(drawn ? Math.max(...vals) + PAD : -Infinity, hi ?? -Infinity),
+      };
+    };
+    const sx = span(allXs, bgBox?.x, bgBox && bgBox.x + bgBox.w);
+    const sy = span(allYs, bgBox?.y, bgBox && bgBox.y + bgBox.h);
+    return { minX: sx.min, minY: sy.min, w: sx.max - sx.min, h: sy.max - sy.min };
   }, [nodes, freeNodes, texts, polygons, cohabitationBox, pos, bgImage]);
 
   /** 把畫布裁切後轉成點陣圖並下載。transparent=true 時不補白底（PNG 去背用）。 */
   const rasterizeAndDownload = useCallback((box, { transparent, format, filename }) => {
-    const cloned = svgRef.current.cloneNode(true);
+    const cloned = stripEditorOnly(svgRef.current.cloneNode(true));
     cloned.setAttribute('width', box.w); cloned.setAttribute('height', box.h);
     cloned.setAttribute('viewBox', `${box.minX} ${box.minY} ${box.w} ${box.h}`);
     const url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(cloned)], { type: 'image/svg+xml;charset=utf-8' }));
     const img = new Image();
     img.onload = () => {
-      const canvas = document.createElement('canvas'); canvas.width = box.w * 3; canvas.height = box.h * 3;
-      const ctx = canvas.getContext('2d'); ctx.scale(3, 3);
+      const canvas = document.createElement('canvas'); canvas.width = box.w * EXPORT_SCALE; canvas.height = box.h * EXPORT_SCALE;
+      const ctx = canvas.getContext('2d'); ctx.scale(EXPORT_SCALE, EXPORT_SCALE);
       if (!transparent) { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, box.w, box.h); }
       ctx.drawImage(img, 0, 0, box.w, box.h);
       URL.revokeObjectURL(url);
-      canvas.toBlob(blob => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click(); URL.revokeObjectURL(a.href); }, format, 1.0);
+      /* 把裁切框寫進圖檔本身：這張圖之後再匯入「舊圖修補」時，就能一比一
+         放回原本的位置與大小，而不是變成三倍大又貼在左上角。 */
+      canvas.toBlob(async blob => {
+        const stamped = await stampOriginMeta(blob, format, {
+          v: 1,
+          x: Math.round(box.minX), y: Math.round(box.minY),
+          w: Math.round(box.w), h: Math.round(box.h),
+          s: EXPORT_SCALE,
+        });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(stamped); a.download = filename; a.click();
+        URL.revokeObjectURL(a.href);
+      }, format, 1.0);
     };
     img.src = url;
   }, []);
@@ -739,7 +836,7 @@ const GenogramTab = ({
   const printA4 = useCallback(() => {
     const box = computeCropBox();
     if (!box) return;
-    const cloned = svgRef.current.cloneNode(true);
+    const cloned = stripEditorOnly(svgRef.current.cloneNode(true));
     cloned.removeAttribute('width'); cloned.removeAttribute('height');
     cloned.setAttribute('viewBox', `${box.minX} ${box.minY} ${box.w} ${box.h}`);
     cloned.setAttribute('preserveAspectRatio', 'xMidYMid meet');
@@ -764,25 +861,45 @@ const GenogramTab = ({
 
   /* ===== 橡皮擦：在底圖上拖曳抹除 =====
    * 一筆從 mousedown 開始、mouseup 結束，中途只更新本地暫態；
-   * 放開才寫進文件，所以一筆就是一筆歷史，Ctrl+Z 會整筆消失而不是一段一段。 */
+   * 放開才寫進文件，所以一筆就是一筆歷史，Ctrl+Z 會整筆消失而不是一段一段。
+   *
+   * 座標存的是「圖片自身的像素」而不是畫布座標：底圖之後被搬動或縮放時，
+   * 擦掉的地方要跟著圖一起走，不然一移動就會在畫布上留下一片破洞。
+   * 筆刷寬度同理 —— 滑鼠底下看到的圈固定是 eraseWidth 個畫布單位，
+   * 寫進文件前先除以倍率換算成圖片像素。 */
+  const bgLocal = useCallback((sp) => {
+    const s = bgImage?.scale || 1;
+    return {
+      x: (sp.x - (bgImage?.x ?? BG_X)) / s,
+      y: (sp.y - (bgImage?.y ?? BG_Y)) / s,
+      s,
+    };
+  }, [bgImage]);
+
   const eraseStart = useCallback((e) => {
     if (!bgImage) return;
     e.stopPropagation();
-    const sp = svgPt(e);
-    setEraseDraft({ w: eraseWidth, pts: [[Math.round(sp.x), Math.round(sp.y)]] });
-  }, [bgImage, eraseWidth, svgPt]);
+    const { x, y, s } = bgLocal(svgPt(e));
+    setEraseDraft({
+      w: Math.max(1, Math.round(eraseWidth / s)),
+      pts: [[Math.round(x), Math.round(y)]],
+    });
+  }, [bgImage, eraseWidth, svgPt, bgLocal]);
 
   const eraseMoveTo = useCallback((e) => {
-    if (!eraseDraft) return;
     const sp = svgPt(e);
+    setEraseCursor({ x: sp.x, y: sp.y });
+    if (!eraseDraft) return;
+    const { x, y, s } = bgLocal(sp);
     setEraseDraft(d => {
       if (!d) return d;
       const last = d.pts[d.pts.length - 1];
-      // 每 3px 才記一點：省掉大量幾乎重疊的座標，存檔才不會膨脹
-      if (Math.abs(sp.x - last[0]) < 3 && Math.abs(sp.y - last[1]) < 3) return d;
-      return { ...d, pts: [...d.pts, [Math.round(sp.x), Math.round(sp.y)]] };
+      // 畫布上每移動 3px 才記一點：省掉大量幾乎重疊的座標，存檔才不會膨脹
+      const step = 3 / s;
+      if (Math.abs(x - last[0]) < step && Math.abs(y - last[1]) < step) return d;
+      return { ...d, pts: [...d.pts, [Math.round(x), Math.round(y)]] };
     });
-  }, [eraseDraft, svgPt]);
+  }, [eraseDraft, svgPt, bgLocal]);
 
   const eraseEnd = useCallback(() => {
     if (!eraseDraft) return;
@@ -791,8 +908,39 @@ const GenogramTab = ({
     setBgErase(prev => [...prev, stroke]);
   }, [eraseDraft, setBgErase]);
 
-  /* 沒有底圖就不該還停在橡皮擦模式（例如剛按了復原把底圖收回去） */
-  useEffect(() => { if (!bgImage && eraseMode) setEraseMode(false); }, [bgImage, eraseMode]);
+  /* 主家系還是「沒人動過的預設兩個符號」——只有這種狀態才適合在匯入舊圖時
+     自動收起來。已經建好一個家庭的人可能是想在掃描的生態圖旁邊接著畫，
+     把他的圖藏起來會比多按一次按鈕糟糕得多。 */
+  const mainFamilyPristine = useCallback(() => (
+    gen2Cfg.length === 0
+    && indexId === null
+    && g1Status === INITIAL_DOC.g1Status
+    && cohabMembers.length === 0
+    && Object.keys(positions).length === 0
+    && Object.keys(doc.nodeAttrs).length === 0
+    && Object.keys(doc.lineAttrs).length === 0
+    && Object.keys(doc.ages).length === 0
+  ), [gen2Cfg, indexId, g1Status, cohabMembers, positions, doc.nodeAttrs, doc.lineAttrs, doc.ages]);
+
+  /* 匯入底圖：連同「要不要收起主家系」寫成同一次更新，Ctrl+Z 才是一步還原
+     ——分兩次寫的話，復原一次只收回底圖，主家系還是不見的。 */
+  const importBgImage = useCallback((img) => {
+    patchDoc({
+      bgImage: img,
+      bgErase: [],                                    // 換底圖不該留上一張的擦除筆跡
+      ...(mainFamily && mainFamilyPristine() ? { mainFamily: false } : {}),
+    }, '__bgImport');
+  }, [patchDoc, mainFamily, mainFamilyPristine]);
+
+  /* 沒有底圖就不該還停在橡皮擦或定位模式（例如剛按了復原把底圖收回去） */
+  useEffect(() => {
+    if (bgImage) return;
+    if (eraseMode) setEraseMode(false);
+    if (bgAdjust) setBgAdjust(false);
+  }, [bgImage, eraseMode, bgAdjust]);
+
+  // 離開定位模式就把參考圈收掉，否則它會留在最後一次滑過的位置
+  useEffect(() => { if (!bgAdjust) setBgCursor(null); }, [bgAdjust]);
 
   const eraseStrokes = eraseDraft ? [...bgErase, eraseDraft] : bgErase;
 
@@ -841,8 +989,10 @@ const GenogramTab = ({
                 gen2Str: '', gen2Cfg: [], indexId: null, cohabMembers: [], nodeAttrs: {}, lineAttrs: {},
                 cohabSolid: false, polygons: [], texts: [], ages: {},
                 freeNodes: [], customLinks: [], positions: {}, ipStyle: 'filled',
-                bgImage: null, bgErase: [],
+                bgImage: null, bgErase: [], mainFamily: true,
                 subjInfo: INITIAL_DOC.subjInfo, famExtras: {}, recordEdit: '',
+                /* lineStyle／lineWidth 刻意不重置：那是使用者的畫法偏好，
+                   不是這一份個案的資料，清掉只會讓他每開一份新案件重設一次。 */
               }, '__reset');
             }}>重置</button>
           </div>
@@ -949,8 +1099,25 @@ const GenogramTab = ({
           </div>
         </div>
 
+        {/* 舊圖修補模式：主家系整組不畫，這三張卡就沒有意義了，收成一行說明。
+            資料沒有被清掉，切回來整組都在，所以講「已停用」而不是「已清除」。 */}
+        {!mainFamily && (
+          <div className="section main-family-off">
+            <div className="section-title-row">
+              <label>主家系已停用</label>
+              <InfoTip text="舊圖修補模式下不畫自動排版的主家系（第一代、第二代、第三代與它們的線），畫布上只留舊圖、自由擴充區的個體與文字方塊。原本填的資料都還在，切回來就整組回來。" />
+              <button className="btn-soft tone-dust btn-soft-xs" style={{ marginLeft: 'auto' }}
+                      onClick={() => setMainFamily(true)}>切回主家系</button>
+            </div>
+            <div className="hint" style={{ marginTop: 0 }}>
+              舊圖上的人物請用下方「🧩 自由擴充區」一個一個加，位置才不會被自動排版拉走。
+            </div>
+          </div>
+        )}
+
         {/* 第一代與第二代是同一條主線上的兩張卡，標題列結構刻意寫成一樣的
             （section-title-row + label + ⓘ），字級與顏色才不會各走各的 */}
+        {mainFamily && (<>
         <div className="section">
           <div className="section-title-row">
             <label>第一代（父母）</label>
@@ -969,8 +1136,9 @@ const GenogramTab = ({
           </div>
           <input type="text" value={gen2Str} onChange={e => onGen2Change(e.target.value)} placeholder="例：女女男男女 或 FFMMF 或 11221" />
         </div>
+        </>)}
 
-        {gen2Cfg.length > 0 && (
+        {mainFamily && gen2Cfg.length > 0 && (
           <div className="section">
             <label>第二代成員設定</label>
             {gen2Cfg.map((c, i) => (
@@ -996,6 +1164,21 @@ const GenogramTab = ({
             ))}
           </div>
         )}
+
+        {/* 關係線畫法。放在這裡而不是收進舊圖修補面板：它是全站通用的偏好
+            （有人本來就習慣下緣式），只是在對舊圖時特別用得到。 */}
+        <div className="section section-inline">
+          <label style={{ margin: 0 }}>🖇️ 關係線</label>
+          <InfoTip text="家系圖的畫線沒有唯一規範。「中線式」是兩人符號側緣直接連一條（本站原本的畫法）；「下緣式」是各自從符號下緣垂一小段、在下方接成橫線，子女再從橫線往下（McGoldrick 一系教科書常見）。修補舊圖時挑跟原圖一樣的，新疊上去的線才不會是另一套文法。線寬同理，舊圖掃出來通常比較粗。兩個標籤都可以點擊或滾輪切換。" />
+          <span className="status-badge" data-status={lineStyle}
+                onClick={cycleOnClick(LINE_STYLES, lineStyle, setLineStyle)}
+                ref={el => wheelRef(el, LINE_STYLES, lineStyle, setLineStyle)}
+                style={{ marginLeft: 'auto' }}>{LINE_STYLE_LABELS[lineStyle]}</span>
+          <span className="status-badge"
+                onClick={cycleOnClick(LINE_WIDTHS, lineWidth, setLineWidth)}
+                ref={el => wheelRef(el, LINE_WIDTHS, lineWidth, setLineWidth)}
+                title="線寬">{lineWidth.toFixed(1)}</span>
+        </div>
 
         <div className="section section-inline">
           <label style={{ margin: 0 }}>📝 文字方塊</label>
@@ -1030,10 +1213,12 @@ const GenogramTab = ({
         </div>
 
         <ImagePatchPanel
-          bgImage={bgImage} setBgImage={setBgImage}
+          bgImage={bgImage} setBgImage={setBgImage} importBgImage={importBgImage}
           bgErase={bgErase} setBgErase={setBgErase}
           eraseMode={eraseMode} setEraseMode={setEraseMode}
           eraseWidth={eraseWidth} setEraseWidth={setEraseWidth}
+          bgAdjust={bgAdjust} setBgAdjust={setBgAdjust}
+          mainFamily={mainFamily} setMainFamily={setMainFamily}
         />
 
         <CaseBar
@@ -1152,16 +1337,20 @@ const GenogramTab = ({
                 去背 PNG 匯出時擦過的地方才會是真的透明，而不是白色筆跡 */}
             {bgImage && (
               <mask id="bg-erase-mask" maskUnits="userSpaceOnUse"
-                    x={BG_X} y={BG_Y} width={bgBox.w} height={bgBox.h}>
-                <rect x={BG_X} y={BG_Y} width={bgBox.w} height={bgBox.h} fill="white" />
-                {eraseStrokes.map((st, i) => (
-                  <polyline
-                    key={st.id || `draft${i}`}
-                    points={st.pts.map(pt => pt.join(',')).join(' ')}
-                    fill="none" stroke="black" strokeWidth={st.w}
-                    strokeLinecap="round" strokeLinejoin="round"
-                  />
-                ))}
+                    x={bgBox.x} y={bgBox.y} width={bgBox.w} height={bgBox.h}>
+                {/* 筆跡存的是圖片自身的像素座標，所以整組套上跟底圖一樣的
+                    位移與縮放 —— 底圖搬到哪，擦痕就跟到哪。 */}
+                <g transform={`translate(${bgBox.x},${bgBox.y}) scale(${bgImage.scale || 1})`}>
+                  <rect x="0" y="0" width={bgImage.w} height={bgImage.h} fill="white" />
+                  {eraseStrokes.map((st, i) => (
+                    <polyline
+                      key={st.id || `draft${i}`}
+                      points={st.pts.map(pt => pt.join(',')).join(' ')}
+                      fill="none" stroke="black" strokeWidth={st.w}
+                      strokeLinecap="round" strokeLinejoin="round"
+                    />
+                  ))}
+                </g>
               </mask>
             )}
           </defs>
@@ -1170,9 +1359,9 @@ const GenogramTab = ({
           {/* 舊圖底圖：畫在所有內容底下，新疊上去的符號才會蓋在舊圖上面 */}
           {bgImage && (
             <image
-              href={bgImage.src} x={BG_X} y={BG_Y}
+              href={bgImage.src} x={bgBox.x} y={bgBox.y}
               width={bgBox.w} height={bgBox.h}
-              opacity={bgImage.opacity ?? 0.55}
+              opacity={bgImage.opacity ?? DEFAULT_OPACITY}
               mask="url(#bg-erase-mask)"
               preserveAspectRatio="none"
               style={{ pointerEvents: 'none' }}
@@ -1201,33 +1390,45 @@ const GenogramTab = ({
             </g>
           )}
 
-          <text x="16" y={GEN_Y[0] + 5} fontSize="12" fill="#b0b8c4" fontWeight="600" style={{fontFamily: TEXT_FONT}}>G1</text>
-          {gen2Cfg.length > 0 && <text x="16" y={GEN_Y[1] + 5} fontSize="12" fill="#b0b8c4" fontWeight="600" style={{fontFamily: TEXT_FONT}}>G2</text>}
-          {gen2Cfg.some(d => d.partner !== 'none' && d.g3Str) && <text x="16" y={GEN_Y[2] + 5} fontSize="12" fill="#b0b8c4" fontWeight="600" style={{fontFamily: TEXT_FONT}}>G3</text>}
+          {/* 世代標尺跟著主家系走：舊圖修補模式下沒有 G1／G2／G3 這種欄位概念 */}
+          {mainFamily && <text x="16" y={GEN_Y[0] + 5} fontSize="12" fill="#b0b8c4" fontWeight="600" style={{fontFamily: TEXT_FONT}}>G1</text>}
+          {mainFamily && gen2Cfg.length > 0 && <text x="16" y={GEN_Y[1] + 5} fontSize="12" fill="#b0b8c4" fontWeight="600" style={{fontFamily: TEXT_FONT}}>G2</text>}
+          {mainFamily && gen2Cfg.some(d => d.partner !== 'none' && d.g3Str) && <text x="16" y={GEN_Y[2] + 5} fontSize="12" fill="#b0b8c4" fontWeight="600" style={{fontFamily: TEXT_FONT}}>G3</text>}
 
           {lines.map(ln => {
             const lineColor = ln.isExt && extColorMode === 'blue' ? '#3b82f6' : '#444';
             if (ln.type === 'marry') {
-              const a = pos(ln.a), b = pos(ln.b);
-              const x1 = a.x + R, x2 = b.x - R, midX = (x1 + x2) / 2, midY = a.y;
-              const els = [<line key={ln.id} x1={x1} y1={a.y} x2={x2} y2={b.y} stroke={lineColor} strokeWidth="2" strokeDasharray={ln.status === 'cohab' ? "8,6" : "0"} />];
-              if (ln.status === 'separated') els.push(<line key={`${ln.id}-s`} x1={midX-6} y1={midY+12} x2={midX+6} y2={midY-12} stroke={lineColor} strokeWidth="2" />);
-              if (ln.status === 'divorced') els.push(<line key={`${ln.id}-d1`} x1={midX-8} y1={midY-8} x2={midX+8} y2={midY+8} stroke={lineColor} strokeWidth="2" />, <line key={`${ln.id}-d2`} x1={midX-8} y1={midY+8} x2={midX+8} y2={midY-8} stroke={lineColor} strokeWidth="2" />);
+              /* 中線式是一條線，下緣式是「垂下—橫過—垂下」三段；離婚／分居的
+                 斜線也跟著 geom.mid 走，切換畫法時記號不會留在原地。 */
+              const geom = marriageGeom(pos(ln.a), pos(ln.b), lineStyle);
+              const { x: midX, y: midY } = geom.mid;
+              const els = geom.segs.map(([x1, y1, x2, y2], i) => (
+                <line key={`${ln.id}-${i}`} x1={x1} y1={y1} x2={x2} y2={y2}
+                      stroke={lineColor} strokeWidth={lineWidth}
+                      strokeDasharray={ln.status === 'cohab' ? '8,6' : '0'} />
+              ));
+              if (ln.status === 'separated') els.push(<line key={`${ln.id}-s`} x1={midX-6} y1={midY+12} x2={midX+6} y2={midY-12} stroke={lineColor} strokeWidth={lineWidth} />);
+              if (ln.status === 'divorced') els.push(<line key={`${ln.id}-d1`} x1={midX-8} y1={midY-8} x2={midX+8} y2={midY+8} stroke={lineColor} strokeWidth={lineWidth} />, <line key={`${ln.id}-d2`} x1={midX-8} y1={midY+8} x2={midX+8} y2={midY-8} stroke={lineColor} strokeWidth={lineWidth} />);
               return <g key={ln.id}>{els}</g>;
             }
             if (ln.type === 'pc') {
-              const pA = pos(ln.pa), pB = pos(ln.pb), midX = (pA.x + pB.x) / 2, parentY = Math.max(pA.y, pB.y);
+              const pA = pos(ln.pa), pB = pos(ln.pb), midX = (pA.x + pB.x) / 2;
               const kidPos = ln.kids.map(k => pos(k)); if (kidPos.length === 0) return null;
-              const barY = (parentY + R + kidPos[0].y - R) / 2, els = [];
-              els.push(<line key={`${ln.id}-v`} x1={midX} y1={parentY} x2={midX} y2={barY} stroke={lineColor} strokeWidth="2" />);
+              /* 子女豎線從婚姻線接下去：中線式接在兩人中線上（豎線會穿過婚姻線），
+                 下緣式接在下方那條橫線上。兩者都由 marriageGeom 算，不會各走各的。 */
+              const coupleY = marriageGeom(pA, pB, lineStyle).barY;
+              const topY = lineStyle === 'below' ? coupleY : coupleY + R;
+              // 子女被拖到很靠近父母時，中點會跑到婚姻線上方，橫線就會反向
+              const barY = Math.max(topY + 10, (topY + kidPos[0].y - R) / 2), els = [];
+              els.push(<line key={`${ln.id}-v`} x1={midX} y1={coupleY} x2={midX} y2={barY} stroke={lineColor} strokeWidth={lineWidth} />);
               const groups = []; let cur = []; ln.kids.forEach((k, i) => { if (nodes.find(n => n.id === k)?.isMulti) cur.push(i); else { if (cur.length >= 2) groups.push(cur); cur = []; } }); if (cur.length >= 2) groups.push(cur);
               // 計算水平線端點：多胞胎用匯集中心點，非多胞胎用個體 X
               const barXs = kidPos.map((kp, j) => { const g = groups.find(x => x.includes(j)); return g ? g.map(i => kidPos[i].x).reduce((a, b) => a + b, 0) / g.length : kp.x; });
-              els.push(<line key={`${ln.id}-h`} x1={Math.min(midX, ...barXs)} y1={barY} x2={Math.max(midX, ...barXs)} y2={barY} stroke={lineColor} strokeWidth="2" />);
+              els.push(<line key={`${ln.id}-h`} x1={Math.min(midX, ...barXs)} y1={barY} x2={Math.max(midX, ...barXs)} y2={barY} stroke={lineColor} strokeWidth={lineWidth} />);
               kidPos.forEach((kp, j) => {
                 const g = groups.find(x => x.includes(j));
-                if (g) els.push(<line key={`${ln.id}-m${j}`} x1={g.map(i=>kidPos[i].x).reduce((a,b)=>a+b,0)/g.length} y1={barY} x2={kp.x} y2={kp.y - R} stroke={lineColor} strokeWidth="2" />);
-                else els.push(<line key={`${ln.id}-k${j}`} x1={kp.x} y1={barY} x2={kp.x} y2={kp.y - R} stroke={lineColor} strokeWidth="2" strokeDasharray={kinshipDashFor(doc.nodeAttrs[ln.kids[j]])} />);
+                if (g) els.push(<line key={`${ln.id}-m${j}`} x1={g.map(i=>kidPos[i].x).reduce((a,b)=>a+b,0)/g.length} y1={barY} x2={kp.x} y2={kp.y - R} stroke={lineColor} strokeWidth={lineWidth} />);
+                else els.push(<line key={`${ln.id}-k${j}`} x1={kp.x} y1={barY} x2={kp.x} y2={kp.y - R} stroke={lineColor} strokeWidth={lineWidth} strokeDasharray={kinshipDashFor(doc.nodeAttrs[ln.kids[j]])} />);
               });
               return <g key={ln.id}>{els}</g>;
             } return null;
@@ -1417,19 +1618,21 @@ const GenogramTab = ({
               );
             }
 
-            const isSpLeft = sp.x < tp.x;
-            const x1 = isSpLeft ? sp.x + R : sp.x - R;
-            const x2 = isSpLeft ? tp.x - R : tp.x + R;
-            const midX = (x1 + x2) / 2, midY = (sp.y + tp.y) / 2;
+            // 擴充關係的配偶線跟主家系走同一套畫法，兩邊才不會是兩種文法
+            const geom = marriageGeom(sp, tp, lineStyle);
+            const { x: midX, y: midY } = geom.mid;
+            const [hx1, hy1, hx2, hy2] = geom.hit;
             const cStroke = extColorMode === 'blue' ? '#3b82f6' : '#444';
             return (
               <g key={lnk.id}>
-                <line x1={x1} y1={sp.y} x2={x2} y2={tp.y} stroke={cStroke} strokeWidth="2" />
+                {geom.segs.map(([x1, y1, x2, y2], i) => (
+                  <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke={cStroke} strokeWidth={lineWidth} />
+                ))}
                 {lnk.status === 'divorced' && <>
-                  <line x1={midX-8} y1={midY-8} x2={midX+8} y2={midY+8} stroke={cStroke} strokeWidth="2" />
-                  <line x1={midX-8} y1={midY+8} x2={midX+8} y2={midY-8} stroke={cStroke} strokeWidth="2" />
+                  <line x1={midX-8} y1={midY-8} x2={midX+8} y2={midY+8} stroke={cStroke} strokeWidth={lineWidth} />
+                  <line x1={midX-8} y1={midY+8} x2={midX+8} y2={midY-8} stroke={cStroke} strokeWidth={lineWidth} />
                 </>}
-                <line x1={x1} y1={sp.y} x2={x2} y2={tp.y} stroke="transparent" strokeWidth="12" style={{ cursor: 'pointer' }} onDoubleClick={e => { e.stopPropagation(); deleteCustomLink(lnk.id); }} />
+                <line x1={hx1} y1={hy1} x2={hx2} y2={hy2} stroke="transparent" strokeWidth="12" style={{ cursor: 'pointer' }} onDoubleClick={e => { e.stopPropagation(); deleteCustomLink(lnk.id); }} />
               </g>
             );
           })}
@@ -1438,8 +1641,8 @@ const GenogramTab = ({
           {symbolDrag?.hoverLineId && (() => {
             const seg = marriageLineSegs.find(s => s.id === symbolDrag.hoverLineId);
             if (!seg) return null;
-            const pa = pos(seg.a), pb = pos(seg.b);
-            return <line x1={pa.x} y1={pa.y} x2={pb.x} y2={pb.y} stroke="#3b82f6" strokeWidth="7" strokeDasharray="5,4" opacity="0.5" pointerEvents="none" />;
+            const [x1, y1, x2, y2] = marriageGeom(pos(seg.a), pos(seg.b), lineStyle).hit;
+            return <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#3b82f6" strokeWidth="7" strokeDasharray="5,4" opacity="0.5" pointerEvents="none" />;
           })()}
 
           {/* === 關係品質標記 (疏離／衝突／斷絕／暴力，疊加在婚姻線上) === */}
@@ -1534,18 +1737,79 @@ const GenogramTab = ({
             );
           })}
 
-          {/* 橡皮擦模式的擷取層：蓋在最上面，讓節點與文字方塊在擦除時不會被誤拖。
-              fill 透明所以不影響匯出結果。 */}
+          {/* 底圖定位框：拖框內搬動、拖四角等比縮放，方向鍵可以微調一格。
+              只服務編輯畫面，下載與列印前會被 stripEditorOnly 拿掉。 */}
+          {bgAdjust && bgImage && (
+            <g className={NO_EXPORT}>
+              <rect
+                x={bgBox.x} y={bgBox.y} width={bgBox.w} height={bgBox.h}
+                fill="rgba(59, 130, 246, 0.06)" stroke="#3b82f6"
+                strokeWidth="2" strokeDasharray="10,7"
+                style={{ cursor: 'move', touchAction: 'none' }}
+                onPointerDown={e => {
+                  e.stopPropagation();
+                  const sp = svgPt(e);
+                  setBgDrag({ kind: 'move', ox: sp.x - bgBox.x, oy: sp.y - bgBox.y });
+                }}
+                onClick={e => e.stopPropagation()}
+              />
+              {BG_HANDLES.map(([sx, sy]) => (
+                <circle
+                  key={`${sx}${sy}`}
+                  cx={sx < 0 ? bgBox.x : bgBox.x + bgBox.w}
+                  cy={sy < 0 ? bgBox.y : bgBox.y + bgBox.h}
+                  r="9" fill="#3b82f6" stroke="white" strokeWidth="2"
+                  style={{ cursor: sx === sy ? 'nwse-resize' : 'nesw-resize', touchAction: 'none' }}
+                  onPointerDown={e => {
+                    e.stopPropagation();
+                    // 錨點是被拖那一角的對角：縮放時對角固定不動
+                    setBgDrag({
+                      kind: 'resize', sx, sy,
+                      ax: sx < 0 ? bgBox.x + bgBox.w : bgBox.x,
+                      ay: sy < 0 ? bgBox.y + bgBox.h : bgBox.y,
+                    });
+                  }}
+                  onClick={e => e.stopPropagation()}
+                />
+              ))}
+
+              {/* 符號大小參考圈：跟畫布上的人物一樣是 SZ 單位。縮放舊圖時拿它
+                  比對圖上的圓圈方塊，就能把舊圖縮到跟新符號同一個尺度 ——
+                  不必猜百分比，也不用去改 App 這邊的符號大小。 */}
+              {bgCursor && (
+                <g pointerEvents="none">
+                  <circle cx={bgCursor.x} cy={bgCursor.y} r={R}
+                          fill="none" stroke="#3b82f6" strokeWidth="1.5" strokeDasharray="4,3" />
+                  <text x={bgCursor.x + R + 6} y={bgCursor.y + 4} fontSize="11" fill="#3b82f6"
+                        fontWeight="600" style={{ fontFamily: TEXT_FONT }}>符號大小</text>
+                </g>
+              )}
+            </g>
+          )}
+
+          {/* 橡皮擦模式的擷取層：蓋在最上面，讓節點與文字方塊在擦除時不會被誤拖。 */}
           {eraseMode && bgImage && (
             <rect
+              className={NO_EXPORT}
               width="100%" height="100%" fill="transparent"
-              style={{ cursor: 'crosshair', touchAction: 'none' }}
+              // 有預覽圈就把系統游標藏起來，兩個指標同時在畫面上反而分心
+              style={{ cursor: eraseCursor ? 'none' : 'crosshair', touchAction: 'none' }}
               onPointerDown={eraseStart}
               onPointerMove={eraseMoveTo}
               onPointerUp={eraseEnd}
-              onPointerLeave={eraseEnd}
+              onPointerLeave={() => { eraseEnd(); setEraseCursor(null); }}
               onPointerCancel={eraseEnd}
               onClick={e => e.stopPropagation()}
+            />
+          )}
+
+          {/* 筆刷預覽圈：擦之前先看得到會擦掉多大一塊，才不用試一次退一次 */}
+          {eraseMode && bgImage && eraseCursor && (
+            <circle
+              className={NO_EXPORT}
+              cx={eraseCursor.x} cy={eraseCursor.y} r={eraseWidth / 2}
+              fill="rgba(59, 130, 246, 0.12)" stroke="#3b82f6" strokeWidth="1.5"
+              pointerEvents="none"
             />
           )}
         </svg>

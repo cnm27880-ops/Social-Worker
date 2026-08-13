@@ -10,6 +10,8 @@
  * 同一份資料，所以只需要維護一種格式。
  * =========================================================================== */
 
+import { migrateBgPatch } from './bgImage';
+
 /** 文件格式版本。日後改變資料形狀時 +1，並在 migrateDoc 補上轉換。 */
 export const DOC_VERSION = 1;
 
@@ -25,6 +27,24 @@ export const INITIAL_DOC = {
   indexId: null,
   g1Status: 'married',
   cohabMembers: [],
+
+  /* --- 主家系開關 ---
+   * false 時，整組自動產生的主家系（第一代夫妻、第二代、第三代與它們的線）
+   * 都不畫，畫布上只剩自由擴充區、文字方塊、圈選與底圖。
+   *
+   * 為什麼需要這個開關：第一代那兩個符號是寫死進畫布的，沒有「空白畫布」
+   * 這個狀態。匯入舊圖修補時，它們一定壓在別人畫好的圖上，而且刪不掉。
+   * 而舊圖上的人物本來就該用自由擴充區一個一個加 —— 主家系是「填表自動
+   * 排版」，跟「在既有的圖上加註」是相反的操作方式，硬要並存只會互相打架。
+   *
+   * 關掉不會銷毀 gen2Cfg 等資料，切回來整組都在。 */
+  mainFamily: true,
+
+  /* --- 關係線畫法與線寬 ---
+   * 見 utils/helpers.js 的 marriageGeom：家系圖的畫線沒有唯一規範，
+   * 舊圖修補時要能配合原圖，新疊上去的線才不會跟底下那張圖是兩套文法。 */
+  lineStyle: 'center',
+  lineWidth: 2,
 
   /* --- 節點標記 ---
    * { [nodeId]: ['deceased', 'disabled', ...] }
@@ -53,7 +73,7 @@ export const INITIAL_DOC = {
 
   /* --- 舊圖修補（Image Overlay） ---
    * 匯入一張既有的家系圖當底圖，在上面疊符號、關係線與文字方塊。
-   * { src: dataURL, w, h, opacity, scale }
+   * { src: dataURL, w, h, x, y, scale, baseX, baseY, baseScale, opacity, fromApp, v }
    * src 存 dataURL 而不是 File／blob URL：blob URL 重新整理就失效，
    * 而底圖必須跟著案件一起存進案件庫、一起匯出成 .json。
    * 上傳時會先縮圖再轉 dataURL（見 utils/bgImage.js），避免把
@@ -61,7 +81,8 @@ export const INITIAL_DOC = {
   bgImage: null,
 
   /* --- 底圖橡皮擦筆跡 ---
-   * [{ id, w, pts: [[x, y], ...] }]
+   * [{ id, w, pts: [[x, y], ...] }]，座標與筆寬都是「圖片自身的像素」，
+   * 不是畫布座標 —— 底圖被拖動或縮放時，擦掉的地方才會跟著一起走。
    * 底圖是點陣圖，「擦掉」的做法是拿這些筆跡組成 SVG mask 把該處挖成透明，
    * 而不是在上面塗白色 —— 塗白在去背 PNG 匯出時會留下白色筆跡。 */
   bgErase: [],
@@ -291,6 +312,10 @@ export const migrateDoc = (raw) => {
   // 底圖與橡皮擦筆跡：形狀不對就當沒有。壞掉的一筆不該讓整張畫布打不開
   if (doc.bgImage && typeof doc.bgImage.src !== 'string') doc.bgImage = null;
   doc.bgErase = doc.bgErase.filter(st => st && Array.isArray(st.pts) && st.pts.length > 0);
+  // v1 的底圖沒有 x/y，筆跡也還存在畫布座標；換算成目前的格式（見 utils/bgImage.js）
+  const bgPatch = migrateBgPatch(doc.bgImage, doc.bgErase);
+  doc.bgImage = bgPatch.bgImage;
+  doc.bgErase = bgPatch.bgErase;
 
   return doc;
 };
