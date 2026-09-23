@@ -22,7 +22,7 @@ import {
   resolveText, anchoredXY, snapWhileDragging, detachTextsFrom, duplicateText,
   textCenter, xyForCenter,
 } from '../utils/textBox';
-import { AGE_DISPLAYS, AGE_DISPLAY_LABELS, displayAge, currentRocYear } from '../utils/age';
+import { displayAge, currentRocYear, parseAgeInput } from '../utils/age';
 import { newId } from '../utils/ids';
 import { setChildLink, dropChildLinks, childRestPos, dropZones, hitZone, descendantsOf } from '../utils/childLinks';
 import { buildFamily } from '../utils/familyLayout';
@@ -132,6 +132,8 @@ const GenogramTab = ({
   const ages = doc.ages,                      setAges = setField('ages');
   const ageDisplay = doc.ageDisplay,          setAgeDisplay = setField('ageDisplay');
   const rocYear = currentRocYear();
+  /** 圖上有沒有人填的是民國生年：有才需要「生年 ⇄ 實歲」那顆按鈕。 */
+  const hasBirthYears = Object.values(ages).some(v => parseAgeInput(v)?.kind === 'birthYear');
   const [editingAgeId, setEditingAgeId] = useState(null);
   const [editingTextId, setEditingTextId] = useState(null);
   const [editingEcoId, setEditingEcoId] = useState(null);
@@ -1002,15 +1004,6 @@ const GenogramTab = ({
                         title="年齡 [E]：進入模式後點人物直接輸入年齡">
                   年齡
                 </button>
-                {/* 原樣／實歲：只換「畫出來的字」，存的永遠是當初打的字，切回來一定還原。
-                    民國生年（82年、82年次、民82、R82）才會換算；35、35y、35yo 本來就是
-                    年齡，原樣顯示。已歿成員不換算。 */}
-                <span className="status-badge" data-status={ageDisplay}
-                      onClick={cycleOnClick(AGE_DISPLAYS, ageDisplay, setAgeDisplay)}
-                      ref={el => wheelRef(el, AGE_DISPLAYS, ageDisplay, setAgeDisplay)}
-                      title={`原樣：照輸入的字顯示。實歲：民國生年換算成今年滿幾歲（今年民國 ${rocYear} 年 − 生年；只有年份，生日未到的人會多算 1 歲）。已歿成員不換算。`}>
-                  {AGE_DISPLAY_LABELS[ageDisplay]}
-                </span>
               </div>
             </div>
           </div>
@@ -1187,6 +1180,20 @@ const GenogramTab = ({
 
       {/* SVG 畫布 */}
       <div className="canvas-wrap">
+        {/* 生年 ⇄ 實歲：只有圖上真的有人填民國生年（82年次、民82…）才出現。
+            放在畫布角落而不是左側面板：面板那一排（案主／同住／年齡）已經剛好
+            塞滿 276px，多一顆就會把年齡擠到下一行。這顆是 HTML 按鈕，不在
+            <svg> 裡，下載的圖不會有它。 */}
+        {hasBirthYears && (
+          <div className="canvas-float">
+            <button type="button" className="canvas-float-btn"
+                    onClick={() => setAgeDisplay(ageDisplay === 'age' ? 'raw' : 'age')}
+                    aria-pressed={ageDisplay === 'age'}
+                    title={`民國生年換算成今年滿幾歲（今年民國 ${rocYear} 年 − 生年；只有年份，生日未到的人會多算 1 歲）。35、35y 這類本來就是年齡的不受影響，已歿成員也不換算。只改顯示，填的字不會變。`}>
+              {ageDisplay === 'age' ? '⇄ 顯示生年' : '⇄ 生年換實歲'}
+            </button>
+          </div>
+        )}
         <svg ref={svgRef} width={svgW} height={svgH}
              onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp} onPointerCancel={onUp}
              onClick={(e) => {
