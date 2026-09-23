@@ -63,6 +63,10 @@ function inlineCss() {
 
 export default defineConfig({
   plugins: [react(), inlineCss()],
+  /* 打包日期：問題回報表單的「環境資訊」會帶上它，收到回報時才知道對方用的是哪一版。 */
+  define: {
+    __BUILD_DATE__: JSON.stringify(new Date().toISOString().slice(0, 10)),
+  },
   base: './',
   root: '.',
   build: {
