@@ -5,6 +5,8 @@ import RecordTab from './components/RecordTab';
 import { useCaseDoc } from './hooks/useCaseDoc';
 import { useFullscreen } from './hooks/useFullscreen';
 import { idsWithAttr } from './utils/caseDoc';
+import { feedbackUrl } from './utils/feedback';
+import pkg from '../package.json';
 import './styles.css';
 
 const App = () => {
@@ -86,6 +88,31 @@ const App = () => {
           </nav>
 
           <div className="navbar-actions">
+            {/* 問題回報／功能建議：新分頁打開 Google 表單，只帶入環境資訊（版本、
+                瀏覽器、螢幕、頁籤），不帶任何案件內容。見 utils/feedback.js。
+                href 在按下去那一刻才算，拿到的是當下的頁籤與視窗大小。 */}
+            <a
+              className="icon-btn"
+              href="#"
+              target="_blank" rel="noopener noreferrer"
+              onClick={e => {
+                e.currentTarget.href = feedbackUrl({
+                  version: pkg.version,
+                  buildDate: typeof __BUILD_DATE__ !== 'undefined' ? __BUILD_DATE__ : '',
+                  ua: navigator.userAgent,
+                  width: window.innerWidth, height: window.innerHeight,
+                  tab: activeTab === 'record' ? '個案紀錄' : '家系圖',
+                });
+              }}
+              title="回報問題或建議功能（開啟 Google 表單，請勿填寫個案資料）"
+              aria-label="回報問題或建議功能"
+            >
+              <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor"
+                   strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M3.5 4.5h13v8.5h-7l-3.5 3v-3h-2.5z" />
+                <path d="M7 8.2h6M7 10.6h4" />
+              </svg>
+            </a>
             {/* 不支援的裝置照樣把按鈕留著（除非已是獨立 App）：按下去會給
                 「加入主畫面」的替代做法，比整顆消失讓人不知道有沒有這功能好。
                 狀態靠 aria-pressed 與 .is-on 表達，圖示維持同一個字符，
