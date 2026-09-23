@@ -40,6 +40,7 @@ const App = () => {
     doc, setField, patchDoc, toggleNodeAttr, toggleLineAttr, clearNodeAttrs, clearLineAttr,
     cases, activeCaseId, activeCase, isSaved,
     switchCase, saveCase, renameCase, deleteCase, exportCase, importCase,
+    updateCaseMeta, duplicateCase, backupAll, lastBackupAt,
     snapshots, takeSnapshot, restoreSnapshot, removeSnapshot,
   } = useCaseDoc();
 
@@ -132,6 +133,7 @@ const App = () => {
           cases={cases} activeCaseId={activeCaseId} activeCase={activeCase} isSaved={isSaved}
           switchCase={switchCase} saveCase={saveCase} renameCase={renameCase}
           deleteCase={deleteCase} exportCase={exportCase} importCase={importCase}
+          updateCaseMeta={updateCaseMeta} duplicateCase={duplicateCase} backupAll={backupAll} lastBackupAt={lastBackupAt}
 
           snapshots={snapshots} takeSnapshot={takeSnapshot}
           restoreSnapshot={restoreSnapshot} removeSnapshot={removeSnapshot}

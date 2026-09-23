@@ -5,6 +5,7 @@ import {
 import {
   openLibrary, readCaseDoc, writeCaseDoc, writeIndex, touchCase,
   addCase, renameCaseIn, removeCase, downloadCaseFile, parseCaseFile,
+  updateCaseMeta as updateMetaIn, copyName, buildBackup, downloadBackupFile,
 } from '../utils/caseStore';
 import {
   listSnapshots, saveSnapshot, deleteSnapshot, readSnapshotDoc, clearSnapshots,
@@ -323,16 +324,69 @@ export function useCaseDoc() {
     downloadCaseFile(entry?.name || '未命名案件', docRef.current);
   }, []);
 
-  /** 匯入永遠是「新增一份」，不覆蓋目前開著的案件。 */
+  /**
+   * 匯入永遠是「新增」，不覆蓋任何既有案件。
+   *   單一案件檔 → 新增一份並打開它，回傳 { kind: 'case', entry }
+   *   整包備份檔 → 每份都新增、但留在目前的畫面，回傳 { kind: 'backup', count }
+   * 名稱重複不擋：同一份備份還原兩次會有兩份，使用者自己看得到、刪得掉，
+   * 比起偷偷跳過或覆蓋安全。
+   */
   const importCase = useCallback(async (file) => {
-    const { name, doc: imported } = await file.text().then(parseCaseFile);
+    const parsed = await file.text().then(parseCaseFile);
     flushActive();
-    const { index: next, id } = addCase(indexRef.current, name || undefined);
-    writeCaseDoc(id, imported);
+    if (parsed.kind === 'backup') {
+      let next = indexRef.current, count = 0;
+      for (const c of parsed.cases) {
+        const added = addCase(next, c.name || undefined, c.meta, { open: false });
+        if (!writeCaseDoc(added.id, c.doc)) {
+          // 空間不夠：已經寫進去的留著，告訴使用者還原到第幾份
+          commitIndex(next);
+          throw new Error(`本機空間不足，只還原了 ${count} 份（共 ${parsed.cases.length} 份）。`);
+        }
+        next = added.index;
+        count++;
+      }
+      commitIndex(next);
+      return { kind: 'backup', count };
+    }
+    const { index: next, id } = addCase(indexRef.current, parsed.name || undefined);
+    if (!writeCaseDoc(id, parsed.doc)) throw new Error(QUOTA_MSG);
     commitIndex(next);
-    loadIntoEditor(imported);
-    return next.list.find(c => c.id === id);
+    loadIntoEditor(parsed.doc);
+    return { kind: 'case', entry: next.list.find(c => c.id === id) };
   }, [flushActive, commitIndex, loadIntoEditor]);
+
+  /** 修改案件的名稱／案號／備註。 */
+  const updateCaseMeta = useCallback((id, meta) => {
+    commitIndex(updateMetaIn(indexRef.current, id, meta));
+  }, [commitIndex]);
+
+  /**
+   * 另存新檔：把目前畫面複製成一份新案件並切過去，原本那份停在另存前的樣子。
+   * 常見用法是拿一份畫好的當範本，改成另一個家庭。
+   */
+  const duplicateCase = useCallback(() => {
+    const cur = indexRef.current.list.find(c => c.id === activeIdRef.current);
+    if (!cur) return null;
+    flushActive();
+    const copy = { ...docRef.current };
+    const { index: next, id } = addCase(indexRef.current, copyName(indexRef.current.list, cur.name),
+      { caseNo: cur.caseNo, note: cur.note });
+    if (!writeCaseDoc(id, copy)) throw new Error(QUOTA_MSG);
+    commitIndex(next);
+    loadIntoEditor(copy);
+    snapshotInto(id, `另存自「${cur.name}」`);
+    return next.list.find(c => c.id === id);
+  }, [flushActive, commitIndex, loadIntoEditor, snapshotInto]);
+
+  /** 所有案件打包成一個 .json 下載，並記下備份時間（清單底部會提示多久沒備份）。 */
+  const backupAll = useCallback(() => {
+    flushActive();
+    const current = indexRef.current;
+    if (!current.list.length) return;
+    downloadBackupFile(buildBackup(current.list, readCaseDoc));
+    commitIndex({ ...current, lastBackupAt: Date.now() });
+  }, [flushActive, commitIndex]);
 
   /* 關掉分頁前把最後的編輯寫回，補上節流的空窗 */
   useEffect(() => {
@@ -365,6 +419,10 @@ export function useCaseDoc() {
     deleteCase,
     exportCase,
     importCase,
+    updateCaseMeta,
+    duplicateCase,
+    backupAll,
+    lastBackupAt: index.lastBackupAt ?? null,
 
     snapshots,
     takeSnapshot,

@@ -19,7 +19,8 @@ src/
 │   ├── SnapshotMenu.jsx    # 本地歷史快照版本選單
 │   ├── BadgeGroup.jsx      # 符號與狀態徽章元件
 │   ├── TextBoxItem.jsx     # 畫布上的單一文字方塊（選取框、刪除／複製／縮放把手）
-│   ├── CustomLinkPanel.jsx # 左側「擴充連線設定」卡片
+│   ├── CustomLinkPanel.jsx # 左側「擴充連線設定」卡片（含掛在婚姻線下的子女）
+│   ├── CaseMenu.jsx        # 案件清單（搜尋、排序、案號備註、另存、全部備份、空間用量）
 │   └── InfoTip.jsx         # 浮動提示小工具
 ├── hooks/               # 自訂商業邏輯 Hooks
 │   ├── useCaseDoc.js       # 核心個案文檔狀態管理（整合畫布、紀錄與快照）
@@ -37,6 +38,7 @@ src/
 │   ├── standalone.js       # 獨立個體（三角、寵物）的類型與形狀
 │   ├── statusBadge.js      # 狀態標籤的點擊／滾輪切換
 │   ├── ids.js              # 畫布物件 id 產生器（同一毫秒不撞號）
+│   ├── childLinks.js       # 自由擴充成員掛到婚姻線底下成為子女
 │   ├── __tests__/          # Vitest 單元測試（純函式）
 │   └── helpers.js          # 幾何運算、坐標吸附、防抖、格式轉換
 ├── styles.css           # 全域 CSS（色彩變數、畫布網格、響應式斷點）
@@ -81,10 +83,8 @@ src/
 - **高解析 PNG**：下載一律 3 倍圖（`EXPORT_SCALE`）。
 - **寵物符號（菱形）**：自由擴充區的獨立個體，拖到飼主身上產生註記連線。
 - **文字方塊複製**：選取後按 ⧉ 或 Ctrl+D。
-
-## 待討論
-
-- 儲存清單（案件庫）功能強化：範圍待與使用者確認。
+- **掛成子女**：自由擴充的成員拖到任一條婚姻線上放開 → 成為那對夫妻的子女（`doc.childLinks`），親子線與原有子女共用。見 `utils/childLinks.js`。
+- **案件庫**：案號／備註、搜尋排序、另存成新案件、一次備份全部（`geno-link-backup` 格式，匯入按鈕通吃）、備份提醒、本機空間用量。見 `utils/caseStore.js`、`components/CaseMenu.jsx`。
 
 ---
 

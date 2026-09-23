@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import SnapshotMenu from './SnapshotMenu';
+import CaseMenu, { needsBackup } from './CaseMenu';
 import { nextCaseName } from '../utils/caseStore';
 
 /* 這一列的圖示一律用 inline SVG，不用 emoji／Unicode 箭頭符號：
@@ -29,16 +30,6 @@ const ICON = {
   draft: <><path d="M5 3h6l4 4v10H5z" /><path d="M11 3v4h4" /></>,
 };
 
-const fmtTime = (ts) => {
-  if (!ts) return '';
-  const d = new Date(ts);
-  const today = new Date();
-  const sameDay = d.toDateString() === today.toDateString();
-  return sameDay
-    ? d.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })
-    : d.toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' });
-};
-
 /**
  * 案件列：儲存／切換／改名／刪除／匯出／匯入／時間軸快照。
  *
@@ -58,6 +49,7 @@ const fmtTime = (ts) => {
 const CaseBar = ({
   cases, activeCaseId, activeCase, isSaved,
   switchCase, saveCase, renameCase, deleteCase, exportCase, importCase,
+  updateCaseMeta, duplicateCase, backupAll, lastBackupAt,
   snapshots, takeSnapshot, restoreSnapshot, removeSnapshot,
 }) => {
   /* 第一次儲存時預填的化名（案主 A、案主 B…，跳過已用過的） */
@@ -141,7 +133,10 @@ const CaseBar = ({
     if (!file) return;
     setError('');
     try {
-      await importCase(file);
+      const res = await importCase(file);
+      setOpen(false);
+      if (res?.kind === 'backup') setFlash(`已還原 ${res.count} 份`);
+      else setFlash('已匯入');
     } catch (err) {
       setError(err.message || '匯入失敗。');
     }
@@ -186,7 +181,7 @@ const CaseBar = ({
 
         {cases.length > 0 && (
           <button
-            className={`case-caret ${open ? 'open' : ''}`}
+            className={`case-caret ${open ? 'open' : ''} ${needsBackup(cases, lastBackupAt) ? 'needs-backup' : ''}`}
             onClick={() => { setOpen(o => !o); setSnapOpen(false); }}
             title="開啟已儲存的案件"
             aria-label="開啟已儲存的案件"
@@ -218,7 +213,7 @@ const CaseBar = ({
         <button className="case-tool" onClick={exportCase} title="匯出成 .json 檔" aria-label="匯出成 .json 檔">
           <Icon path={ICON.export} />
         </button>
-        <button className="case-tool" onClick={() => fileRef.current?.click()} title="從 .json 檔匯入" aria-label="從 .json 檔匯入">
+        <button className="case-tool" onClick={() => fileRef.current?.click()} title="從 .json 檔匯入（單一案件，或「備份全部案件」的整包檔）" aria-label="從 .json 檔匯入">
           <Icon path={ICON.import} />
         </button>
         <input
@@ -235,22 +230,23 @@ const CaseBar = ({
       )}
 
       {open && (
-        <ul className="case-menu">
-          {cases.map(c => (
-            <li key={c.id} className={c.id === activeCaseId ? 'active' : ''}>
-              <button className="case-menu-pick" onClick={() => { switchCase(c.id); setOpen(false); }}>
-                <span className="case-menu-name">{c.name}</span>
-                <span className="case-menu-time">{fmtTime(c.updatedAt)}</span>
-              </button>
-              <button
-                className="case-menu-del"
-                onClick={() => confirmDelete(c)}
-                title={`刪除「${c.name}」`}
-                aria-label={`刪除「${c.name}」`}
-              >×</button>
-            </li>
-          ))}
-        </ul>
+        <CaseMenu
+          cases={cases} activeCaseId={activeCaseId} isSaved={isSaved} lastBackupAt={lastBackupAt}
+          onPick={(id) => { switchCase(id); setOpen(false); }}
+          onDelete={confirmDelete}
+          updateCaseMeta={updateCaseMeta}
+          onDuplicate={() => {
+            setError('');
+            try {
+              const c = duplicateCase();
+              setOpen(false);
+              if (c) setFlash('已另存');
+            } catch (err) {
+              setError(err.message || '另存失敗。');
+            }
+          }}
+          onBackupAll={() => { backupAll(); setFlash('已備份'); }}
+        />
       )}
     </div>
   );

@@ -58,6 +58,9 @@ export const INITIAL_DOC = {
   /* --- 自由擴充區 --- */
   freeNodes: [],
   customLinks: [],
+  /* 自由擴充的成員掛在哪條婚姻線底下當子女：[{ id, lineId, childId }]
+     見 utils/childLinks.js。 */
+  childLinks: [],
 
   /* --- 關係線標記 ---
    * { [lineId]: 'conflict' | 'distant' | 'cutoff' | 'violence' }
@@ -276,6 +279,10 @@ export const remapGen2Keys = (doc, newToOld) => {
     nodeAttrs: remapObj(doc.nodeAttrs),
     positions: remapObj(doc.positions),
     ages: remapObj(doc.ages),
+    // 掛在第二代婚姻線（ml-c0…）底下的子女跟著那對夫妻走；夫妻被刪掉就解除
+    childLinks: (doc.childLinks || [])
+      .map(cl => ({ ...cl, lineId: mapId(cl.lineId) }))
+      .filter(cl => cl.lineId !== null),
     // 綁在第二代身上的標籤跟著人走；人被刪掉就解開，留在原本的位置
     texts: (doc.texts || []).map(t => {
       if (!t.anchor) return t;
@@ -329,6 +336,8 @@ export const migrateDoc = (raw) => {
     const { anchor, ...rest } = t;
     return rest;
   });
+  doc.childLinks = doc.childLinks.filter(cl =>
+    cl && typeof cl.id === 'string' && typeof cl.lineId === 'string' && typeof cl.childId === 'string');
   if (!AGE_DISPLAYS.includes(doc.ageDisplay)) doc.ageDisplay = INITIAL_DOC.ageDisplay;
 
   // 底圖與橡皮擦筆跡：形狀不對就當沒有。壞掉的一筆不該讓整張畫布打不開

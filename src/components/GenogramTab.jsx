@@ -24,6 +24,7 @@ import {
 } from '../utils/textBox';
 import { AGE_DISPLAYS, AGE_DISPLAY_LABELS, displayAge, currentRocYear } from '../utils/age';
 import { newId } from '../utils/ids';
+import { mergeChildLinks, setChildLink, dropChildLinks, childRestPos } from '../utils/childLinks';
 import { cycleOnClick, wheelRef } from '../utils/statusBadge';
 import { STANDALONE_TYPES, standaloneRadius, diamondPath, diamondEdge } from '../utils/standalone';
 import TextBoxItem from './TextBoxItem';
@@ -48,6 +49,7 @@ const GenogramTab = ({
   doc, setField, patchDoc, toggleNodeAttr, toggleLineAttr, clearNodeAttrs, clearLineAttr,
   cases, activeCaseId, activeCase, isSaved,
   switchCase, saveCase, renameCase, deleteCase, exportCase, importCase,
+    updateCaseMeta, duplicateCase, backupAll, lastBackupAt,
   snapshots, takeSnapshot, restoreSnapshot, removeSnapshot,
   gen2Str, setGen2Str, gen2Cfg, setGen2Cfg,
   indexId, setIndexId,
@@ -285,7 +287,19 @@ const GenogramTab = ({
   };
   const deleteCustomLink = (linkId) => {
     setCustomLinks(prev => prev.filter(l => l.id !== linkId));
+    // 這條婚姻線底下掛的子女一起放開（人留著，只是不再連到這對父母）
+    setChildLinks(prev => dropChildLinks(prev, { lineId: linkId }));
   };
+
+  /* --- 掛在婚姻線底下的子女（見 utils/childLinks.js） --- */
+  const childLinks = doc.childLinks,          setChildLinks = setField('childLinks');
+  /** 自由擴充的成員被刪掉時：連在他身上的標籤解開、親子關係清掉。 */
+  const forgetFreeNode = (id) => {
+    detachLabels(id);
+    setChildLinks(prev => dropChildLinks(prev, { childId: id }));
+  };
+  /** 可以掛到婚姻線底下當子女的：人物與三角（懷孕／流產／死產）。寵物、生態圖不行。 */
+  const canBeChild = (fn) => !!fn && fn.type !== 'eco' && fn.type !== 'pet';
 
   const { nodes, lines } = useMemo(() => {
     const N = [], L = [];
@@ -370,8 +384,9 @@ const GenogramTab = ({
       if (kidIds.length > 0) L.push({ id: `${lnk.id}_pc`, type: 'pc', pa: lnk.sourceId, pb: lnk.targetId, kids: kidIds, isExt: true });
     });
 
-    return { nodes: N, lines: L };
-  }, [gen2Cfg, g1Status, customLinks, mainFamily]); // freeNodes 改用 ref 讀取，避免每次拖曳觸發重算
+    // 自由擴充的成員掛到某條婚姻線底下（子女）：併進那對夫妻的親子線
+    return { nodes: N, lines: mergeChildLinks(L, customLinks, doc.childLinks) };
+  }, [gen2Cfg, g1Status, customLinks, mainFamily, doc.childLinks]); // freeNodes 改用 ref 讀取，避免每次拖曳觸發重算
 
 
   const pos = useCallback((id) => {
@@ -451,9 +466,11 @@ const GenogramTab = ({
   }, [lines, customLinks]);
 
   /** 找出座標命中的婚姻線；沒命中回傳 null。 */
-  const hitTestLine = useCallback((pt) => {
+  const hitTestLine = useCallback((pt, excludeNodeId = null) => {
     let best = null, bestDist = 14; // 14px 內才算命中，太寬會誤觸到旁邊的線
     for (const seg of marriageLineSegs) {
+      // 拖著夫妻其中一人時，不該命中他自己的婚姻線
+      if (excludeNodeId && (seg.a === excludeNodeId || seg.b === excludeNodeId)) continue;
       // 用實際畫出來的那一段判定：下緣式的線在符號下方，拿中心連線判定會差一截
       const [x1, y1, x2, y2] = marriageGeom(pos(seg.a), pos(seg.b), lineStyle).hit;
       const d = distToSegment(pt.x, pt.y, x1, y1, x2, y2);
@@ -536,7 +553,8 @@ const GenogramTab = ({
   const onDown = useCallback((e, id) => {
     e.stopPropagation(); nodeDragMoved.current = false; const sp = svgPt(e); const p = pos(id);
     const isFree = freeNodes.some(fn => fn.id === id);
-    setDrag({ id, ox: sp.x - p.x, oy: sp.y - p.y, isFree });
+    // start：拖曳起點。掛到婚姻線底下當子女之後，人會放回這裡（見 onUp）
+    setDrag({ id, ox: sp.x - p.x, oy: sp.y - p.y, isFree, start: { x: p.x, y: p.y } });
   }, [svgPt, pos, freeNodes]);
 
   const onTextDown = useCallback((e, id) => {
@@ -560,6 +578,8 @@ const GenogramTab = ({
   /* 拖曳時的對齊參考線（純顯示，不進文件）：
      { x, y, center } — center 為 true 代表吸在「中線」上（父母對子女中央等） */
   const [snapGuide, setSnapGuide] = useState(null);
+  /** 拖自由擴充的成員經過哪一條婚姻線（放開就成為子女），純顯示。 */
+  const [childDropLine, setChildDropLine] = useState(null);
 
   const onMove = useCallback((e) => {
     const sp = svgPt(e);
@@ -693,6 +713,9 @@ const GenogramTab = ({
       newX = sx.v; newY = sy.v;
       showGuide(sx, sy);
       setFreeNodes(prev => prev.map(fn => fn.id === drag.id ? { ...fn, x: newX, y: newY } : fn));
+      // 經過婚姻線時高亮：放開就會變成這對夫妻的子女
+      const dragged = freeNodesRef.current.find(fn => fn.id === drag.id);
+      setChildDropLine(canBeChild(dragged) ? hitTestLine({ x: newX, y: newY }, drag.id) : null);
     } else {
       // 原生節點：中線磁吸 + 12px 全域磁吸
       const sx = snapX(sp.x - drag.ox), sy = snapY(sp.y - drag.oy);
@@ -700,11 +723,28 @@ const GenogramTab = ({
       setPositions(prev => ({ ...prev, [drag.id]: { x: sx.v, y: sy.v } }));
     }
   }, [drag, textDrag, textResize, dragVertex, draftPoly, svgPt, setFreeNodes, customLinks, nodes, lines,
-      bgDrag, bgImage, setBgImage, bgAdjust, snapTargets, targetPos]);
+      bgDrag, bgImage, setBgImage, bgAdjust, snapTargets, targetPos, hitTestLine]);
 
   const onUp = useCallback(() => {
-    if (drag && drag.isFree) {
-      const draggedNode = freeNodes.find(fn => fn.id === drag.id);
+    /* 放在婚姻線上：成為那對夫妻的子女。比「疊到人身上＝結婚」優先判斷——
+       線就在兩個人中間，不先看線的話，放在線上幾乎一定會被當成疊到某個人。 */
+    const draggedFree = drag?.isFree ? freeNodes.find(fn => fn.id === drag.id) : null;
+    const dropLineId = draggedFree && canBeChild(draggedFree)
+      ? hitTestLine({ x: draggedFree.x, y: draggedFree.y }, drag.id) : null;
+    if (dropLineId) {
+      const seg = marriageLineSegs.find(sg => sg.id === dropLineId);
+      const { barY } = marriageGeom(pos(seg.a), pos(seg.b), lineStyle);
+      const sibs = lines.find(ln => ln.type === 'pc'
+        && ((ln.pa === seg.a && ln.pb === seg.b) || (ln.pa === seg.b && ln.pb === seg.a)));
+      const siblingYs = (sibs?.kids || []).filter(k => k !== drag.id).map(k => pos(k).y);
+      const rest = childRestPos({ start: drag.start, dropX: draggedFree.x, barY, siblingYs, radius: R });
+      // 親子關係與位置寫成同一筆歷史：Ctrl+Z 一步回到拖曳之前
+      patchDoc({
+        childLinks: setChildLink(childLinks, drag.id, dropLineId, newId('ch_')),
+        freeNodes: freeNodes.map(fn => fn.id === drag.id ? { ...fn, ...rest } : fn),
+      });
+    } else if (drag && drag.isFree) {
+      const draggedNode = draggedFree;
       if (draggedNode) {
         const dp = { x: draggedNode.x, y: draggedNode.y };
         // Check collision with all existing nodes
@@ -737,8 +777,9 @@ const GenogramTab = ({
       }
     }
     setDragVertex(null); setDrag(null); setTextDrag(null); setTextResize(null); setSnapGuide(null);
-    setBgDrag(null);
-  }, [drag, freeNodes, nodes, pos, customLinks, setCustomLinks, setFreeNodes]);
+    setBgDrag(null); setChildDropLine(null);
+  }, [drag, freeNodes, nodes, pos, customLinks, setCustomLinks, setFreeNodes,
+      hitTestLine, marriageLineSegs, lines, lineStyle, childLinks, patchDoc]);
 
   const onClick = (e, id) => {
     e.stopPropagation();
@@ -923,7 +964,7 @@ const GenogramTab = ({
               patchDoc({
                 gen2Str: '', gen2Cfg: [], indexId: null, cohabMembers: [], nodeAttrs: {}, lineAttrs: {},
                 cohabSolid: false, polygons: [], texts: [], ages: {},
-                freeNodes: [], customLinks: [], positions: {}, ipStyle: 'filled',
+                freeNodes: [], customLinks: [], childLinks: [], positions: {}, ipStyle: 'filled',
                 bgImage: null, bgErase: [], mainFamily: true,
                 subjInfo: INITIAL_DOC.subjInfo, famExtras: {}, recordEdit: '',
                 /* lineStyle／lineWidth 刻意不重置：那是使用者的畫法偏好，
@@ -1137,7 +1178,7 @@ const GenogramTab = ({
         <div className="section">
           <div className="section-title-row">
             <label>🧩 自由擴充區</label>
-            <InfoTip text="男性／女性／三角／寵物／生態圖：點按鈕即在畫布上新增一個獨立個體。寵物畫成菱形，拖到飼主身上會連一條細線；名字可以用文字方塊吸在旁邊。把新增的個體拖到目標人物上疊在一起放開，就會自動產生連線；生態圖新增後預設連結案主。按下「編輯」會把擴充個體改用藍色畫，方便跟原本的家系區分。" />
+            <InfoTip text="男性／女性／三角／寵物／生態圖：點按鈕即在畫布上新增一個獨立個體。把新增的人拖到一對夫妻的婚姻線上（線會變綠）放開，他就成為那對夫妻的子女，並回到原本的位置。寵物畫成菱形，拖到飼主身上會連一條細線；名字可以用文字方塊吸在旁邊。把新增的個體拖到目標人物上疊在一起放開，就會自動產生連線；生態圖新增後預設連結案主。按下「編輯」會把擴充個體改用藍色畫，方便跟原本的家系區分。" />
           </div>
           <div className="btn-row">
             <button className="btn-soft tone-dust" onClick={() => addFreeNode('M')}>男性</button>
@@ -1170,6 +1211,7 @@ const GenogramTab = ({
           cases={cases} activeCaseId={activeCaseId} activeCase={activeCase} isSaved={isSaved}
           switchCase={switchCase} saveCase={saveCase} renameCase={renameCase}
           deleteCase={deleteCase} exportCase={exportCase} importCase={importCase}
+          updateCaseMeta={updateCaseMeta} duplicateCase={duplicateCase} backupAll={backupAll} lastBackupAt={lastBackupAt}
           snapshots={snapshots} takeSnapshot={takeSnapshot}
           restoreSnapshot={restoreSnapshot} removeSnapshot={removeSnapshot}
         />
@@ -1178,6 +1220,8 @@ const GenogramTab = ({
           customLinks={customLinks} setCustomLinks={setCustomLinks}
           nodes={nodes} freeNodes={freeNodes}
           updateCustomLink={updateCustomLink} deleteCustomLink={deleteCustomLink}
+          childLinks={childLinks} marriageLineSegs={marriageLineSegs}
+          removeChildLink={(id) => setChildLinks(prev => prev.filter(cl => cl.id !== id))}
         />
 
       </div>
@@ -1346,7 +1390,7 @@ const GenogramTab = ({
                       跟著消失。年齡模式下雙擊等於連點兩次，交給單擊處理就好。 */
                    if (mode === 'age' || !nd.isFree) return;
                    if (window.confirm('確定要刪除這個擴充個體嗎？(相關連線也會一併刪除)')) {
-                     detachLabels(nd.id);
+                     forgetFreeNode(nd.id);
                      setCustomLinks(prev => prev.filter(l => l.sourceId !== nd.id && l.targetId !== nd.id));
                      setFreeNodes(prev => prev.filter(fn => fn.id !== nd.id));
                    }
@@ -1447,7 +1491,7 @@ const GenogramTab = ({
                  onDoubleClick={e => {
                    e.stopPropagation();
                    if (window.confirm('確定要刪除這個標記嗎？(相關連線也會一併刪除)')) {
-                     detachLabels(fn.id);
+                     forgetFreeNode(fn.id);
                      setCustomLinks(prev => prev.filter(l => l.sourceId !== fn.id && l.targetId !== fn.id));
                      setFreeNodes(prev => prev.filter(f => f.id !== fn.id));
                    }
@@ -1529,6 +1573,20 @@ const GenogramTab = ({
             if (!seg) return null;
             const [x1, y1, x2, y2] = marriageGeom(pos(seg.a), pos(seg.b), lineStyle).hit;
             return <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#3b82f6" strokeWidth="7" strokeDasharray="5,4" opacity="0.5" pointerEvents="none" />;
+          })()}
+
+          {/* 拖自由擴充的成員經過婚姻線：綠色高亮＋提示，放開就成為這對夫妻的子女 */}
+          {childDropLine && (() => {
+            const seg = marriageLineSegs.find(sg => sg.id === childDropLine);
+            if (!seg) return null;
+            const [x1, y1, x2, y2] = marriageGeom(pos(seg.a), pos(seg.b), lineStyle).hit;
+            return (
+              <g className={NO_EXPORT} pointerEvents="none">
+                <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#10b981" strokeWidth="8" strokeDasharray="6,4" opacity="0.55" />
+                <text x={(x1 + x2) / 2} y={Math.min(y1, y2) - 12} textAnchor="middle" fontSize="12" fontWeight="600"
+                      fill="#059669" stroke="white" strokeWidth="3" paintOrder="stroke" style={{ fontFamily: TEXT_FONT }}>放開＝成為子女</text>
+              </g>
+            );
           })()}
 
           {/* === 關係品質標記 (疏離／衝突／斷絕／暴力，疊加在婚姻線上) === */}

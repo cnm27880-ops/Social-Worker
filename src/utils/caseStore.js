@@ -4,7 +4,7 @@
  * 一位社工手上不會只有一個案子，所以本機要能同時放多份案件文件。
  *
  * 儲存配置刻意拆成「索引」與「各案內容」兩層：
- *   genogram-cases      → { v, activeId, list: [{ id, name, updatedAt }] }
+ *   genogram-cases      → { v, activeId, lastBackupAt, list: [{ id, name, caseNo, note, createdAt, updatedAt }] }
  *   genogram-case-<id>  → 該案件的文件 JSON
  *
  * 這樣存檔時只需要覆寫「目前這一份」，不必把所有案件重寫一遍。
@@ -65,20 +65,28 @@ export const nextCaseName = (list) => {
  * 索引
  * =========================================================================== */
 
-const emptyIndex = () => ({ v: INDEX_VERSION, activeId: null, list: [] });
+const emptyIndex = () => ({ v: INDEX_VERSION, activeId: null, lastBackupAt: null, list: [] });
 
 const normalizeIndex = (raw) => {
   if (!raw || !Array.isArray(raw.list)) return null;
   const list = raw.list
     .filter(c => c && typeof c.id === 'string')
-    .map(c => ({
-      id: c.id,
-      name: typeof c.name === 'string' && c.name.trim() ? c.name : '未命名案件',
-      updatedAt: typeof c.updatedAt === 'number' ? c.updatedAt : 0,
-    }));
+    .map(c => {
+      const updatedAt = typeof c.updatedAt === 'number' ? c.updatedAt : 0;
+      return {
+        id: c.id,
+        name: typeof c.name === 'string' && c.name.trim() ? c.name : '未命名案件',
+        // 案號與備註是舊版沒有的欄位，缺的補空字串；建立時間缺的用更新時間頂替
+        caseNo: typeof c.caseNo === 'string' ? c.caseNo : '',
+        note: typeof c.note === 'string' ? c.note : '',
+        createdAt: typeof c.createdAt === 'number' ? c.createdAt : updatedAt,
+        updatedAt,
+      };
+    });
   if (!list.length) return null;
   const activeId = list.some(c => c.id === raw.activeId) ? raw.activeId : list[0].id;
-  return { v: INDEX_VERSION, activeId, list };
+  const lastBackupAt = typeof raw.lastBackupAt === 'number' ? raw.lastBackupAt : null;
+  return { v: INDEX_VERSION, activeId, lastBackupAt, list };
 };
 
 export const readIndex = () => normalizeIndex(readJSON(INDEX_KEY)) || emptyIndex();
@@ -138,10 +146,78 @@ export const touchCase = (index, id, at = Date.now()) => ({
   list: index.list.map(c => (c.id === id ? { ...c, updatedAt: at } : c)),
 });
 
-export const addCase = (index, name) => {
+/**
+ * 在案件庫新增一份。meta 可帶 caseNo／note（另存、從備份還原時沿用）。
+ * open=false 時不切換過去（還原整包備份時，一次加很多份但留在原本的畫面）。
+ */
+export const addCase = (index, name, meta = {}, { open = true } = {}) => {
   const id = newCaseId();
-  const entry = { id, name: name || nextCaseName(index.list), updatedAt: Date.now() };
-  return { index: { ...index, activeId: id, list: [...index.list, entry] }, id };
+  const now = Date.now();
+  const entry = {
+    id, name: name || nextCaseName(index.list),
+    caseNo: meta.caseNo || '', note: meta.note || '',
+    createdAt: meta.createdAt || now, updatedAt: meta.updatedAt || now,
+  };
+  return { index: { ...index, activeId: open ? id : index.activeId, list: [...index.list, entry] }, id };
+};
+
+/** 修改案件的名稱／案號／備註。名稱清空視為不改。 */
+export const updateCaseMeta = (index, id, { name, caseNo, note }) => ({
+  ...index,
+  list: index.list.map(c => (c.id !== id ? c : {
+    ...c,
+    ...(typeof name === 'string' && name.trim() ? { name: name.trim() } : {}),
+    ...(typeof caseNo === 'string' ? { caseNo: caseNo.trim() } : {}),
+    ...(typeof note === 'string' ? { note: note.trim() } : {}),
+  })),
+});
+
+/** 「另存新檔」的預設名稱：原名加（副本），重複就再加編號。 */
+export const copyName = (list, name) => {
+  const used = new Set(list.map(c => c.name));
+  const base = `${name}（副本）`;
+  if (!used.has(base)) return base;
+  for (let i = 2; ; i++) if (!used.has(`${base}${i}`)) return `${base}${i}`;
+};
+
+/* ===========================================================================
+ * 清單的搜尋與排序
+ * =========================================================================== */
+
+export const CASE_SORTS = ['updated', 'created', 'name'];
+export const CASE_SORT_LABELS = { updated: '最近編輯', created: '建立時間', name: '名稱' };
+
+/** 名稱、案號、備註任一包含關鍵字就留下（不分大小寫）。 */
+export const filterSortCases = (list, query = '', sort = 'updated') => {
+  const q = query.trim().toLowerCase();
+  const hit = (c) => !q || [c.name, c.caseNo, c.note].some(v => (v || '').toLowerCase().includes(q));
+  const out = list.filter(hit);
+  if (sort === 'name') out.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
+  else if (sort === 'created') out.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  else out.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  return out;
+};
+
+/* ===========================================================================
+ * 本機空間用量
+ *
+ * localStorage 的上限各瀏覽器不同，Chrome／Edge 大約是 5 百萬個字元，
+ * 這裡用這個數字估算百分比，只是給人「快滿了」的警覺，不是精確值。
+ * =========================================================================== */
+
+export const STORAGE_BUDGET = 5_000_000;
+
+/** 本站在 localStorage 佔了多少字元（key 與 value 都算）。 */
+export const storageUsage = (storage = globalThis.localStorage) => {
+  let used = 0;
+  try {
+    for (let i = 0; i < storage.length; i++) {
+      const key = storage.key(i);
+      if (!key || !key.startsWith('genogram')) continue;
+      used += key.length + (storage.getItem(key) || '').length;
+    }
+  } catch { /* 讀不到就當 0 */ }
+  return { used, ratio: Math.min(1, used / STORAGE_BUDGET) };
 };
 
 export const renameCaseIn = (index, id, name) => ({
@@ -156,7 +232,7 @@ export const renameCaseIn = (index, id, name) => ({
 export const removeCase = (index, id) => {
   const list = index.list.filter(c => c.id !== id);
   removeCaseDoc(id);
-  if (!list.length) return { index: emptyIndex(), closedActive: true };
+  if (!list.length) return { index: { ...emptyIndex(), lastBackupAt: index.lastBackupAt ?? null }, closedActive: true };
 
   const closedActive = index.activeId === id;
   return {
@@ -170,6 +246,7 @@ export const removeCase = (index, id) => {
  * =========================================================================== */
 
 export const FILE_KIND = 'geno-link-case';
+export const BACKUP_KIND = 'geno-link-backup';
 export const FILE_VERSION = 1;
 
 export const buildExport = (name, doc) => ({
@@ -183,14 +260,28 @@ export const buildExport = (name, doc) => ({
 /** 檔名去掉不能用在檔案系統的字元。 */
 const safeFileName = (name) => name.replace(/[\\/:*?"<>|]/g, '_').trim() || '案件';
 
-export const downloadCaseFile = (name, doc) => {
-  const payload = buildExport(name, doc);
+/**
+ * 整個案件庫打包成一個檔案。readDoc(id) 讀出每一份的內容。
+ * 時間軸快照不放進來：那是每份案件自己的歷史，份數一多檔案會大好幾倍，
+ * 備份要的是「每份案件現在的樣子」。
+ */
+export const buildBackup = (list, readDoc) => ({
+  kind: BACKUP_KIND,
+  v: FILE_VERSION,
+  exportedAt: new Date().toISOString(),
+  cases: list.map(c => ({
+    name: c.name, caseNo: c.caseNo || '', note: c.note || '',
+    createdAt: c.createdAt, updatedAt: c.updatedAt,
+    doc: readDoc(c.id),
+  })),
+});
+
+const downloadJSON = (payload, fileName) => {
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  const stamp = new Date().toISOString().slice(0, 10);
   a.href = url;
-  a.download = `${safeFileName(name)}-${stamp}.json`;
+  a.download = fileName;
   document.body.appendChild(a);
   a.click();
   // 立刻 revoke 會讓下載在檔名還沒定下來前就失去來源（存成 "download"），
@@ -200,6 +291,14 @@ export const downloadCaseFile = (name, doc) => {
     URL.revokeObjectURL(url);
   }, 1000);
 };
+
+const today = () => new Date().toISOString().slice(0, 10);
+
+export const downloadCaseFile = (name, doc) =>
+  downloadJSON(buildExport(name, doc), `${safeFileName(name)}-${today()}.json`);
+
+export const downloadBackupFile = (payload) =>
+  downloadJSON(payload, `家系圖全部案件備份-${today()}.json`);
 
 /**
  * 解析匯入的檔案內容。
@@ -213,11 +312,33 @@ export const parseCaseFile = (text) => {
     throw new Error('這不是有效的 JSON 檔案。');
   }
 
+  // 整包備份：每一份各自檢查，壞掉的那份跳過，不讓一份壞檔拖垮整包
+  if (raw && raw.kind === BACKUP_KIND) {
+    const cases = (Array.isArray(raw.cases) ? raw.cases : [])
+      .map(c => {
+        const doc = migrateDoc(c?.doc);
+        if (!doc) return null;
+        const str = (v) => (typeof v === 'string' ? v : '');
+        return {
+          name: str(c.name).trim() || null,
+          meta: {
+            caseNo: str(c.caseNo), note: str(c.note),
+            createdAt: typeof c.createdAt === 'number' ? c.createdAt : undefined,
+            updatedAt: typeof c.updatedAt === 'number' ? c.updatedAt : undefined,
+          },
+          doc,
+        };
+      })
+      .filter(Boolean);
+    if (!cases.length) throw new Error('備份檔裡沒有可以還原的案件。');
+    return { kind: 'backup', cases };
+  }
+
   // 也接受直接丟一份文件進來（例如手動從 localStorage 複製出來的）
   const source = raw && raw.kind === FILE_KIND ? raw.doc : raw;
   const doc = migrateDoc(source);
   if (!doc) throw new Error('檔案內容不是家系圖案件。');
 
   const name = typeof raw?.name === 'string' && raw.name.trim() ? raw.name.trim() : null;
-  return { name, doc };
+  return { kind: 'case', name, doc };
 };

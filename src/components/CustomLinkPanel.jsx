@@ -13,8 +13,21 @@ import { STANDALONE_TYPES } from '../utils/standalone';
 const CUSTOM_LINK_STATUSES = ['married', 'divorced'];
 const CUSTOM_LINK_LABELS = { married: '已婚', divorced: '離婚' };
 
-const CustomLinkPanel = ({ customLinks, setCustomLinks, nodes, freeNodes, updateCustomLink, deleteCustomLink }) => {
-  if (customLinks.length === 0) return null;
+const CustomLinkPanel = ({
+  customLinks, setCustomLinks, nodes, freeNodes, updateCustomLink, deleteCustomLink,
+  childLinks = [], marriageLineSegs = [], removeChildLink,
+}) => {
+  const nodeById = (id) => nodes.find(n => n.id === id) || freeNodes.find(n => n.id === id);
+  // 只列出婚姻線還在的親子關係；線被刪掉的那些畫布上本來就不畫
+  const shownChildLinks = childLinks
+    .map(cl => ({ cl, seg: marriageLineSegs.find(sg => sg.id === cl.lineId) }))
+    .filter(x => x.seg);
+  if (customLinks.length === 0 && shownChildLinks.length === 0) return null;
+  const personLabel = (node) => {
+    if (!node) return '?';
+    if (STANDALONE_TYPES.includes(node.type)) return SYMBOL_MAP[node.type]?.label || node.type;
+    return node.label || (node.gender === 'M' ? '■' : '●');
+  };
   return (
     <div className="section">
       <label>🔗 擴充連線設定</label>
@@ -83,6 +96,20 @@ const CustomLinkPanel = ({ customLinks, setCustomLinks, nodes, freeNodes, update
           </div>
         );
       })}
+      {shownChildLinks.length > 0 && (
+        <>
+          <label style={{ marginTop: '8px' }}>👶 掛在婚姻線下的子女</label>
+          {shownChildLinks.map(({ cl, seg }) => (
+            <div key={cl.id} className="link-card">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}>
+                <span>{personLabel(nodeById(seg.a))}＋{personLabel(nodeById(seg.b))} → {personLabel(nodeById(cl.childId))}</span>
+                <button className="btn-soft tone-clay btn-soft-xs" onClick={() => removeChildLink(cl.id)} style={{ marginLeft: 'auto' }}
+                        title="只解除親子關係，人還留在畫布上">解除</button>
+              </div>
+            </div>
+          ))}
+        </>
+      )}
     </div>
   );
 };
