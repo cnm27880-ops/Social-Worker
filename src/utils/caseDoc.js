@@ -11,6 +11,8 @@
  * =========================================================================== */
 
 import { migrateBgPatch } from './bgImage';
+import { TEXT_SIDES } from './textBox';
+import { AGE_DISPLAYS } from './age';
 
 /** 文件格式版本。日後改變資料形狀時 +1，並在 migrateDoc 補上轉換。 */
 export const DOC_VERSION = 1;
@@ -56,6 +58,9 @@ export const INITIAL_DOC = {
   /* --- 自由擴充區 --- */
   freeNodes: [],
   customLinks: [],
+  /* 自由擴充的成員掛在哪條婚姻線底下當子女：[{ id, lineId, childId }]
+     見 utils/childLinks.js。 */
+  childLinks: [],
 
   /* --- 關係線標記 ---
    * { [lineId]: 'conflict' | 'distant' | 'cutoff' | 'violence' }
@@ -70,6 +75,9 @@ export const INITIAL_DOC = {
   polygons: [],
   texts: [],
   ages: {},
+  /* 年齡的顯示方式：'raw' 照輸入的字、'age' 把民國生年換算成實歲。
+     ages 本身永遠存原字串，換算只發生在畫面上（見 utils/age.js）。 */
+  ageDisplay: 'raw',
 
   /* --- 舊圖修補（Image Overlay） ---
    * 匯入一張既有的家系圖當底圖，在上面疊符號、關係線與文字方塊。
@@ -271,6 +279,22 @@ export const remapGen2Keys = (doc, newToOld) => {
     nodeAttrs: remapObj(doc.nodeAttrs),
     positions: remapObj(doc.positions),
     ages: remapObj(doc.ages),
+    // 掛在第二代婚姻線（ml-c0…）底下的子女跟著那對夫妻走；夫妻被刪掉就解除
+    // 子女本身也可能是第二代的配偶（s0…）：放進岳父母子女區的那一位
+    childLinks: (doc.childLinks || [])
+      .map(cl => ({
+        ...cl,
+        childId: mapId(cl.childId),
+        ...(cl.parentId ? { parentId: mapId(cl.parentId) } : { lineId: mapId(cl.lineId) }),
+      }))
+      .filter(cl => cl.childId !== null && (cl.parentId !== undefined ? cl.parentId : cl.lineId) !== null),
+    // 綁在第二代身上的標籤跟著人走；人被刪掉就解開，留在原本的位置
+    texts: (doc.texts || []).map(t => {
+      if (!t.anchor) return t;
+      const to = mapId(t.anchor.id);
+      if (to === null) { const { anchor, ...rest } = t; return rest; }
+      return to === t.anchor.id ? t : { ...t, anchor: { ...t.anchor, id: to } };
+    }),
     lineAttrs: remapObj(doc.lineAttrs),
     famExtras,
     cohabMembers: (doc.cohabMembers || []).map(mapId).filter(Boolean),
@@ -308,6 +332,19 @@ export const migrateDoc = (raw) => {
     attrs = setAttrIds(attrs, 'disabled', raw.disabledIds || []);
     doc.nodeAttrs = attrs;
   }
+
+  // 文字方塊的綁定：形狀不對就丟掉綁定，方塊本身留著（x / y 就是最後吸附的位置）
+  doc.texts = doc.texts.map(t => {
+    if (!t || !t.anchor) return t;
+    const ok = typeof t.anchor.id === 'string' && TEXT_SIDES.includes(t.anchor.side);
+    if (ok) return t;
+    const { anchor, ...rest } = t;
+    return rest;
+  });
+  doc.childLinks = doc.childLinks.filter(cl =>
+    cl && typeof cl.id === 'string' && typeof cl.childId === 'string'
+    && (typeof cl.lineId === 'string' || typeof cl.parentId === 'string'));
+  if (!AGE_DISPLAYS.includes(doc.ageDisplay)) doc.ageDisplay = INITIAL_DOC.ageDisplay;
 
   // 底圖與橡皮擦筆跡：形狀不對就當沒有。壞掉的一筆不該讓整張畫布打不開
   if (doc.bgImage && typeof doc.bgImage.src !== 'string') doc.bgImage = null;

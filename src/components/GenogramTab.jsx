@@ -14,7 +14,22 @@ import { SymbolPreview, loadUsage, bumpUsage } from './SymbolPreview';
 import {
   BG_X, BG_Y, bgImageBox, clampScale, DEFAULT_OPACITY,
 } from '../utils/bgImage';
-import { stampOriginMeta } from '../utils/imageMeta';
+import {
+  NO_EXPORT, ecoRx, ECO_RY, computeCropBox as cropBoxOf, exportBaseName,
+  rasterizeAndDownload, printA4 as printSvgA4,
+} from '../utils/exportImage';
+import {
+  resolveText, anchoredXY, snapWhileDragging, detachTextsFrom, duplicateText,
+  textCenter, xyForCenter,
+} from '../utils/textBox';
+import { AGE_DISPLAYS, AGE_DISPLAY_LABELS, displayAge, currentRocYear } from '../utils/age';
+import { newId } from '../utils/ids';
+import { setChildLink, dropChildLinks, childRestPos, dropZones, hitZone, descendantsOf } from '../utils/childLinks';
+import { buildFamily } from '../utils/familyLayout';
+import { cycleOnClick, wheelRef } from '../utils/statusBadge';
+import { STANDALONE_TYPES, standaloneRadius, diamondPath, diamondEdge } from '../utils/standalone';
+import TextBoxItem from './TextBoxItem';
+import CustomLinkPanel from './CustomLinkPanel';
 import {
   SYMBOL_MAP, QUICK_KEYS, QUICK_SYMBOLS,
   halfPath, healthHalvesFor, divisionSegments, kinshipDashFor,
@@ -25,30 +40,8 @@ import {
 } from '../utils/symbols';
 import { INITIAL_DOC, alignGen2, remapGen2Keys } from '../utils/caseDoc';
 
-/* 獨立個體（懷孕／流產／死產）用的三角形半徑：跟人物節點（正方形／圓形）
- * 一樣大，畫布上才不會顯得特別小。 */
-const STANDALONE_TYPES = ['pregnancy', 'miscarriage', 'stillbirth'];
-const standaloneRadius = () => R;
-
-const CUSTOM_LINK_STATUSES = ['married', 'divorced'];
-const CUSTOM_LINK_LABELS = { married: '已婚', divorced: '離婚' };
 const EXT_COLOR_MODES = ['black', 'blue'];
 const EXT_COLOR_LABELS = { black: '一般', blue: '編輯' };
-
-const ecoRx = (text) => Math.max(35, (text?.length || 1) * 9 + 15);
-const ECO_RY = 28;
-
-/* 下載圖片的取樣倍率。列印與貼進 Word 都吃得下 3 倍圖，而這個數字也會
- * 寫進圖檔的來源印子裡（見 utils/imageMeta.js），下次匯入修補時才對得回來。 */
-const EXPORT_SCALE = 3;
-
-/* 只服務編輯畫面、不該出現在成品裡的圖層（底圖定位框、橡皮擦游標圈…）。
- * 下載與列印都是複製整棵 <svg>，所以複製完要先把這些拿掉。 */
-const NO_EXPORT = 'no-export';
-const stripEditorOnly = (svgEl) => {
-  svgEl.querySelectorAll(`.${NO_EXPORT}`).forEach(el => el.remove());
-  return svgEl;
-};
 
 /* 底圖定位框的四個角把手：[x 方向, y 方向]，-1 是左／上，1 是右／下。 */
 const BG_HANDLES = [[-1, -1], [1, -1], [-1, 1], [1, 1]];
@@ -57,6 +50,7 @@ const GenogramTab = ({
   doc, setField, patchDoc, toggleNodeAttr, toggleLineAttr, clearNodeAttrs, clearLineAttr,
   cases, activeCaseId, activeCase, isSaved,
   switchCase, saveCase, renameCase, deleteCase, exportCase, importCase,
+    updateCaseMeta, duplicateCase, backupAll, lastBackupAt,
   snapshots, takeSnapshot, restoreSnapshot, removeSnapshot,
   gen2Str, setGen2Str, gen2Cfg, setGen2Cfg,
   indexId, setIndexId,
@@ -136,6 +130,8 @@ const GenogramTab = ({
 
   /* --- 年齡與文字編輯狀態 --- */
   const ages = doc.ages,                      setAges = setField('ages');
+  const ageDisplay = doc.ageDisplay,          setAgeDisplay = setField('ageDisplay');
+  const rocYear = currentRocYear();
   const [editingAgeId, setEditingAgeId] = useState(null);
   const [editingTextId, setEditingTextId] = useState(null);
   const [editingEcoId, setEditingEcoId] = useState(null);
@@ -151,22 +147,18 @@ const GenogramTab = ({
 
   /* ===== 畫布互動邏輯 ===== */
   const svgRef = useRef(null);
-  const wheelRef = (el, list, current, setter) => {
-    if (!el) return;
-    el.onwheel = (e) => { e.preventDefault(); e.stopPropagation(); const next = (list.indexOf(current) + (e.deltaY > 0 ? 1 : -1) + list.length) % list.length; setter(list[next]); };
-  };
-  /** 點擊往前切到下一個狀態（跟滾輪往下同方向），滾輪仍可雙向切換。
-   * 這批狀態標籤原本只能滾輪操作——滑鼠沒有滾輪（觸控板手勢因人而異）或
-   * 不知道可以滾的人根本切不動，點擊是找得到的最低限度操作方式。 */
-  const cycleOnClick = (list, current, setter) => (e) => {
-    e.stopPropagation();
-    const next = (list.indexOf(current) + 1) % list.length;
-    setter(list[next]);
-  };
 
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      /* 選取中的文字方塊：Ctrl+D 複製一份（瀏覽器預設是加書籤，這裡攔下來）、
+       * Delete 刪除。要放在下面「帶 Ctrl 一律略過」之前。 */
+      if (selectedTextId && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
+        e.preventDefault();
+        duplicateSelectedText(selectedTextId);
+        return;
+      }
+      if (selectedTextId && e.key === 'Delete') { deleteText(selectedTextId); return; }
       /* 這裡全是單鍵快捷鍵，帶了 Ctrl／Cmd／Alt 的組合鍵不該落進來——
        * 否則 Ctrl+A（全選）會順手把符號選取打開、Ctrl+S 會偷偷換掉選中的符號。 */
       if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -192,7 +184,7 @@ const GenogramTab = ({
        * 離開模式不會關掉顯示，年齡填完仍然留在畫布上。 */
       if (key === 'e') setMode(p => p === 'age' ? null : 'age');
       if (e.key === 'Enter' && mode === 'cohab' && cohabMode === 'poly' && draftPoly.length >= 3) {
-        setPolygons(prev => [...prev, { id: 'pg_' + Date.now(), pts: draftPoly }]); setDraftPoly([]); setMousePos(null);
+        setPolygons(prev => [...prev, { id: newId('pg_'), pts: draftPoly }]); setDraftPoly([]); setMousePos(null);
       }
       if (e.key === 'Enter' && bgAdjust) setBgAdjust(false);
       if (e.key === 'Escape' && draftPoly.length > 0) { setDraftPoly([]); setMousePos(null); }
@@ -213,7 +205,8 @@ const GenogramTab = ({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [draftPoly, mode, cohabMode, quickIdx, bgAdjust, setBgImage]);
+  // 複製用到的吸附位置由 texts／positions／freeNodes 算出，三者變了都要換新的 handler
+  }, [draftPoly, mode, cohabMode, quickIdx, bgAdjust, setBgImage, selectedTextId, texts, positions, freeNodes]);
 
   /* 第二代的人數／配偶／第三代一變動，整排子女的寬度就跟著變，父母原本停的
    * 位置就不再是正中央。這裡把「改第二代」與「父母重新置中」寫成同一次更新：
@@ -250,7 +243,7 @@ const GenogramTab = ({
   const toggleMulti = (i) => setGen2Cfg(p => p.map((d, j) => j === i ? { ...d, isMulti: !d.isMulti } : d));
 
   const addText = () => {
-    const id = 'txt_' + Date.now();
+    const id = newId('txt_');
     setTexts(prev => [...prev, { id, x: 300, y: 200, text: '文字', fontSize: 16, vertical: textDirection === 'vertical' }]);
   };
   const deleteText = (id) => {
@@ -261,6 +254,7 @@ const GenogramTab = ({
   const finishEditingEco = (id, newText) => {
     if (!newText.trim()) {
       // 清空文字 → 刪除該生態圖節點及相關連線
+      detachLabels(id);
       setCustomLinks(prev => prev.filter(l => l.sourceId !== id && l.targetId !== id));
       setFreeNodes(prev => prev.filter(fn => fn.id !== id));
     } else {
@@ -271,22 +265,22 @@ const GenogramTab = ({
 
   /* --- 自由節點操作 --- */
   const addFreeNode = (gender) => {
-    const id = 'f_' + Date.now();
+    const id = newId('f_');
     setFreeNodes(prev => [...prev, { id, gender, x: 500, y: 320 }]);
   };
-  /** 新增獨立個體（目前僅「三角」）：跟 addFreeNode 一樣，點按鈕就在畫布上
+  /** 新增獨立個體（三角、寵物）：跟 addFreeNode 一樣，點按鈕就在畫布上
    * 生出一個全新節點，不覆蓋任何既有節點——跟快捷列表「點人物套用標記」是兩回事。 */
   const addStandaloneNode = (type) => {
-    const id = 'f_' + Date.now();
+    const id = newId('f_');
     setFreeNodes(prev => [...prev, { id, type, x: 500, y: 320 }]);
   };
   const addEcoNode = () => {
-    const id = 'eco_' + Date.now();
+    const id = newId('eco_');
     const hasIndex = !!indexId;
     const newNode = { id, type: 'eco', text: '資源名稱', x: hasIndex ? 650 : 100, y: hasIndex ? 100 : 100 };
     setFreeNodes(prev => [...prev, newNode]);
     if (hasIndex) {
-      setCustomLinks(prev => [...prev, { id: 'l_' + Date.now(), sourceId: indexId, targetId: id, type: 'eco', status: 'married', kidsStr: '', kidsCfg: [] }]);
+      setCustomLinks(prev => [...prev, { id: newId('l_'), sourceId: indexId, targetId: id, type: 'eco', status: 'married', kidsStr: '', kidsCfg: [] }]);
     }
   };
   const updateCustomLink = (linkId, field, val) => {
@@ -294,93 +288,28 @@ const GenogramTab = ({
   };
   const deleteCustomLink = (linkId) => {
     setCustomLinks(prev => prev.filter(l => l.id !== linkId));
+    // 這條婚姻線底下掛的子女一起放開（人留著，只是不再連到這對父母）
+    setChildLinks(prev => dropChildLinks(prev, { lineId: linkId }));
   };
 
-  const { nodes, lines } = useMemo(() => {
-    const N = [], L = [];
-    // 版面幾何（含第一代夫妻自動置中）與子女變動時的重新置中共用同一份計算
-    const { units, fX, mX } = computeMainLayout(gen2Cfg);
-    /* 舊圖修補模式（mainFamily === false）整組主家系都不產生：畫布上只剩
-       自由擴充區、文字方塊與底圖。下面的 customLinks 區塊照跑 —— 舊圖上的
-       人物就是靠它們加的，找不到主家系節點時會退回 freeNodes 的座標。 */
-    if (mainFamily) {
-      N.push({ id: 'fa', gender: 'M', gen: 0, dx: fX, dy: GEN_Y[0], label: '父' }, { id: 'mo', gender: 'F', gen: 0, dx: mX, dy: GEN_Y[0], label: '母' });
-      L.push({ id: 'ml-g1', type: 'marry', a: 'fa', b: 'mo', status: g1Status });
+  /* --- 掛在婚姻線底下的子女（見 utils/childLinks.js） --- */
+  const childLinks = doc.childLinks,          setChildLinks = setField('childLinks');
+  /** 自由擴充的成員被刪掉時：連在他身上的標籤解開、親子關係清掉。 */
+  const forgetFreeNode = (id) => {
+    detachLabels(id);
+    // 他自己被掛在誰底下、或有誰以他為單親掛著，都一起清掉
+    setChildLinks(prev => dropChildLinks(prev, { childId: id, parentId: id }));
+  };
+  /** 可以掛到婚姻線底下當子女的：人物與三角（懷孕／流產／死產）。寵物、生態圖不行。 */
+  const canBeChild = (fn) => !!fn && fn.type !== 'eco' && fn.type !== 'pet';
 
-      const g2ids = [];
-      units.forEach((u, i) => {
-        const cid = `c${i}`;
-        if (u.isMarried) {
-          const lx = u.x, rx = u.spouseX;
-          const sid = `s${i}`, coupleMidX = (lx + rx) / 2;
-          N.push({ id: cid, gender: u.gender, gen: 1, dx: lx, dy: GEN_Y[1], label: `${u.gender === 'M'?'子':'女'}${i+1}`, isMulti: u.isMulti });
-          N.push({ id: sid, gender: u.gender === 'M'?'F':'M', gen: 1, dx: rx, dy: GEN_Y[1], label: '配偶' });
-          L.push({ id: `ml-c${i}`, type: 'marry', a: cid, b: sid, status: u.partner });
-          g2ids.push(cid);
-          if (u.g3.length > 0) {
-            const g3Start = coupleMidX - ((u.g3.length - 1) * SIBLING_GAP) / 2, g3ids = [];
-            u.g3.forEach((g, j) => {
-              const gid = `g${i}_${j}`;
-              N.push({ id: gid, gender: g, gen: 2, dx: g3Start + j * SIBLING_GAP, dy: GEN_Y[2], label: `${g==='M'?'孫':'孫女'}${j+1}` });
-              g3ids.push(gid);
-            });
-            L.push({ id: `pc-c${i}`, type: 'pc', pa: cid, pb: sid, kids: g3ids });
-          }
-        } else {
-          N.push({ id: cid, gender: u.gender, gen: 1, dx: u.x, dy: GEN_Y[1], label: `${u.gender === 'M'?'子':'女'}${i+1}`, isMulti: u.isMulti });
-          g2ids.push(cid);
-        }
-      });
-      if (g2ids.length > 0) L.push({ id: 'pc-g1', type: 'pc', pa: 'fa', pb: 'mo', kids: g2ids });
-    }
-
-    // === customLink kidsCfg → 整合為完全體節點 ===
-    customLinks.forEach(lnk => {
-      if (lnk.type === 'eco' || lnk.type === 'annotation') return; // 生態圖／獨立個體連線不參與節點生成
-      if (!lnk.kidsCfg || lnk.kidsCfg.length === 0) return;
-      const srcN = N.find(n => n.id === lnk.sourceId); const srcF = freeNodesRef.current.find(fn => fn.id === lnk.sourceId);
-      const tgtN = N.find(n => n.id === lnk.targetId); const tgtF = freeNodesRef.current.find(fn => fn.id === lnk.targetId);
-      
-      // 修正座標抓取：強制讀取拖曳後的實際視覺座標，防止兩段婚姻小孩擠在同一個中心點
-      const spx = positionsRef.current[lnk.sourceId]?.x ?? srcN?.dx ?? srcF?.x ?? 300;
-      const spy = positionsRef.current[lnk.sourceId]?.y ?? srcN?.dy ?? srcF?.y ?? 160;
-      const tpx = positionsRef.current[lnk.targetId]?.x ?? tgtN?.dx ?? tgtF?.x ?? 400;
-      const tpy = positionsRef.current[lnk.targetId]?.y ?? tgtN?.dy ?? tgtF?.y ?? 160;
-
-      const parentMidX = (spx + tpx) / 2, parentY = Math.max(spy, tpy), kidsY = parentY + 80;
-      const kidUnits = lnk.kidsCfg.map((kc) => {
-        const isMarried = kc.partner !== 'none'; const g3 = isMarried ? parseGenders(kc.g3Str || '') : [];
-        const w = !isMarried ? SIBLING_GAP : Math.max(COUPLE_GAP + SZ, g3.length > 0 ? (g3.length - 1) * SIBLING_GAP + SZ : 0) + 50;
-        return { ...kc, g3, w, isMarried };
-      });
-      const kidsTotalW = kidUnits.reduce((s, u) => s + u.w, 0) || SIBLING_GAP;
-      let ckx = parentMidX - kidsTotalW / 2; const kidIds = [];
-      kidUnits.forEach((ku, ki) => {
-        const kidId = `${lnk.id}_c${ki}`, midU = ckx + ku.w / 2;
-        if (ku.isMarried) {
-          const lx = kidUnits.length === 1 ? parentMidX - COUPLE_GAP / 2 : midU - COUPLE_GAP / 2;
-          const rx = kidUnits.length === 1 ? parentMidX + COUPLE_GAP / 2 : midU + COUPLE_GAP / 2;
-          const sid = `${lnk.id}_s${ki}`, cmx = (lx + rx) / 2;
-          N.push({ id: kidId, gender: ku.gender, gen: 2, dx: lx, dy: kidsY, label: getRelativeTitle(ku.gender, ki, lnk.kidsCfg), isExt: true });
-          N.push({ id: sid, gender: ku.gender === 'M' ? 'F' : 'M', gen: 2, dx: rx, dy: kidsY, label: '配偶', isExt: true });
-          L.push({ id: `${lnk.id}_ml_c${ki}`, type: 'marry', a: kidId, b: sid, status: ku.partner, isExt: true });
-          kidIds.push(kidId);
-          if (ku.g3.length > 0) {
-            const g3Start = cmx - ((ku.g3.length - 1) * SIBLING_GAP) / 2, g3ids = [];
-            ku.g3.forEach((g, j) => { const gkid = `${lnk.id}_g${ki}_${j}`; N.push({ id: gkid, gender: g, gen: 3, dx: g3Start + j * SIBLING_GAP, dy: kidsY + 80, label: `${g === 'M' ? '孫' : '孫女'}${j+1}`, isExt: true }); g3ids.push(gkid); });
-            L.push({ id: `${lnk.id}_pc_c${ki}`, type: 'pc', pa: kidId, pb: sid, kids: g3ids, isExt: true });
-          }
-        } else {
-          N.push({ id: kidId, gender: ku.gender, gen: 2, dx: midU, dy: kidsY, label: getRelativeTitle(ku.gender, ki, lnk.kidsCfg), isExt: true });
-          kidIds.push(kidId);
-        }
-        ckx += ku.w;
-      });
-      if (kidIds.length > 0) L.push({ id: `${lnk.id}_pc`, type: 'pc', pa: lnk.sourceId, pb: lnk.targetId, kids: kidIds, isExt: true });
-    });
-
-    return { nodes: N, lines: L };
-  }, [gen2Cfg, g1Status, customLinks, mainFamily]); // freeNodes 改用 ref 讀取，避免每次拖曳觸發重算
+  /* 排版本身在 utils/familyLayout.js（個案紀錄也用同一份推算稱謂）。
+     freeNodes／positions 用 ref 讀：拖曳時每一格都在變，列進相依會讓整份
+     排版在拖曳中不停重算；它們只影響擴充子代的起始位置。 */
+  const { nodes, lines } = useMemo(() => buildFamily({
+    gen2Cfg, g1Status, customLinks, mainFamily, childLinks: doc.childLinks,
+    positions: positionsRef.current, freeNodes: freeNodesRef.current,
+  }), [gen2Cfg, g1Status, customLinks, mainFamily, doc.childLinks]);
 
 
   const pos = useCallback((id) => {
@@ -391,6 +320,31 @@ const GenogramTab = ({
     if (fn) return { x: fn.x, y: fn.y };
     return { x: 0, y: 0 };
   }, [positions, nodes, freeNodes]);
+  /* ===== 文字方塊的吸附 =====
+   * 可以吸的對象：人物（主家系、擴充子代、自由擴充的男女）與獨立個體（三角、
+   * 寵物）。生態圖不算——它自己的橢圓裡就寫著名稱。 */
+  const snapTargets = useMemo(() => [
+    ...nodes.map(n => ({ id: n.id, ...pos(n.id) })),
+    ...freeNodes.filter(fn => fn.type !== 'eco').map(fn => ({ id: fn.id, x: fn.x, y: fn.y })),
+  ], [nodes, freeNodes, pos]);
+  const targetPos = useCallback((id) => snapTargets.find(c => c.id === id) || null, [snapTargets]);
+  /** 畫面上實際的文字方塊：綁在節點上的，位置跟著節點算。 */
+  const resolvedTexts = useMemo(
+    () => texts.map(t => resolveText(t, targetPos, R)),
+    [texts, targetPos]
+  );
+  /** 刪除節點前先把綁在它身上的標籤解開，標籤留在原地。 */
+  const detachLabels = (nodeId) => setTexts(prev => detachTextsFrom(prev, nodeId, targetPos, R));
+
+  const duplicateSelectedText = (id) => {
+    const src = texts.find(t => t.id === id);
+    const shown = resolvedTexts.find(t => t.id === id);
+    if (!src || !shown) return;
+    const copy = duplicateText(src, shown, newId('txt_'));
+    setTexts(prev => [...prev, copy]);
+    setSelectedTextId(copy.id);
+  };
+
   const svgPt = useCallback((e) => { const p = svgRef.current.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; return p.matrixTransform(svgRef.current.getScreenCTM().inverse()); }, []);
 
   /* =========================================================================
@@ -435,9 +389,11 @@ const GenogramTab = ({
   }, [lines, customLinks]);
 
   /** 找出座標命中的婚姻線；沒命中回傳 null。 */
-  const hitTestLine = useCallback((pt) => {
+  const hitTestLine = useCallback((pt, excludeNodeId = null) => {
     let best = null, bestDist = 14; // 14px 內才算命中，太寬會誤觸到旁邊的線
     for (const seg of marriageLineSegs) {
+      // 拖著夫妻其中一人時，不該命中他自己的婚姻線
+      if (excludeNodeId && (seg.a === excludeNodeId || seg.b === excludeNodeId)) continue;
       // 用實際畫出來的那一段判定：下緣式的線在符號下方，拿中心連線判定會差一截
       const [x1, y1, x2, y2] = marriageGeom(pos(seg.a), pos(seg.b), lineStyle).hit;
       const d = distToSegment(pt.x, pt.y, x1, y1, x2, y2);
@@ -494,7 +450,7 @@ const GenogramTab = ({
 
       if (kind === 'standalone') {
         if (hitTestNode(svgP)) return;                // 放開在既有人物節點上：不做事
-        setFreeNodes(prev => [...prev, { id: 'f_' + Date.now(), type: key, x: svgP.x, y: svgP.y }]);
+        setFreeNodes(prev => [...prev, { id: newId('f_'), type: key, x: svgP.x, y: svgP.y }]);
         recordUse(key);
         return;
       }
@@ -520,13 +476,17 @@ const GenogramTab = ({
   const onDown = useCallback((e, id) => {
     e.stopPropagation(); nodeDragMoved.current = false; const sp = svgPt(e); const p = pos(id);
     const isFree = freeNodes.some(fn => fn.id === id);
-    setDrag({ id, ox: sp.x - p.x, oy: sp.y - p.y, isFree });
+    // start：拖曳起點。掛到婚姻線底下當子女之後，人會放回這裡（見 onUp）
+    setDrag({ id, ox: sp.x - p.x, oy: sp.y - p.y, isFree, start: { x: p.x, y: p.y } });
   }, [svgPt, pos, freeNodes]);
 
   const onTextDown = useCallback((e, id) => {
-    e.stopPropagation(); textDragMoved.current = false; const sp = svgPt(e); const found = texts.find(v => v.id === id);
-    if (found) setTextDrag({ id, ox: sp.x - found.x, oy: sp.y - found.y });
-  }, [svgPt, texts]);
+    e.stopPropagation(); textDragMoved.current = false; const sp = svgPt(e); const found = resolvedTexts.find(v => v.id === id);
+    if (!found) return;
+    const c = textCenter(found, found.vertical);
+    // 記的是「游標到方塊中心」的距離，理由見 utils/textBox.js 的 snapWhileDragging
+    setTextDrag({ id, ox: sp.x - c.x, oy: sp.y - c.y, sx: sp.x, sy: sp.y });
+  }, [svgPt, resolvedTexts]);
 
   const onTextClick = useCallback((e, id) => { e.stopPropagation(); if (textDragMoved.current) return; setSelectedTextId(id); }, []);
   const onTextDoubleClick = useCallback((e, id) => {
@@ -541,6 +501,34 @@ const GenogramTab = ({
   /* 拖曳時的對齊參考線（純顯示，不進文件）：
      { x, y, center } — center 為 true 代表吸在「中線」上（父母對子女中央等） */
   const [snapGuide, setSnapGuide] = useState(null);
+  /* 拖著自由擴充的人（或三角）時，可以放的子女區：每對夫妻的婚姻線中點下方，
+     以及每位「沒有任何婚姻連線」的人正下方（單親）。已經有伴侶的人只出現
+     夫妻共同的那一格——兩格並排會擠在一起，也很少需要。 */
+  const childZones = useMemo(() => {
+    if (!drag) return [];
+    if (drag.isFree) {
+      if (!canBeChild(freeNodes.find(fn => fn.id === drag.id))) return [];
+    } else {
+      /* 主家系的人：只有「還沒有父母」的才能放——配偶（s0…）、第一代父母。
+         這樣才畫得出配偶的原生家庭、案主的祖父母。已經放過子女區的可以改放。
+         有父母的第二、三代是填表產生的，親子關係由表格決定，不給拖走。 */
+      const viaZone = childLinks.some(cl => cl.childId === drag.id);
+      const hasParents = lines.some(ln => ln.type === 'pc' && ln.kids.includes(drag.id));
+      if (hasParents && !viaZone) return [];
+    }
+    const married = new Set(marriageLineSegs.flatMap(sg => [sg.a, sg.b]));
+    const singles = allNodeIds.filter(id => !married.has(id));
+    return dropZones({
+      draggedId: drag.id, couples: marriageLineSegs, singles, posOf: pos, radius: R,
+      blocked: descendantsOf(lines, drag.id),
+      barYOf: (c) => marriageGeom(pos(c.a), pos(c.b), lineStyle).barY,
+    });
+    // 只在開始拖的那一刻算一次：拖曳中別人不會動，被拖的人自己不在清單裡
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drag?.id, drag?.isFree]);
+
+  /** 拖成員時，游標目前落在哪個「子女放置區」（放開就成為子女），純顯示。 */
+  const [childZoneKey, setChildZoneKey] = useState(null);
 
   const onMove = useCallback((e) => {
     const sp = svgPt(e);
@@ -570,7 +558,23 @@ const GenogramTab = ({
     if (draftPoly.length > 0) setMousePos({ x: sp.x, y: sp.y });
     if (dragVertex) { setPolygons(p => p.map(pg => pg.id !== dragVertex.polyId ? pg : { ...pg, pts: pg.pts.map((pt, i) => i === dragVertex.index ? { x: sp.x - dragVertex.ox, y: sp.y - dragVertex.oy } : pt) })); return; }
     if (textResize) { setTexts(p => p.map(t => t.id === textResize.id ? { ...t, fontSize: Math.max(10, Math.min(72, Math.round(textResize.startSize + (sp.y - textResize.startY) * 0.3))) } : t)); return; }
-    if (textDrag) { textDragMoved.current = true; setTexts(p => p.map(t => t.id === textDrag.id ? { ...t, x: sp.x - textDrag.ox, y: sp.y - textDrag.oy } : t)); return; }
+    if (textDrag) {
+      /* 抖動不算拖：單擊選取時手難免晃一兩個像素，不擋掉的話吸好的標籤
+         會在「點一下」的時候被重新判斷吸附，甚至被拉開。 */
+      if (!textDragMoved.current && Math.hypot(sp.x - textDrag.sx, sp.y - textDrag.sy) < 3) return;
+      textDragMoved.current = true;
+      const center = { x: sp.x - textDrag.ox, y: sp.y - textDrag.oy };
+      setTexts(p => p.map(t => {
+        if (t.id !== textDrag.id) return t;
+        // 按住 Shift 拖曳＝不吸附，想把標籤放在節點旁邊但不綁定時用
+        const anchor = e.shiftKey ? null : snapWhileDragging(t, center, snapTargets, R);
+        if (!anchor) { const { anchor: _drop, ...rest } = t; return { ...rest, ...xyForCenter(t, !!t.vertical, center) }; }
+        /* 吸附時也把算好的位置寫進 x / y：節點日後消失（被刪、主家系關掉）時，
+           標籤就停在這裡，而不是跳回很久以前的位置。 */
+        return { ...t, anchor, ...anchoredXY(t, targetPos(anchor.id), anchor.side, R) };
+      }));
+      return;
+    }
     if (!drag) return;
     nodeDragMoved.current = true;
 
@@ -658,18 +662,48 @@ const GenogramTab = ({
       newX = sx.v; newY = sy.v;
       showGuide(sx, sy);
       setFreeNodes(prev => prev.map(fn => fn.id === drag.id ? { ...fn, x: newX, y: newY } : fn));
+      // 經過子女放置區時高亮：放開就會變成那對夫妻（或那位單親）的子女
+      const z = childZones.length ? hitZone(childZones, { x: newX, y: newY }) : null;
+      setChildZoneKey(z ? z.key : null);
     } else {
       // 原生節點：中線磁吸 + 12px 全域磁吸
       const sx = snapX(sp.x - drag.ox), sy = snapY(sp.y - drag.oy);
       showGuide(sx, sy);
       setPositions(prev => ({ ...prev, [drag.id]: { x: sx.v, y: sy.v } }));
+      const z = childZones.length ? hitZone(childZones, { x: sx.v, y: sy.v }) : null;
+      setChildZoneKey(z ? z.key : null);
     }
   }, [drag, textDrag, textResize, dragVertex, draftPoly, svgPt, setFreeNodes, customLinks, nodes, lines,
-      bgDrag, bgImage, setBgImage, bgAdjust]);
+      bgDrag, bgImage, setBgImage, bgAdjust, snapTargets, targetPos, childZones]);
 
   const onUp = useCallback(() => {
-    if (drag && drag.isFree) {
-      const draggedNode = freeNodes.find(fn => fn.id === drag.id);
+    /* 放進子女放置區：成為那對夫妻（或單親）的子女。比「疊到人身上＝結婚」
+       優先判斷——放置區就在人的正下方，距離一定落在結婚的判定範圍內。 */
+    const draggedFree = drag?.isFree ? freeNodes.find(fn => fn.id === drag.id) : null;
+    const dropAt = drag && childZones.length ? pos(drag.id) : null;
+    const zone = dropAt ? hitZone(childZones, dropAt) : null;
+    if (zone) {
+      let barY, pair;
+      if (zone.target.parentId) {
+        const pp = pos(zone.target.parentId);
+        barY = pp.y; pair = [zone.target.parentId, zone.target.parentId];
+      } else {
+        const seg = marriageLineSegs.find(sg => sg.id === zone.target.lineId);
+        barY = marriageGeom(pos(seg.a), pos(seg.b), lineStyle).barY; pair = [seg.a, seg.b];
+      }
+      const sibs = lines.find(ln => ln.type === 'pc'
+        && ((ln.pa === pair[0] && ln.pb === pair[1]) || (ln.pa === pair[1] && ln.pb === pair[0])));
+      const siblingYs = (sibs?.kids || []).filter(k => k !== drag.id).map(k => pos(k).y);
+      const rest = childRestPos({ start: drag.start, dropX: dropAt.x, barY, siblingYs, radius: R });
+      // 親子關係與位置寫成同一筆歷史：Ctrl+Z 一步回到拖曳之前
+      patchDoc({
+        childLinks: setChildLink(childLinks, drag.id, zone.target, newId('ch_')),
+        ...(draggedFree
+          ? { freeNodes: freeNodes.map(fn => fn.id === drag.id ? { ...fn, ...rest } : fn) }
+          : { positions: { ...positions, [drag.id]: rest } }),
+      });
+    } else if (drag && drag.isFree) {
+      const draggedNode = draggedFree;
       if (draggedNode) {
         const dp = { x: draggedNode.x, y: draggedNode.y };
         // Check collision with all existing nodes
@@ -691,7 +725,7 @@ const GenogramTab = ({
             const draggedIsEco = draggedNode.type === 'eco';
             const draggedIsAnnotation = STANDALONE_TYPES.includes(draggedNode.type);
             const newLinkType = draggedIsEco ? 'eco' : draggedIsAnnotation ? 'annotation' : undefined;
-            setCustomLinks(prev => [...prev, { id: 'l_' + Date.now(), sourceId: closestId, targetId: drag.id, ...(newLinkType ? { type: newLinkType } : {}), status: 'married', kidsStr: '', kidsCfg: [] }]);
+            setCustomLinks(prev => [...prev, { id: newId('l_'), sourceId: closestId, targetId: drag.id, ...(newLinkType ? { type: newLinkType } : {}), status: 'married', kidsStr: '', kidsCfg: [] }]);
             // Push freeNode away to prevent overlap
             const tp = pos(closestId);
             const angle = Math.atan2(dp.y - tp.y, dp.x - tp.x);
@@ -702,8 +736,9 @@ const GenogramTab = ({
       }
     }
     setDragVertex(null); setDrag(null); setTextDrag(null); setTextResize(null); setSnapGuide(null);
-    setBgDrag(null);
-  }, [drag, freeNodes, nodes, pos, customLinks, setCustomLinks, setFreeNodes]);
+    setBgDrag(null); setChildZoneKey(null);
+  }, [drag, freeNodes, nodes, pos, customLinks, setCustomLinks, setFreeNodes,
+      childZones, marriageLineSegs, lines, lineStyle, childLinks, patchDoc, positions]);
 
   const onClick = (e, id) => {
     e.stopPropagation();
@@ -737,127 +772,27 @@ const GenogramTab = ({
     return { type: 'poly', points: lower.concat(upper) };
   }, [cohabMembers, nodes, pos]);
 
-  /** 算出目前畫面上所有內容的最小外框（含留白），下載圖片/列印共用。 */
-  const computeCropBox = useCallback(() => {
-    const PAD = 40, allXs = [], allYs = [];
-    nodes.forEach(n => { const p = pos(n.id); allXs.push(p.x - R, p.x + R); allYs.push(p.y - R, p.y + R); });
-    freeNodes.forEach(fn => {
-      if (fn.type === 'eco') {
-        const rx = ecoRx(fn.text);
-        allXs.push(fn.x - rx, fn.x + rx); allYs.push(fn.y - ECO_RY, fn.y + ECO_RY);
-      } else {
-        allXs.push(fn.x - R, fn.x + R); allYs.push(fn.y - R, fn.y + R);
-      }
-    });
-    texts.forEach(t => { const w = t.vertical ? t.fontSize * 1.5 : t.text.length * t.fontSize * 0.7, h = t.vertical ? t.text.length * t.fontSize * 1.2 : t.fontSize * 1.5; allXs.push(t.x - 4, t.x + (t.vertical ? t.fontSize * 1.5 : w)); allYs.push(t.y - (t.vertical ? 4 : t.fontSize + 4), t.y + (t.vertical ? h : 8)); });
-    polygons.forEach(pg => pg.pts.forEach(pt => { allXs.push(pt.x); allYs.push(pt.y); }));
-    if (cohabitationBox && cohabitationBox.type === 'single') { allXs.push(cohabitationBox.x, cohabitationBox.x + cohabitationBox.w); allYs.push(cohabitationBox.y, cohabitationBox.y + cohabitationBox.h); }
-    else if (cohabitationBox && cohabitationBox.type === 'poly') { cohabitationBox.points.forEach(pt => { allXs.push(pt.x); allYs.push(pt.y); }); }
-
-    // 底圖也要進裁切範圍，否則下載/列印會把修補好的舊圖切掉
-    const bgBox = bgImageBox(bgImage);
-    if (allXs.length === 0 && !bgBox) return null;
-
-    /* 只有「畫上去的東西」需要外加白邊；底圖不用 —— 一張圖的邊界本來就是
-       它自己的留白。對底圖再墊一次 40px 的話，「下載 → 匯入修補 → 再下載」
-       每繞一圈就會多長出一圈白邊，來回幾趟整張圖會越縮越小。 */
-    const span = (vals, lo, hi) => {
-      const drawn = vals.length > 0;
-      return {
-        min: Math.min(drawn ? Math.min(...vals) - PAD : Infinity, lo ?? Infinity),
-        max: Math.max(drawn ? Math.max(...vals) + PAD : -Infinity, hi ?? -Infinity),
-      };
-    };
-    const sx = span(allXs, bgBox?.x, bgBox && bgBox.x + bgBox.w);
-    const sy = span(allYs, bgBox?.y, bgBox && bgBox.y + bgBox.h);
-    return { minX: sx.min, minY: sy.min, w: sx.max - sx.min, h: sy.max - sy.min };
-  }, [nodes, freeNodes, texts, polygons, cohabitationBox, pos, bgImage]);
-
-  /** 把畫布裁切後轉成點陣圖並下載。transparent=true 時不補白底（PNG 去背用）。 */
-  const rasterizeAndDownload = useCallback((box, { transparent, format, filename }) => {
-    const cloned = stripEditorOnly(svgRef.current.cloneNode(true));
-    cloned.setAttribute('width', box.w); cloned.setAttribute('height', box.h);
-    cloned.setAttribute('viewBox', `${box.minX} ${box.minY} ${box.w} ${box.h}`);
-    const url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(cloned)], { type: 'image/svg+xml;charset=utf-8' }));
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement('canvas'); canvas.width = box.w * EXPORT_SCALE; canvas.height = box.h * EXPORT_SCALE;
-      const ctx = canvas.getContext('2d'); ctx.scale(EXPORT_SCALE, EXPORT_SCALE);
-      if (!transparent) { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, box.w, box.h); }
-      ctx.drawImage(img, 0, 0, box.w, box.h);
-      URL.revokeObjectURL(url);
-      /* 把裁切框寫進圖檔本身：這張圖之後再匯入「舊圖修補」時，就能一比一
-         放回原本的位置與大小，而不是變成三倍大又貼在左上角。 */
-      canvas.toBlob(async blob => {
-        const stamped = await stampOriginMeta(blob, format, {
-          v: 1,
-          x: Math.round(box.minX), y: Math.round(box.minY),
-          w: Math.round(box.w), h: Math.round(box.h),
-          s: EXPORT_SCALE,
-        });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(stamped); a.download = filename; a.click();
-        URL.revokeObjectURL(a.href);
-      }, format, 1.0);
-    };
-    img.src = url;
-  }, []);
-
-  /** 檔名用案件名稱，未儲存的草稿就叫 genogram。 */
-  const exportBaseName = useCallback(
-    () => (activeCase?.name || 'genogram').replace(/[\\/:*?"<>|]/g, '_'),
-    [activeCase]
-  );
+  /** 目前畫面上所有內容的最小外框（含留白），下載圖片／列印共用。計算本身在 utils/exportImage.js。 */
+  const computeCropBox = useCallback(() => cropBoxOf({
+    nodePts: nodes.map(n => pos(n.id)),
+    freeNodes, texts: resolvedTexts, polygons, cohabitationBox, bgImage,
+  }), [nodes, freeNodes, resolvedTexts, polygons, cohabitationBox, pos, bgImage]);
 
   /* 主按鈕：一鍵下載高解析 PNG（3 倍圖、白底）。
    * 白底而不是去背 —— 直接貼進 Word／LINE 都不會變成一片黑，去背留在進階選單。 */
-  const downloadPNG = useCallback(() => {
+  const download = useCallback((opts, suffix) => {
     const box = computeCropBox();
     if (!box) return;
-    rasterizeAndDownload(box, { transparent: false, format: 'image/png', filename: `${exportBaseName()}.png` });
-  }, [computeCropBox, rasterizeAndDownload, exportBaseName]);
-
-  const downloadJPG = useCallback(() => {
-    const box = computeCropBox();
-    if (!box) return;
-    rasterizeAndDownload(box, { transparent: false, format: 'image/jpeg', filename: `${exportBaseName()}.jpg` });
-  }, [computeCropBox, rasterizeAndDownload, exportBaseName]);
-
-  const downloadPNGTransparent = useCallback(() => {
-    const box = computeCropBox();
-    if (!box) return;
-    rasterizeAndDownload(box, { transparent: true, format: 'image/png', filename: `${exportBaseName()}-去背.png` });
-  }, [computeCropBox, rasterizeAndDownload, exportBaseName]);
-
-  /* 列印/存成 PDF：借瀏覽器內建的列印功能，不額外引入 PDF 產生套件。
-   * 做法是暫時在 <body> 底下插入一份只含裁切後 SVG 的列印專用容器，
-   * 搭配 @media print 把畫面其他部分藏起來，列印對話框關閉後就移除，
-   * 完全不影響使用者正在編輯的畫面。 */
-  const printA4 = useCallback(() => {
-    const box = computeCropBox();
-    if (!box) return;
-    const cloned = stripEditorOnly(svgRef.current.cloneNode(true));
-    cloned.removeAttribute('width'); cloned.removeAttribute('height');
-    cloned.setAttribute('viewBox', `${box.minX} ${box.minY} ${box.w} ${box.h}`);
-    cloned.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-
-    const container = document.createElement('div');
-    container.id = 'print-a4-container';
-
-    const style = document.createElement('style');
-    style.textContent = `@page { size: A4 ${box.w >= box.h ? 'landscape' : 'portrait'}; margin: 10mm; }`;
-
-    const header = document.createElement('div');
-    header.className = 'print-a4-header';
-    header.textContent = `${activeCase?.name || '家系圖'}．列印於 ${new Date().toLocaleDateString('zh-TW')}`;
-
-    container.append(style, header, cloned);
-    document.body.appendChild(container);
-
-    const cleanup = () => { container.remove(); window.removeEventListener('afterprint', cleanup); };
-    window.addEventListener('afterprint', cleanup);
-    window.print();
+    rasterizeAndDownload(svgRef.current, box, { ...opts, filename: `${exportBaseName(activeCase?.name)}${suffix}` });
   }, [computeCropBox, activeCase]);
+  const downloadPNG = () => download({ transparent: false, format: 'image/png' }, '.png');
+  const downloadJPG = () => download({ transparent: false, format: 'image/jpeg' }, '.jpg');
+  const downloadPNGTransparent = () => download({ transparent: true, format: 'image/png' }, '-去背.png');
+
+  const printA4 = () => {
+    const box = computeCropBox();
+    if (box) printSvgA4(svgRef.current, box, activeCase?.name);
+  };
 
   /* ===== 橡皮擦：在底圖上拖曳抹除 =====
    * 一筆從 mousedown 開始、mouseup 結束，中途只更新本地暫態；
@@ -903,7 +838,7 @@ const GenogramTab = ({
 
   const eraseEnd = useCallback(() => {
     if (!eraseDraft) return;
-    const stroke = { id: 'er_' + Date.now(), ...eraseDraft };
+    const stroke = { id: newId('er_'), ...eraseDraft };
     setEraseDraft(null);
     setBgErase(prev => [...prev, stroke]);
   }, [eraseDraft, setBgErase]);
@@ -945,11 +880,11 @@ const GenogramTab = ({
   const eraseStrokes = eraseDraft ? [...bgErase, eraseDraft] : bgErase;
 
   /* ===== SVG 尺寸計算 ===== */
-  const allX = nodes.map(n => positions[n.id]?.x ?? n.dx).concat(texts.map(t => t.x + 100), freeNodes.map(fn => {
+  const allX = nodes.map(n => positions[n.id]?.x ?? n.dx).concat(resolvedTexts.map(t => t.x + 100), freeNodes.map(fn => {
     if (fn.type === 'eco') return fn.x + ecoRx(fn.text);
     return fn.x + 100;
   }));
-  const allY = nodes.map(n => positions[n.id]?.y ?? n.dy).concat(texts.map(t => t.y + 100), freeNodes.map(fn => fn.y + 100));
+  const allY = nodes.map(n => positions[n.id]?.y ?? n.dy).concat(resolvedTexts.map(t => t.y + 100), freeNodes.map(fn => fn.y + 100));
   const bgBox = bgImageBox(bgImage);
   const svgW = Math.max(800, (allX.length ? Math.max(...allX) : 0) + 160, bgBox ? bgBox.x + bgBox.w + 60 : 0);
   const svgH = Math.max(520, (allY.length ? Math.max(...allY) : 0) + 80, bgBox ? bgBox.y + bgBox.h + 60 : 0);
@@ -988,7 +923,7 @@ const GenogramTab = ({
               patchDoc({
                 gen2Str: '', gen2Cfg: [], indexId: null, cohabMembers: [], nodeAttrs: {}, lineAttrs: {},
                 cohabSolid: false, polygons: [], texts: [], ages: {},
-                freeNodes: [], customLinks: [], positions: {}, ipStyle: 'filled',
+                freeNodes: [], customLinks: [], childLinks: [], positions: {}, ipStyle: 'filled',
                 bgImage: null, bgErase: [], mainFamily: true,
                 subjInfo: INITIAL_DOC.subjInfo, famExtras: {}, recordEdit: '',
                 /* lineStyle／lineWidth 刻意不重置：那是使用者的畫法偏好，
@@ -1067,6 +1002,15 @@ const GenogramTab = ({
                         title="年齡 [E]：進入模式後點人物直接輸入年齡">
                   年齡
                 </button>
+                {/* 原樣／實歲：只換「畫出來的字」，存的永遠是當初打的字，切回來一定還原。
+                    民國生年（82年、82年次、民82、R82）才會換算；35、35y、35yo 本來就是
+                    年齡，原樣顯示。已歿成員不換算。 */}
+                <span className="status-badge" data-status={ageDisplay}
+                      onClick={cycleOnClick(AGE_DISPLAYS, ageDisplay, setAgeDisplay)}
+                      ref={el => wheelRef(el, AGE_DISPLAYS, ageDisplay, setAgeDisplay)}
+                      title={`原樣：照輸入的字顯示。實歲：民國生年換算成今年滿幾歲（今年民國 ${rocYear} 年 − 生年；只有年份，生日未到的人會多算 1 歲）。已歿成員不換算。`}>
+                  {AGE_DISPLAY_LABELS[ageDisplay]}
+                </span>
               </div>
             </div>
           </div>
@@ -1193,12 +1137,13 @@ const GenogramTab = ({
         <div className="section">
           <div className="section-title-row">
             <label>🧩 自由擴充區</label>
-            <InfoTip text="男性／女性／三角／生態圖：點按鈕即在畫布上新增一個獨立個體。把新增的個體拖到目標人物上疊在一起放開，就會自動產生連線；生態圖新增後預設連結案主。按下「編輯」會把擴充個體改用藍色畫，方便跟原本的家系區分。" />
+            <InfoTip text="男性／女性／三角／寵物／生態圖：點按鈕即在畫布上新增一個獨立個體。拖著新增的人靠近別人時會出現綠色「↓子女」小框：夫妻的在婚姻線下方，單身者在他正下方（單親）。放進去就成為子女，並回到原本的位置。寵物畫成菱形，拖到飼主身上會連一條細線；名字可以用文字方塊吸在旁邊。把新增的個體拖到目標人物上疊在一起放開，就會自動產生連線；生態圖新增後預設連結案主。按下「編輯」會把擴充個體改用藍色畫，方便跟原本的家系區分。" />
           </div>
           <div className="btn-row">
             <button className="btn-soft tone-dust" onClick={() => addFreeNode('M')}>男性</button>
             <button className="btn-soft tone-rose" onClick={() => addFreeNode('F')}>女性</button>
             <button className="btn-soft tone-mauve" onClick={() => addStandaloneNode('pregnancy')}>三角</button>
+            <button className="btn-soft tone-sage" onClick={() => addStandaloneNode('pet')}>寵物</button>
             <button className="btn-soft tone-teal" onClick={addEcoNode}>生態圖</button>
             {/* 原本是個只能用滾輪切換的標籤（看起來像 tag，也沒人知道可以滾）。
                 改成真的按鈕：點一下切換，滾輪仍然可用。 */}
@@ -1225,80 +1170,18 @@ const GenogramTab = ({
           cases={cases} activeCaseId={activeCaseId} activeCase={activeCase} isSaved={isSaved}
           switchCase={switchCase} saveCase={saveCase} renameCase={renameCase}
           deleteCase={deleteCase} exportCase={exportCase} importCase={importCase}
+          updateCaseMeta={updateCaseMeta} duplicateCase={duplicateCase} backupAll={backupAll} lastBackupAt={lastBackupAt}
           snapshots={snapshots} takeSnapshot={takeSnapshot}
           restoreSnapshot={restoreSnapshot} removeSnapshot={removeSnapshot}
         />
 
-        {customLinks.length > 0 && (
-          <div className="section">
-            <label>🔗 擴充連線設定</label>
-            {customLinks.map(lnk => {
-              const isEcoLink = lnk.type === 'eco';
-              const isAnnotationLink = lnk.type === 'annotation';
-              const isSpecialLink = isEcoLink || isAnnotationLink;
-              const srcNode = nodes.find(n => n.id === lnk.sourceId) || freeNodes.find(n => n.id === lnk.sourceId);
-              const tgtNode = nodes.find(n => n.id === lnk.targetId) || freeNodes.find(n => n.id === lnk.targetId);
-              const linkNodeLabel = (node) => {
-                if (!node) return '?';
-                if (node.type === 'eco') return node.text || '生態圖';
-                if (STANDALONE_TYPES.includes(node.type)) return SYMBOL_MAP[node.type]?.label || node.type;
-                return node.label || (node.gender === 'M' ? '■' : '●');
-              };
-              const srcLabel = linkNodeLabel(srcNode);
-              const tgtLabel = linkNodeLabel(tgtNode);
-              return (
-                <div key={lnk.id} className={`link-card ${isEcoLink ? 'eco' : isAnnotationLink ? 'annotation' : ''}`}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}>
-                    <span>{isEcoLink ? '🌐 ' : isAnnotationLink ? '📎 ' : ''}{srcLabel} ↔ {tgtLabel}</span>
-                    {!isSpecialLink && (
-                      <span className="status-badge" data-status={lnk.status}
-                            onClick={cycleOnClick(CUSTOM_LINK_STATUSES, lnk.status, v => updateCustomLink(lnk.id, 'status', v))}
-                            ref={el => wheelRef(el, CUSTOM_LINK_STATUSES, lnk.status, v => updateCustomLink(lnk.id, 'status', v))}
->{CUSTOM_LINK_LABELS[lnk.status]}</span>
-                    )}
-                    <button className="btn-soft tone-clay btn-soft-xs" onClick={() => deleteCustomLink(lnk.id)} style={{ marginLeft: 'auto' }}>刪除</button>
-                  </div>
-                  {!isSpecialLink && (
-                    <>
-                      <div style={{ marginTop: '4px' }}>
-                        <input type="text" value={lnk.kidsStr || ''} onChange={e => {
-                          const val = e.target.value;
-                          const gs = parseGenders(val);
-                          const newKidsCfg = gs.map((g, i) => (lnk.kidsCfg?.[i]?.gender === g) ? lnk.kidsCfg[i] : { gender: g, partner: 'none', g3Str: '' });
-                          setCustomLinks(prev => prev.map(l => l.id === lnk.id ? { ...l, kidsStr: val, kidsCfg: newKidsCfg } : l));
-                        }} placeholder="子代 (例: 男女 或 MF 或 12)" style={{ width: '100%', fontSize: '12px' }} />
-                      </div>
-                      {lnk.kidsCfg && lnk.kidsCfg.length > 0 && (
-                        <div style={{ marginTop: '6px', paddingLeft: '8px', borderLeft: '2px solid #e2e8f0' }}>
-                          {lnk.kidsCfg.map((kc, ki) => (
-                            <div key={ki}>
-                              <div className="child-row">
-                                <span className={`child-icon ${kc.gender === 'M' ? 'm' : 'f'}`}>{kc.gender === 'M' ? '■' : '●'}</span>
-                                <span className={`child-name ${kc.gender === 'M' ? 'm' : 'f'}`}>{getRelativeTitle(kc.gender, ki, lnk.kidsCfg)}</span>
-                                <div className="chk-wrap">
-                                  <span className="status-badge" data-status={kc.partner || 'none'}
-                                        onClick={cycleOnClick(G2_STATUSES, kc.partner || 'none', v => setCustomLinks(prev => prev.map(l => l.id === lnk.id ? { ...l, kidsCfg: l.kidsCfg.map((k, idx) => idx === ki ? { ...k, partner: v, g3Str: v === 'none' ? '' : k.g3Str } : k) } : l)))}
-                                        ref={el => wheelRef(el, G2_STATUSES, kc.partner || 'none', v => setCustomLinks(prev => prev.map(l => l.id === lnk.id ? { ...l, kidsCfg: l.kidsCfg.map((k, idx) => idx === ki ? { ...k, partner: v, g3Str: v === 'none' ? '' : k.g3Str } : k) } : l)))}
->{G2_LABELS[kc.partner || 'none']}</span>
-                                </div>
-                              </div>
-                              {kc.partner !== 'none' && (
-                                <div className="gen3-block">
-                                  <label>↳ 第三代 (例: 男/女 或 M/F 或 1/2)</label>
-                                  <input type="text" value={kc.g3Str || ''} onChange={e => setCustomLinks(prev => prev.map(l => l.id === lnk.id ? { ...l, kidsCfg: l.kidsCfg.map((k, idx) => idx === ki ? { ...k, g3Str: e.target.value } : k) } : l))} />
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
+        <CustomLinkPanel
+          customLinks={customLinks} setCustomLinks={setCustomLinks}
+          nodes={nodes} freeNodes={freeNodes}
+          updateCustomLink={updateCustomLink} deleteCustomLink={deleteCustomLink}
+          childLinks={childLinks} marriageLineSegs={marriageLineSegs}
+          removeChildLink={(id) => setChildLinks(prev => prev.filter(cl => cl.id !== id))}
+        />
 
       </div>
 
@@ -1325,7 +1208,7 @@ const GenogramTab = ({
                  if (lineId) { toggleLineAttr(lineId, mode); recordUse(mode); }
                } else if (sym.kind === 'standalone') {
                  if (!hitTestNode(sp)) {
-                   setFreeNodes(prev => [...prev, { id: 'f_' + Date.now(), type: mode, x: sp.x, y: sp.y }]);
+                   setFreeNodes(prev => [...prev, { id: newId('f_'), type: mode, x: sp.x, y: sp.y }]);
                    recordUse(mode);
                  }
                }
@@ -1369,7 +1252,7 @@ const GenogramTab = ({
           )}
 
           {mode === 'cohab' && cohabMode === 'poly' && (
-            <rect width="100%" height="100%" fill="transparent" style={{ cursor: 'crosshair' }} onClick={e => { e.stopPropagation(); const sp = svgPt(e); const pt = { x: sp.x, y: sp.y }; if (draftPoly.length >= 3 && Math.sqrt(Math.pow(pt.x - draftPoly[0].x,2) + Math.pow(pt.y - draftPoly[0].y,2)) < 15) { setPolygons(p => [...p, { id: 'pg_' + Date.now(), pts: draftPoly }]); setDraftPoly([]); setMousePos(null); return; } setDraftPoly(p => [...p, pt]); }} />
+            <rect width="100%" height="100%" fill="transparent" style={{ cursor: 'crosshair' }} onClick={e => { e.stopPropagation(); const sp = svgPt(e); const pt = { x: sp.x, y: sp.y }; if (draftPoly.length >= 3 && Math.sqrt(Math.pow(pt.x - draftPoly[0].x,2) + Math.pow(pt.y - draftPoly[0].y,2)) < 15) { setPolygons(p => [...p, { id: newId('pg_'), pts: draftPoly }]); setDraftPoly([]); setMousePos(null); return; } setDraftPoly(p => [...p, pt]); }} />
           )}
 
           {cohabitationBox && cohabitationBox.type === 'single' && <rect x={cohabitationBox.x} y={cohabitationBox.y} width={cohabitationBox.w} height={cohabitationBox.h} fill="none" stroke="#ef4444" strokeWidth="2.5" strokeDasharray={cohabSolid ? "0" : "8,6"} rx="15" />}
@@ -1416,8 +1299,10 @@ const GenogramTab = ({
               const kidPos = ln.kids.map(k => pos(k)); if (kidPos.length === 0) return null;
               /* 子女豎線從婚姻線接下去：中線式接在兩人中線上（豎線會穿過婚姻線），
                  下緣式接在下方那條橫線上。兩者都由 marriageGeom 算，不會各走各的。 */
-              const coupleY = marriageGeom(pA, pB, lineStyle).barY;
-              const topY = lineStyle === 'below' ? coupleY : coupleY + R;
+              // 單親（pa === pb）：沒有婚姻線，豎線直接從家長符號的下緣往下
+              const single = ln.pa === ln.pb;
+              const coupleY = single ? pA.y + R : marriageGeom(pA, pB, lineStyle).barY;
+              const topY = single || lineStyle === 'below' ? coupleY : coupleY + R;
               // 子女被拖到很靠近父母時，中點會跑到婚姻線上方，橫線就會反向
               const barY = Math.max(topY + 10, (topY + kidPos[0].y - R) / 2), els = [];
               els.push(<line key={`${ln.id}-v`} x1={midX} y1={coupleY} x2={midX} y2={barY} stroke={lineColor} strokeWidth={lineWidth} />);
@@ -1453,7 +1338,9 @@ const GenogramTab = ({
             const fill = isIP && !isDouble ? '#1e293b' : 'white';
             const txtC = isIP && !isDouble ? 'white' : '#333';
             const overlayDark = isIP && !isDouble ? 'white' : '#333';
-            const isEditAge = editingAgeId === nd.id, ageVal = ages[nd.id] || '';
+            const isEditAge = editingAgeId === nd.id, ageRaw = ages[nd.id] || '';
+            // 編輯時給原字串，畫出來的是依「原樣／實歲」換算後的字（見 utils/age.js）
+            const ageVal = displayAge(ageRaw, ageDisplay, { rocYear, deceased: deceasedIds.includes(nd.id) });
             return (
               <g key={nd.id} transform={`translate(${nd.x},${nd.y})`} style={{ cursor: drag?.id === nd.id ? 'grabbing' : 'grab', touchAction: 'none' }}
                  onPointerDown={e => onDown(e, nd.id)} onClick={e => onClick(e, nd.id)}
@@ -1464,6 +1351,7 @@ const GenogramTab = ({
                       跟著消失。年齡模式下雙擊等於連點兩次，交給單擊處理就好。 */
                    if (mode === 'age' || !nd.isFree) return;
                    if (window.confirm('確定要刪除這個擴充個體嗎？(相關連線也會一併刪除)')) {
+                     forgetFreeNode(nd.id);
                      setCustomLinks(prev => prev.filter(l => l.sourceId !== nd.id && l.targetId !== nd.id));
                      setFreeNodes(prev => prev.filter(fn => fn.id !== nd.id));
                    }
@@ -1509,7 +1397,7 @@ const GenogramTab = ({
                   : <path d={`M 0,${-R} A ${R},${R} 0 0,0 0,${R} Z`} fill={overlayDark} pointerEvents="none" />)}
                 {isEditAge ? (
                   <foreignObject x={-R} y={-10} width={SZ} height={20}>
-                    <input autoFocus defaultValue={ageVal}
+                    <input autoFocus defaultValue={ageRaw}
                       onBlur={e => finishEditingAge(nd.id, e.target.value)}
                       onKeyDown={e => { e.stopPropagation(); if(e.key === 'Enter') finishEditingAge(nd.id, e.target.value); }}
                       style={{ width: '100%', height: '100%', textAlign: 'center', fontSize: '13px', fontFamily: TEXT_FONT, border: 'none', background: 'transparent', outline: 'none', color: txtC, fontWeight: 'bold', padding: 0 }} />
@@ -1556,18 +1444,20 @@ const GenogramTab = ({
           {/* === 獨立個體節點 (懷孕／流產／死產，三角形) === */}
           {freeNodes.filter(fn => STANDALONE_TYPES.includes(fn.type)).map(fn => {
             const r = standaloneRadius(fn.type);
-            const hasCross = fn.type !== 'pregnancy';
+            const isPet = fn.type === 'pet';
+            const hasCross = !isPet && fn.type !== 'pregnancy';
             return (
               <g key={fn.id} transform={`translate(${fn.x},${fn.y})`} style={{ cursor: drag?.id === fn.id ? 'grabbing' : 'grab', touchAction: 'none' }}
                  onPointerDown={e => onDown(e, fn.id)}
                  onDoubleClick={e => {
                    e.stopPropagation();
                    if (window.confirm('確定要刪除這個標記嗎？(相關連線也會一併刪除)')) {
+                     forgetFreeNode(fn.id);
                      setCustomLinks(prev => prev.filter(l => l.sourceId !== fn.id && l.targetId !== fn.id));
                      setFreeNodes(prev => prev.filter(f => f.id !== fn.id));
                    }
                  }}>
-                <path d={trianglePath(r)} fill="white" stroke="#333" strokeWidth="2.5" strokeLinejoin="round" />
+                <path d={isPet ? diamondPath(r) : trianglePath(r)} fill="white" stroke="#333" strokeWidth="2.5" strokeLinejoin="round" />
                 {hasCross && triangleCrossLines(r).map(([x1, y1, x2, y2], i) => (
                   <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#333" strokeWidth="1.5" pointerEvents="none" />
                 ))}
@@ -1595,6 +1485,7 @@ const GenogramTab = ({
                   const rx = ecoRx(node.text);
                   return (rx * ECO_RY) / Math.sqrt(Math.pow(ECO_RY * Math.cos(ang), 2) + Math.pow(rx * Math.sin(ang), 2));
                 }
+                if (node?.type === 'pet') return diamondEdge(standaloneRadius(), ang);
                 if (STANDALONE_TYPES.includes(node?.type)) return standaloneRadius(node.type);
                 if (node?.gender === 'M') {
                   const cosA = Math.abs(Math.cos(ang)), sinA = Math.abs(Math.sin(ang));
@@ -1643,6 +1534,28 @@ const GenogramTab = ({
             if (!seg) return null;
             const [x1, y1, x2, y2] = marriageGeom(pos(seg.a), pos(seg.b), lineStyle).hit;
             return <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#3b82f6" strokeWidth="7" strokeDasharray="5,4" opacity="0.5" pointerEvents="none" />;
+          })()}
+
+          {/* 子女放置區：只畫被拖的人附近的幾格，整張圖都冒出綠框會很亂 */}
+          {childZones.length > 0 && (() => {
+            if (!drag) return null;
+            const me = pos(drag.id);
+            return (
+              <g className={NO_EXPORT} pointerEvents="none">
+                {childZones.filter(z => Math.hypot(z.x - me.x, z.y - me.y) < 170).map(z => {
+                  const on = z.key === childZoneKey;
+                  return (
+                    <g key={z.key} transform={`translate(${z.x},${z.y})`}>
+                      <rect x="-22" y="-11" width="44" height="22" rx="11"
+                            fill={on ? '#10b981' : 'rgba(16,185,129,0.12)'} stroke="#10b981" strokeWidth="1.5"
+                            strokeDasharray={on ? undefined : '4,3'} />
+                      <text y="4" textAnchor="middle" fontSize="11" fontWeight="700" fill={on ? 'white' : '#059669'}
+                            style={{ fontFamily: TEXT_FONT }}>↓子女</text>
+                    </g>
+                  );
+                })}
+              </g>
+            );
           })()}
 
           {/* === 關係品質標記 (疏離／衝突／斷絕／暴力，疊加在婚姻線上) === */}
@@ -1697,45 +1610,20 @@ const GenogramTab = ({
             return null;
           })}
 
-          {texts.map(t => {
-            const lines = (t.text || '').split('\n');
-            const maxLineLen = Math.max(...lines.map(l => l.length), 1);
-            const estW = t.vertical ? t.fontSize * 1.5 * lines.length : maxLineLen * t.fontSize * 0.7;
-            const estH = t.vertical ? maxLineLen * t.fontSize * 1.2 : t.fontSize * 1.3 * lines.length;
-            const isSel = selectedTextId === t.id;
-            const isEditing = editingTextId === t.id;
-
-            return (
-              <g key={t.id} transform={`translate(${t.x},${t.y})`}>
-                {isSel && !isEditing && <rect x="-4" y={t.vertical ? -4 : -t.fontSize} width={estW + 12} height={estH + 8} fill="none" stroke="#3b82f6" strokeWidth="1.5" strokeDasharray="4,3" rx="3" />}
-
-                {isEditing ? (
-                  <foreignObject x="0" y={-t.fontSize} width={Math.max(estW, 150) + 20} height={Math.max(estH, 60) + 30}>
-                    <textarea
-                      autoFocus
-                      defaultValue={t.text}
-                      onBlur={(e) => finishEditingText(t.id, e.target.value)}
-                      onKeyDown={(e) => { e.stopPropagation(); }}
-                      style={{ width: '100%', height: '100%', fontSize: `${t.fontSize}px`, fontFamily: TEXT_FONT, border: '2px dashed #3b82f6', outline: 'none', background: 'rgba(255,255,255,0.95)', resize: 'both', borderRadius: '4px', padding: '4px' }}
-                    />
-                  </foreignObject>
-                ) : (
-                  <text style={{ fontFamily: TEXT_FONT, fontSize: t.fontSize, writingMode: t.vertical ? 'vertical-rl' : undefined, touchAction: 'none' }} fill="#333" cursor="move" onPointerDown={e => onTextDown(e, t.id)} onClick={e => onTextClick(e, t.id)} onDoubleClick={e => onTextDoubleClick(e, t.id)}>
-                    {lines.map((line, idx) => (
-                      <tspan key={idx} x={t.vertical ? undefined : "0"} dy={idx === 0 ? 0 : "1.2em"}>{line}</tspan>
-                    ))}
-                  </text>
-                )}
-
-                {isSel && !isEditing && (
-                  <g>
-                    <g transform={`translate(${estW+8},${t.vertical ? -4 : -t.fontSize})`} style={{ cursor: 'pointer' }} onClick={e => { e.stopPropagation(); deleteText(t.id); }}><circle r="10" fill="white" stroke="#ef4444" strokeWidth="1.5" /><text y="4" textAnchor="middle" fontSize="11" fill="#ef4444" style={{fontFamily: TEXT_FONT}}>✕</text></g>
-                    <g transform={`translate(${estW+8},${t.vertical ? estH+4 : estH - t.fontSize + 4})`} style={{ cursor: 'nwse-resize', touchAction: 'none' }} onPointerDown={e => onResizeDown(e, t.id)}><circle r="8" fill="#3b82f6" /><text y="3.5" textAnchor="middle" fontSize="9" fill="white" style={{fontFamily: TEXT_FONT}}>↘</text></g>
-                  </g>
-                )}
-              </g>
-            );
-          })}
+          {resolvedTexts.map(t => (
+            <TextBoxItem
+              key={t.id} t={t}
+              isSel={selectedTextId === t.id} isEditing={editingTextId === t.id}
+              anchorPt={t.anchor ? targetPos(t.anchor.id) : null}
+              onPointerDown={e => onTextDown(e, t.id)}
+              onClick={e => onTextClick(e, t.id)}
+              onDoubleClick={e => onTextDoubleClick(e, t.id)}
+              onFinishEdit={val => finishEditingText(t.id, val)}
+              onDelete={() => deleteText(t.id)}
+              onDuplicate={() => duplicateSelectedText(t.id)}
+              onResizeDown={e => onResizeDown(e, t.id)}
+            />
+          ))}
 
           {/* 底圖定位框：拖框內搬動、拖四角等比縮放，方向鍵可以微調一格。
               只服務編輯畫面，下載與列印前會被 stripEditorOnly 拿掉。 */}
