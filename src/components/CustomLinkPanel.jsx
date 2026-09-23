@@ -20,7 +20,13 @@ const CustomLinkPanel = ({
   const nodeById = (id) => nodes.find(n => n.id === id) || freeNodes.find(n => n.id === id);
   // 只列出婚姻線還在的親子關係；線被刪掉的那些畫布上本來就不畫
   const shownChildLinks = childLinks
-    .map(cl => ({ cl, seg: marriageLineSegs.find(sg => sg.id === cl.lineId) }))
+    .map(cl => ({
+      cl,
+      // 單親就只有一位家長，兩端都填他，下面的顯示邏輯不用分兩套
+      seg: cl.parentId
+        ? (nodeById(cl.parentId) ? { a: cl.parentId, b: cl.parentId } : null)
+        : marriageLineSegs.find(sg => sg.id === cl.lineId),
+    }))
     .filter(x => x.seg);
   if (customLinks.length === 0 && shownChildLinks.length === 0) return null;
   const personLabel = (node) => {
@@ -98,11 +104,16 @@ const CustomLinkPanel = ({
       })}
       {shownChildLinks.length > 0 && (
         <>
-          <label style={{ marginTop: '8px' }}>👶 掛在婚姻線下的子女</label>
+          <label style={{ marginTop: '8px' }}>👶 放進子女區的成員</label>
           {shownChildLinks.map(({ cl, seg }) => (
             <div key={cl.id} className="link-card">
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}>
-                <span>{personLabel(nodeById(seg.a))}＋{personLabel(nodeById(seg.b))} → {personLabel(nodeById(cl.childId))}</span>
+                <span>
+                  {seg.a === seg.b
+                    ? `${personLabel(nodeById(seg.a))}（單親）`
+                    : `${personLabel(nodeById(seg.a))}＋${personLabel(nodeById(seg.b))}`}
+                  {' → '}{personLabel(nodeById(cl.childId))}
+                </span>
                 <button className="btn-soft tone-clay btn-soft-xs" onClick={() => removeChildLink(cl.id)} style={{ marginLeft: 'auto' }}
                         title="只解除親子關係，人還留在畫布上">解除</button>
               </div>

@@ -161,6 +161,9 @@ const App = () => {
           deceasedIds={deceasedIds}
           disabledIds={disabledIds}
           customLinks={doc.customLinks}
+          freeNodes={doc.freeNodes}
+          childLinks={doc.childLinks}
+          positions={doc.positions}
           subjInfo={doc.subjInfo}
           setSubjInfo={setField('subjInfo')}
           famExtras={doc.famExtras}

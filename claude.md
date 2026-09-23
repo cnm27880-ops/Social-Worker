@@ -38,7 +38,9 @@ src/
 │   ├── standalone.js       # 獨立個體（三角、寵物）的類型與形狀
 │   ├── statusBadge.js      # 狀態標籤的點擊／滾輪切換
 │   ├── ids.js              # 畫布物件 id 產生器（同一毫秒不撞號）
-│   ├── childLinks.js       # 自由擴充成員掛到婚姻線底下成為子女
+│   ├── childLinks.js       # 子女放置區、掛在夫妻或單親底下的子女
+│   ├── familyLayout.js     # 主家系與擴充子代的排版（畫布與個案紀錄共用）
+│   ├── kinship.js          # 從連線推算跟案主的關係與稱謂
 │   ├── __tests__/          # Vitest 單元測試（純函式）
 │   └── helpers.js          # 幾何運算、坐標吸附、防抖、格式轉換
 ├── styles.css           # 全域 CSS（色彩變數、畫布網格、響應式斷點）
@@ -83,7 +85,8 @@ src/
 - **高解析 PNG**：下載一律 3 倍圖（`EXPORT_SCALE`）。
 - **寵物符號（菱形）**：自由擴充區的獨立個體，拖到飼主身上產生註記連線。
 - **文字方塊複製**：選取後按 ⧉ 或 Ctrl+D。
-- **掛成子女**：自由擴充的成員拖到任一條婚姻線上放開 → 成為那對夫妻的子女（`doc.childLinks`），親子線與原有子女共用。見 `utils/childLinks.js`。
+- **子女放置區**：拖曳時夫妻婚姻線下方／單身者正下方出現「↓子女」，放進去成為子女（`doc.childLinks`，`lineId` 或單親 `parentId`）。自由擴充成員與主家系中沒有父母的人（配偶、第一代）都能放。見 `utils/childLinks.js`。
+- **稱謂推算**：`utils/familyLayout.js` 是畫布與紀錄共用的排版；`utils/kinship.js` 從案主沿婚姻／親子／手足走最短路徑，產生「案岳父」「案妻之弟」這類稱謂，寫進個案紀錄最後幾行（不加任何輸入欄位）。
 - **案件庫**：案號／備註、搜尋排序、另存成新案件、一次備份全部（`geno-link-backup` 格式，匯入按鈕通吃）、備份提醒、本機空間用量。見 `utils/caseStore.js`、`components/CaseMenu.jsx`。
 
 ---

@@ -2,6 +2,8 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import BadgeGroup from './BadgeGroup';
 import InfoTip from './InfoTip';
 import { getGen2Title, getIndexGen2Idx, formatKidsText, G2_LABELS, G1_LABELS } from '../utils/helpers';
+import { buildFamily } from '../utils/familyLayout';
+import { extraMembersText } from '../utils/kinship';
 
 const DEFAULT_TAGS = {
   identity: ['一般民眾', '就養榮民', '非就養榮民', '榮眷', '遺眷'],
@@ -30,6 +32,9 @@ const getRankStr = (rank, total) => {
 const RecordTab = ({
   gen2Cfg, indexId, g1Status, cohabMembers, deceasedIds, disabledIds = [], customLinks,
   mainFamily = true,
+  /* 自由擴充區的成員與「放進子女區」的親子關係：用來推算他們跟案主的關係，
+     寫進紀錄最後的「其他家屬」幾行（見 utils/kinship.js）。 */
+  freeNodes = [], childLinks = [], positions = {},
   /* 案主基本資料與家屬補充資訊住在案件文件裡（見 caseDoc.js），不是這裡的
      本地狀態——這樣「重置」清得到、Ctrl+Z 救得回、切換案件不會殘留上一份。 */
   subjInfo, setSubjInfo, famExtras, setFamExtras, recordEdit, setRecordEdit,
@@ -69,6 +74,12 @@ const RecordTab = ({
   const selfIdx = getIndexGen2Idx(indexId, gen2Cfg);
   const isGen2Index = selfIdx >= 0;
   const titleOf = (i) => getGen2Title(i, gen2Cfg, indexId);
+
+  /* 自由擴充區裡連得到案主的人：跟畫布用同一份排版結果推算稱謂 */
+  const extra = useMemo(() => extraMembersText({
+    family: buildFamily({ gen2Cfg, g1Status, customLinks, mainFamily, childLinks, positions, freeNodes }),
+    freeNodes, customLinks, positions, indexId, deceasedIds, disabledIds,
+  }), [gen2Cfg, g1Status, customLinks, mainFamily, childLinks, positions, freeNodes, indexId, deceasedIds, disabledIds]);
 
   /* ===== 紀錄產生器邏輯 ===== */
   const generatedText = useMemo(() => {
@@ -208,8 +219,11 @@ const RecordTab = ({
       });
     }
 
+    // 自由擴充區的其他家屬（配偶的原生家庭、手足的配偶…），一人一行
+    txt += extra.text;
+
     return txt;
-  }, [subjInfo, gen2Cfg, g1Status, cohabMembers, deceasedIds, disabledIds, famExtras, indexId, customLinks]);
+  }, [subjInfo, gen2Cfg, g1Status, cohabMembers, deceasedIds, disabledIds, famExtras, indexId, customLinks, extra]);
 
   /* 預覽可以直接改。recordEdit 非空＝使用者動過手，之後家系圖再變動也不會
      覆蓋掉他寫的字（不然改一個節點就把整段心血洗掉）；按「還原」清空它，
@@ -483,7 +497,16 @@ const RecordTab = ({
         {!mainFamily && (
           <div className="record-notice">
             目前是舊圖修補模式（主家系已停用）。畫布上的人物是自由擴充區的個體，
-            沒有可供推算的親屬結構，因此自動敘述只會帶出基本資料；家庭狀況請直接在下方編輯。
+            沒有主家系的親屬結構，自動敘述只會帶出基本資料，以及跟案主有連線的自由擴充成員；
+            其餘家庭狀況請直接在下方編輯。
+          </div>
+        )}
+        {/* 自由擴充區有人沒連到案主：推算不到關係，所以沒寫進紀錄。講清楚，
+            免得以為系統漏掉。 */}
+        {indexId && extra.unlinked > 0 && (
+          <div className="record-notice">
+            自由擴充區有 {extra.unlinked} 位成員跟案主沒有連線（沒有婚姻線，也沒有放進誰的子女區），
+            算不出跟案主的關係，所以沒有寫進紀錄。
           </div>
         )}
         <textarea

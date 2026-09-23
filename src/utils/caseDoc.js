@@ -280,9 +280,14 @@ export const remapGen2Keys = (doc, newToOld) => {
     positions: remapObj(doc.positions),
     ages: remapObj(doc.ages),
     // 掛在第二代婚姻線（ml-c0…）底下的子女跟著那對夫妻走；夫妻被刪掉就解除
+    // 子女本身也可能是第二代的配偶（s0…）：放進岳父母子女區的那一位
     childLinks: (doc.childLinks || [])
-      .map(cl => ({ ...cl, lineId: mapId(cl.lineId) }))
-      .filter(cl => cl.lineId !== null),
+      .map(cl => ({
+        ...cl,
+        childId: mapId(cl.childId),
+        ...(cl.parentId ? { parentId: mapId(cl.parentId) } : { lineId: mapId(cl.lineId) }),
+      }))
+      .filter(cl => cl.childId !== null && (cl.parentId !== undefined ? cl.parentId : cl.lineId) !== null),
     // 綁在第二代身上的標籤跟著人走；人被刪掉就解開，留在原本的位置
     texts: (doc.texts || []).map(t => {
       if (!t.anchor) return t;
@@ -337,7 +342,8 @@ export const migrateDoc = (raw) => {
     return rest;
   });
   doc.childLinks = doc.childLinks.filter(cl =>
-    cl && typeof cl.id === 'string' && typeof cl.lineId === 'string' && typeof cl.childId === 'string');
+    cl && typeof cl.id === 'string' && typeof cl.childId === 'string'
+    && (typeof cl.lineId === 'string' || typeof cl.parentId === 'string'));
   if (!AGE_DISPLAYS.includes(doc.ageDisplay)) doc.ageDisplay = INITIAL_DOC.ageDisplay;
 
   // 底圖與橡皮擦筆跡：形狀不對就當沒有。壞掉的一筆不該讓整張畫布打不開
