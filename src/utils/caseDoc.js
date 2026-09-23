@@ -11,6 +11,8 @@
  * =========================================================================== */
 
 import { migrateBgPatch } from './bgImage';
+import { TEXT_SIDES } from './textBox';
+import { AGE_DISPLAYS } from './age';
 
 /** 文件格式版本。日後改變資料形狀時 +1，並在 migrateDoc 補上轉換。 */
 export const DOC_VERSION = 1;
@@ -70,6 +72,9 @@ export const INITIAL_DOC = {
   polygons: [],
   texts: [],
   ages: {},
+  /* 年齡的顯示方式：'raw' 照輸入的字、'age' 把民國生年換算成實歲。
+     ages 本身永遠存原字串，換算只發生在畫面上（見 utils/age.js）。 */
+  ageDisplay: 'raw',
 
   /* --- 舊圖修補（Image Overlay） ---
    * 匯入一張既有的家系圖當底圖，在上面疊符號、關係線與文字方塊。
@@ -271,6 +276,13 @@ export const remapGen2Keys = (doc, newToOld) => {
     nodeAttrs: remapObj(doc.nodeAttrs),
     positions: remapObj(doc.positions),
     ages: remapObj(doc.ages),
+    // 綁在第二代身上的標籤跟著人走；人被刪掉就解開，留在原本的位置
+    texts: (doc.texts || []).map(t => {
+      if (!t.anchor) return t;
+      const to = mapId(t.anchor.id);
+      if (to === null) { const { anchor, ...rest } = t; return rest; }
+      return to === t.anchor.id ? t : { ...t, anchor: { ...t.anchor, id: to } };
+    }),
     lineAttrs: remapObj(doc.lineAttrs),
     famExtras,
     cohabMembers: (doc.cohabMembers || []).map(mapId).filter(Boolean),
@@ -308,6 +320,16 @@ export const migrateDoc = (raw) => {
     attrs = setAttrIds(attrs, 'disabled', raw.disabledIds || []);
     doc.nodeAttrs = attrs;
   }
+
+  // 文字方塊的綁定：形狀不對就丟掉綁定，方塊本身留著（x / y 就是最後吸附的位置）
+  doc.texts = doc.texts.map(t => {
+    if (!t || !t.anchor) return t;
+    const ok = typeof t.anchor.id === 'string' && TEXT_SIDES.includes(t.anchor.side);
+    if (ok) return t;
+    const { anchor, ...rest } = t;
+    return rest;
+  });
+  if (!AGE_DISPLAYS.includes(doc.ageDisplay)) doc.ageDisplay = INITIAL_DOC.ageDisplay;
 
   // 底圖與橡皮擦筆跡：形狀不對就當沒有。壞掉的一筆不該讓整張畫布打不開
   if (doc.bgImage && typeof doc.bgImage.src !== 'string') doc.bgImage = null;

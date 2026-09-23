@@ -4,6 +4,7 @@ import {
   trianglePath, triangleCrossLines,
   zigzagPoints, gapSegments, doubleLineSegments, hatchSegments, DISTANT_DASH,
 } from '../utils/symbols';
+import { diamondPath } from '../utils/standalone';
 
 const USAGE_KEY = 'genogram-symbol-usage';
 const LEGACY_RECENT_KEY = 'genogram-recent-symbols';
@@ -50,7 +51,7 @@ export const SymbolPreview = ({ symbol, size = 24 }) => {
         </>
       ) : symbol.kind === 'standalone' ? (
         <>
-          <path d={trianglePath(r)} fill="#fff" stroke="#334155" strokeWidth="1.8" />
+          <path d={symbol.shape === 'diamond' ? diamondPath(r) : trianglePath(r)} fill="#fff" stroke="#334155" strokeWidth="1.8" />
           {symbol.cross && triangleCrossLines(r).map(([x1, y1, x2, y2], i) => (
             <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#334155" strokeWidth="1.4" />
           ))}

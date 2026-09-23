@@ -18,6 +18,8 @@ src/
 │   ├── ImagePatchPanel.jsx # 影像貼圖/底圖輔助面板
 │   ├── SnapshotMenu.jsx    # 本地歷史快照版本選單
 │   ├── BadgeGroup.jsx      # 符號與狀態徽章元件
+│   ├── TextBoxItem.jsx     # 畫布上的單一文字方塊（選取框、刪除／複製／縮放把手）
+│   ├── CustomLinkPanel.jsx # 左側「擴充連線設定」卡片
 │   └── InfoTip.jsx         # 浮動提示小工具
 ├── hooks/               # 自訂商業邏輯 Hooks
 │   ├── useCaseDoc.js       # 核心個案文檔狀態管理（整合畫布、紀錄與快照）
@@ -29,6 +31,13 @@ src/
 │   ├── snapshotStore.js    # 快照歷史儲存機制
 │   ├── bgImage.js          # 底圖處理相關公用函式
 │   ├── imageMeta.js        # 圖片中繼資料與匯出輔助
+│   ├── exportImage.js      # 下載 PNG／JPG、列印 A4、裁切範圍計算
+│   ├── textBox.js          # 文字方塊尺寸估算、直式排版、吸附到節點
+│   ├── age.js              # 民國生年 ⇄ 實歲的判斷與換算
+│   ├── standalone.js       # 獨立個體（三角、寵物）的類型與形狀
+│   ├── statusBadge.js      # 狀態標籤的點擊／滾輪切換
+│   ├── ids.js              # 畫布物件 id 產生器（同一毫秒不撞號）
+│   ├── __tests__/          # Vitest 單元測試（純函式）
 │   └── helpers.js          # 幾何運算、坐標吸附、防抖、格式轉換
 ├── styles.css           # 全域 CSS（色彩變數、畫布網格、響應式斷點）
 ├── App.jsx              # 應用程式入口（頁籤切換：家系圖 ⇄ 處遇紀錄）
@@ -60,33 +69,22 @@ src/
 - **本機啟動**：`npm run dev`
 - **打包建置**：`npm run build`
 - **預覽打包**：`npm run preview`
+- **執行測試**：`npm test`（Vitest；`npm run test:watch` 會在存檔時自動重跑）。PR 與部署前 CI 都會跑。
 
 ---
 
-## 即將推動的核心更新任務清單 (Roadmap)
+## 已完成的功能（勿重做）
 
-在進行功能開發時，請遵循以下方向與設計規範：
+- **民國生年 ⇄ 實歲**：`doc.ageDisplay`（'raw' | 'age'）只影響顯示，`ages` 永遠存原字串。換算 = 今年民國年 − 生年；`82y`／`82yo`／純數字視為年齡；已歿成員不換算。見 `utils/age.js`。
+- **個案 JSON 匯入／匯出**：`CaseBar.jsx` + `useCaseDoc.js` 的 `exportCase`／`importCase`。
+- **標籤吸附**：文字方塊可帶 `anchor: { id, side }`，拖到節點旁自動吸附、拉遠解開、Shift 拖曳不吸附；左右兩側自動直式。第二代索引搬遷時 `remapGen2Keys` 會一起搬標籤。見 `utils/textBox.js`。
+- **高解析 PNG**：下載一律 3 倍圖（`EXPORT_SCALE`）。
+- **寵物符號（菱形）**：自由擴充區的獨立個體，拖到飼主身上產生註記連線。
+- **文字方塊複製**：選取後按 ⧉ 或 Ctrl+D。
 
-1. **民國出生年一鍵批次轉歲數**：
-   - 節點肚子裡的文字支援彈性輸入（如 `35`、`82年`、`82年次`、`民82`）。
-   - 在工具列或操作面新增「民國生年 ⇄ 實歲」一鍵轉換切換鈕。
-   - 計算基準：`當前民國年 (new Date().getFullYear() - 1911) - 輸入生年`。
-   - `82y` / `82yo` 視為實歲，不觸發換算。
+## 待討論
 
-2. **個案 JSON 備份檔匯入 / 匯出**：
-   - 於 `CaseBar.jsx` / `caseStore.js` 擴充「匯出備份 (.json)」與「匯入檔案還原」功能。
-   - 必須相容現有 `caseDoc` 資料格式，純前端 FileReader 讀取，不得將資料上傳遠端。
-
-3. **節點標籤自動吸附連動**：
-   - 改善原本獨立 `textBoxes` 拖曳時容易與人偶分離的痛點。
-   - 支援節點自帶主標籤（稱謂/姓名），並允許方位切換（上、下、左、右），拖曳節點時標籤保持相對偏移連動。
-
-4. **高解析度 PNG 匯出 (High-DPI 2x/3x)**：
-   - 在匯出選單中增加「高解析度列印專用 PNG」選項。
-   - 於 `helpers.js` 或匯出處理邏輯使用 Offscreen Canvas 放大 scale（2x~3x）重繪，確保貼入 Word / 列印 A4 銳利不模糊。
-
-5. **自由擴充區新增特殊符號**：
-   - 在 `utils/symbols.js` 擴充「寵物（菱形符號）」與相應的繪製/匯出邏輯。
+- 儲存清單（案件庫）功能強化：範圍待與使用者確認。
 
 ---
 
