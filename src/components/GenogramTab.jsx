@@ -24,6 +24,7 @@ import {
 } from '../utils/textBox';
 import { displayAge, currentRocYear, parseAgeInput } from '../utils/age';
 import { newId } from '../utils/ids';
+import { confirmDialog } from '../utils/dialog';
 import { setChildLink, dropChildLinks, childRestPos, dropZones, hitZone, descendantsOf } from '../utils/childLinks';
 import { buildFamily } from '../utils/familyLayout';
 import { cycleOnClick, wheelRef } from '../utils/statusBadge';
@@ -708,19 +709,21 @@ const GenogramTab = ({
       const draggedNode = draggedFree;
       if (draggedNode) {
         const dp = { x: draggedNode.x, y: draggedNode.y };
-        // Check collision with all existing nodes
+        /* 真的疊在一起才連線：兩個符號的外框有重疊才算（原本是中心距離 60
+           以內，差不多一個半符號寬，擺得近一點就被誤連）。生態圖是扁長的
+           橢圓，外框用它自己的寬高。 */
+        const extent = (fn) => (fn?.type === 'eco' ? { w: ecoRx(fn.text), h: ECO_RY } : { w: R, h: R });
+        const me = extent(draggedNode);
+        const touches = (p, other) =>
+          Math.abs(dp.x - p.x) < me.w + other.w && Math.abs(dp.y - p.y) < me.h + other.h;
         let closestId = null, closestDist = Infinity;
-        nodes.forEach(nd => {
-          const np = pos(nd.id);
-          const dist = Math.sqrt(Math.pow(dp.x - np.x, 2) + Math.pow(dp.y - np.y, 2));
-          if (dist < 60 && dist < closestDist) { closestDist = dist; closestId = nd.id; }
-        });
-        // Also check other freeNodes
-        freeNodes.forEach(fn => {
-          if (fn.id === drag.id) return;
-          const dist = Math.sqrt(Math.pow(dp.x - fn.x, 2) + Math.pow(dp.y - fn.y, 2));
-          if (dist < 60 && dist < closestDist) { closestDist = dist; closestId = fn.id; }
-        });
+        const consider = (id, p, other) => {
+          if (!touches(p, other)) return;
+          const dist = Math.hypot(dp.x - p.x, dp.y - p.y);
+          if (dist < closestDist) { closestDist = dist; closestId = id; }
+        };
+        nodes.forEach(nd => consider(nd.id, pos(nd.id), extent(null)));
+        freeNodes.forEach(fn => { if (fn.id !== drag.id) consider(fn.id, fn, extent(fn)); });
         if (closestId) {
           const alreadyLinked = customLinks.some(l => (l.sourceId === drag.id && l.targetId === closestId) || (l.sourceId === closestId && l.targetId === drag.id));
           if (!alreadyLinked) {
@@ -920,8 +923,8 @@ const GenogramTab = ({
             {/* 重置走 patchDoc，整批算一筆歷史，所以誤按可以用復原救回來。
                 連個案紀錄的填寫內容一起清掉：這兩頁是同一份個案的兩種呈現，
                 只清畫布會讓下一位個案沿用到上一位的身分別與家屬備註。 */}
-            <button className="btn-action btn-danger" onClick={() => {
-              if (!window.confirm('確定重置？家系圖與個案紀錄都會清空，可用「復原」還原。')) return;
+            <button className="btn-action btn-danger" onClick={async () => {
+              if (!(await confirmDialog({ title: '確定重置？', message: '家系圖與個案紀錄都會清空，可用「復原」（Ctrl+Z）還原。', confirmText: '重置', danger: true }))) return;
               patchDoc({
                 gen2Str: '', gen2Cfg: [], indexId: null, cohabMembers: [], nodeAttrs: {}, lineAttrs: {},
                 cohabSolid: false, polygons: [], texts: [], ages: {},
@@ -1321,7 +1324,40 @@ const GenogramTab = ({
                 const g = groups.find(x => x.includes(j));
                 if (g) els.push(<line key={`${ln.id}-m${j}`} x1={g.map(i=>kidPos[i].x).reduce((a,b)=>a+b,0)/g.length} y1={barY} x2={kp.x} y2={kp.y - R} stroke={lineColor} strokeWidth={lineWidth} />);
                 else els.push(<line key={`${ln.id}-k${j}`} x1={kp.x} y1={barY} x2={kp.x} y2={kp.y - R} stroke={lineColor} strokeWidth={lineWidth} strokeDasharray={kinshipDashFor(doc.nodeAttrs[ln.kids[j]])} />);
+                /* 放進子女區才連上的子女：他那一段豎線可以雙擊解除（跟其他關係線
+                   一樣雙擊刪除，Ctrl+Z 可還原）。填表產生的子女不給刪——那要回左側
+                   面板改人數。透明的粗線只負責好點，畫面上看不到。 */
+                const cl = childLinks.find(c => c.childId === ln.kids[j]);
+                if (cl) els.push(
+                  <line key={`${ln.id}-hit${j}`} className={NO_EXPORT} x1={kp.x} y1={barY} x2={kp.x} y2={kp.y - R}
+                        stroke="transparent" strokeWidth="12" style={{ cursor: 'pointer' }}
+                        onDoubleClick={e => { e.stopPropagation(); setChildLinks(prev => prev.filter(c => c.id !== cl.id)); }}>
+                    <title>雙擊解除這段親子關係</title>
+                  </line>
+                );
               });
+              /* 整組都是放進子女區才有的（pcx-…）：從父母往下那一段與手足橫線也能
+                 雙擊，一次解除這對父母底下所有放進來的子女。 */
+              if (ln.id.startsWith('pcx-')) {
+                const ids = childLinks.filter(c => ln.kids.includes(c.childId)).map(c => c.id);
+                const removeAll = async (e) => {
+                  e.stopPropagation();
+                  if (ids.length > 1 && !(await confirmDialog({
+                    title: `解除 ${ids.length} 位子女的親子關係？`,
+                    message: '人會留在畫布上，只是不再連到這對父母。可用「復原」還原。',
+                    confirmText: '解除', danger: true,
+                  }))) return;
+                  setChildLinks(prev => prev.filter(c => !ids.includes(c.id)));
+                };
+                const hx1 = Math.min(midX, ...barXs), hx2 = Math.max(midX, ...barXs);
+                els.push(
+                  <g key={`${ln.id}-hitbar`} className={NO_EXPORT} style={{ cursor: 'pointer' }} onDoubleClick={removeAll}>
+                    <title>雙擊解除這對父母底下放進來的子女</title>
+                    <line x1={midX} y1={coupleY} x2={midX} y2={barY} stroke="transparent" strokeWidth="12" />
+                    <line x1={hx1} y1={barY} x2={hx2} y2={barY} stroke="transparent" strokeWidth="12" />
+                  </g>
+                );
+              }
               return <g key={ln.id}>{els}</g>;
             } return null;
           })}
@@ -1351,13 +1387,13 @@ const GenogramTab = ({
             return (
               <g key={nd.id} transform={`translate(${nd.x},${nd.y})`} style={{ cursor: drag?.id === nd.id ? 'grabbing' : 'grab', touchAction: 'none' }}
                  onPointerDown={e => onDown(e, nd.id)} onClick={e => onClick(e, nd.id)}
-                 onDoubleClick={e => {
+                 onDoubleClick={async e => {
                    e.stopPropagation();
                    /* 雙擊固定代表「刪除擴充個體」，不再看年齡臉色——年齡已經是
                       獨立模式（單擊輸入），原本「年齡開著就不能雙擊刪除」的衝突
                       跟著消失。年齡模式下雙擊等於連點兩次，交給單擊處理就好。 */
                    if (mode === 'age' || !nd.isFree) return;
-                   if (window.confirm('確定要刪除這個擴充個體嗎？(相關連線也會一併刪除)')) {
+                   if (await confirmDialog({ title: '刪除這個擴充個體？', message: '相關的連線也會一併刪除，可用「復原」還原。', confirmText: '刪除', danger: true })) {
                      forgetFreeNode(nd.id);
                      setCustomLinks(prev => prev.filter(l => l.sourceId !== nd.id && l.targetId !== nd.id));
                      setFreeNodes(prev => prev.filter(fn => fn.id !== nd.id));
@@ -1456,9 +1492,9 @@ const GenogramTab = ({
             return (
               <g key={fn.id} transform={`translate(${fn.x},${fn.y})`} style={{ cursor: drag?.id === fn.id ? 'grabbing' : 'grab', touchAction: 'none' }}
                  onPointerDown={e => onDown(e, fn.id)}
-                 onDoubleClick={e => {
+                 onDoubleClick={async e => {
                    e.stopPropagation();
-                   if (window.confirm('確定要刪除這個標記嗎？(相關連線也會一併刪除)')) {
+                   if (await confirmDialog({ title: `刪除這個${SYMBOL_MAP[fn.type]?.label || '標記'}？`, message: '相關的連線也會一併刪除，可用「復原」還原。', confirmText: '刪除', danger: true })) {
                      forgetFreeNode(fn.id);
                      setCustomLinks(prev => prev.filter(l => l.sourceId !== fn.id && l.targetId !== fn.id));
                      setFreeNodes(prev => prev.filter(f => f.id !== fn.id));

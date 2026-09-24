@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import InfoTip from './InfoTip';
+import { confirmDialog } from '../utils/dialog';
 
 const fmtTime = (ts) => {
   if (!ts) return '';
@@ -41,14 +42,14 @@ const SnapshotMenu = ({
     setDraft('');
   };
 
-  const handleRestore = (snap) => {
-    if (!window.confirm(`確定要還原到「${snap.name}」這個時間點嗎？(還原後可用「復原」還原這次動作)`)) return;
+  const handleRestore = async (snap) => {
+    if (!(await confirmDialog({ title: `還原到「${snap.name}」？`, message: '還原後可用「復原」（Ctrl+Z）取消這次還原。', confirmText: '還原' }))) return;
     restoreSnapshot(snap.id);
     onClose();
   };
 
-  const handleDelete = (snap) => {
-    if (!window.confirm(`確定要刪除快照「${snap.name}」嗎？此動作無法復原。`)) return;
+  const handleDelete = async (snap) => {
+    if (!(await confirmDialog({ title: `刪除快照「${snap.name}」？`, message: '此動作無法復原。', confirmText: '刪除', danger: true }))) return;
     removeSnapshot(snap.id);
   };
 
