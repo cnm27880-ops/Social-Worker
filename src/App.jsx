@@ -6,6 +6,8 @@ import { useCaseDoc } from './hooks/useCaseDoc';
 import { useFullscreen } from './hooks/useFullscreen';
 import { idsWithAttr } from './utils/caseDoc';
 import { feedbackUrl } from './utils/feedback';
+import { alertDialog } from './utils/dialog';
+import DialogHost from './components/DialogHost';
 import pkg from '../package.json';
 import './styles.css';
 
@@ -16,7 +18,7 @@ const App = () => {
 
   /* 全螢幕切換。手機畫面本來就窄，收掉瀏覽器網址列與工具列能多出可觀的
    * 畫布高度；iPhone 版 Safari 不支援時改用提示引導「加入主畫面」。 */
-  const fsFallback = useCallback((msg) => window.alert(msg), []);
+  const fsFallback = useCallback((msg) => { alertDialog({ title: '全螢幕模式', message: msg }); }, []);
   const {
     active: fsActive, supported: fsSupported, standalone: fsStandalone,
     toggle: toggleFullscreen,
@@ -141,6 +143,8 @@ const App = () => {
       </header>
 
       <HelpDrawer open={helpOpen} onClose={() => setHelpOpen(false)} />
+      {/* 全站共用的確認／提示視窗，取代瀏覽器內建的 confirm／alert */}
+      <DialogHost />
 
       {/* 頁籤一：家系圖（用 CSS display 控制，避免 unmount 丟失狀態）。
           .tab-pane 撐滿 top-navbar 以下的剩餘高度，讓左側面板可以用

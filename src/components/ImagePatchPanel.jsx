@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import InfoTip from './InfoTip';
+import { confirmDialog } from '../utils/dialog';
 import {
   loadBgImage, bgZoomPct, bgScaleFromPct, bgImageBox,
   MAX_EDGE, MAX_EDGE_SELF, DEFAULT_OPACITY, BG_X, BG_Y,
@@ -57,8 +58,8 @@ const ImagePatchPanel = ({
     scale: bgImage.baseScale || bgImage.scale || 1,
   });
 
-  const removeImage = () => {
-    if (!window.confirm('移除底圖？擦除筆跡也會一併清掉（可用「復原」還原）。')) return;
+  const removeImage = async () => {
+    if (!(await confirmDialog({ title: '移除底圖？', message: '擦除筆跡也會一併清掉，可用「復原」還原。', confirmText: '移除', danger: true }))) return;
     setBgImage(null);
     setBgErase([]);
     setEraseMode(false);

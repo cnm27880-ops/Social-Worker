@@ -4,6 +4,7 @@ import InfoTip from './InfoTip';
 import { getGen2Title, getIndexGen2Idx, formatKidsText, G2_LABELS, G1_LABELS } from '../utils/helpers';
 import { buildFamily } from '../utils/familyLayout';
 import { extraMembersText } from '../utils/kinship';
+import { alertDialog } from '../utils/dialog';
 
 const DEFAULT_TAGS = {
   identity: ['一般民眾', '就養榮民', '非就養榮民', '榮眷', '遺眷'],
@@ -270,9 +271,9 @@ const RecordTab = ({
         if (parsed.savedNotes) {
           setSavedNotes(parsed.savedNotes);
         }
-        alert('✅ 設定檔匯入成功！');
+        alertDialog({ message: '✅ 設定檔匯入成功！' });
       } catch {
-        alert('❌ 檔案格式錯誤，請確認是否為有效的 JSON 設定檔。');
+        alertDialog({ title: '匯入失敗', message: '檔案格式錯誤，請確認是否為有效的 JSON 設定檔。' });
       }
     };
     reader.readAsText(file);

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import SnapshotMenu from './SnapshotMenu';
 import CaseMenu, { needsBackup } from './CaseMenu';
 import { nextCaseName } from '../utils/caseStore';
+import { confirmDialog } from '../utils/dialog';
 
 /* 這一列的圖示一律用 inline SVG，不用 emoji／Unicode 箭頭符號：
  * ⤓ ⤒ 這類冷門符號在不同系統的字型覆蓋率差很多，缺字時會變成豆腐或
@@ -142,11 +143,11 @@ const CaseBar = ({
     }
   };
 
-  const confirmDelete = (c) => {
+  const confirmDelete = async (c) => {
     const msg = c.id === activeCaseId
-      ? `確定刪除「${c.name}」？刪除後會回到空白畫布，此動作無法復原。`
-      : `確定刪除「${c.name}」？此動作無法復原。`;
-    if (window.confirm(msg)) deleteCase(c.id);
+      ? `刪除後會回到空白畫布，此動作無法復原。`
+      : `此動作無法復原。`;
+    if (await confirmDialog({ title: `刪除「${c.name}」？`, message: msg, confirmText: '刪除', danger: true })) deleteCase(c.id);
   };
 
   return (
