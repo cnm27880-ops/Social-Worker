@@ -1093,6 +1093,9 @@ input::placeholder, textarea::placeholder { color: var(--ink-faint); font-weight
 .chk-wrap { display: flex; align-items: center; gap: 3px; font-size: 12px; color: var(--ink-mid); cursor: pointer; margin-left: auto; }
 .gen3-block { padding: 4px 0 4px 26px; }
 .gen3-block label { font-size: 11px; color: var(--ink-soft); display: block; margin-bottom: 2px; }
+.gen3-block .g3-multi-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 4px; }
+.gen3-block .g3-multi-row .chk-wrap { display: inline-flex; margin: 0; font-size: 12px; color: var(--ink-mid); }
+.g3-multi-hint { font-size: 11px; color: var(--ink-soft); }
 
 /* 擴充連線設定裡的一筆連線 */
 .link-card { background: var(--wash); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 8px; margin-top: 6px; color: var(--ink); }
