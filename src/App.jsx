@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import GenogramTab from './components/GenogramTab';
 import HelpDrawer from './components/HelpDrawer';
+import UpdatesButton from './components/UpdatesButton';
 import RecordTab from './components/RecordTab';
 import { useCaseDoc } from './hooks/useCaseDoc';
 import { useFullscreen } from './hooks/useFullscreen';
@@ -115,6 +116,8 @@ const App = () => {
                 <path d="M7 8.2h6M7 10.6h4" />
               </svg>
             </a>
+            {/* 最近更新：想看才點，不會自己跳出來。內容在 utils/changelog.js */}
+            <UpdatesButton />
             {/* 不支援的裝置照樣把按鈕留著（除非已是獨立 App）：按下去會給
                 「加入主畫面」的替代做法，比整顆消失讓人不知道有沒有這功能好。
                 狀態靠 aria-pressed 與 .is-on 表達，圖示維持同一個字符，
