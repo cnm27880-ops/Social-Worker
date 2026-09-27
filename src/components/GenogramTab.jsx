@@ -241,9 +241,19 @@ const GenogramTab = ({
     applyGen2Cfg(nextCfg, { gen2Str: val, ...remapGen2Keys(doc, newToOld) });
   };
 
-  const changePartner = (i, status) => applyGen2Cfg(gen2Cfg.map((d, j) => j === i ? { ...d, partner: status, g3Str: status === 'none' ? '' : d.g3Str } : d));
-  const setG3 = (i, v) => applyGen2Cfg(gen2Cfg.map((d, j) => j === i ? { ...d, g3Str: v } : d));
+  const changePartner = (i, status) => applyGen2Cfg(gen2Cfg.map((d, j) => j === i ? { ...d, partner: status, g3Str: status === 'none' ? '' : d.g3Str, g3Multi: status === 'none' ? [] : d.g3Multi } : d));
+  /* 第三代的多胞胎勾選（g3Multi）跟 g3Str 的每個字一一對應。改人數時照位置
+     保留舊的勾選，多出來的預設不勾、被刪掉的跟著丟掉。 */
+  const setG3 = (i, v) => applyGen2Cfg(gen2Cfg.map((d, j) => j === i
+    ? { ...d, g3Str: v, g3Multi: parseGenders(v).map((_, k) => !!d.g3Multi?.[k]) }
+    : d));
   const toggleMulti = (i) => setGen2Cfg(p => p.map((d, j) => j === i ? { ...d, isMulti: !d.isMulti } : d));
+  const toggleG3Multi = (i, k) => setGen2Cfg(p => p.map((d, j) => {
+    if (j !== i) return d;
+    const flags = parseGenders(d.g3Str).map((_, n) => !!d.g3Multi?.[n]);
+    flags[k] = !flags[k];
+    return { ...d, g3Multi: flags };
+  }));
 
   const addText = () => {
     const id = newId('txt_');
@@ -1098,6 +1108,18 @@ const GenogramTab = ({
                   <div className="gen3-block">
                     <label>↳ 第三代 (例: 男/女 或 M/F 或 1/2)</label>
                     <input type="text" value={c.g3Str} onChange={e => setG3(i, e.target.value)} />
+                    {/* 相鄰且都勾了多胞胎的孫輩，畫布上會從同一點分岔（跟第二代一樣） */}
+                    {parseGenders(c.g3Str).length >= 2 && (
+                      <div className="g3-multi-row">
+                        {parseGenders(c.g3Str).map((g, k) => (
+                          <label key={k} className="chk-wrap">
+                            <input type="checkbox" checked={!!c.g3Multi?.[k]} onChange={() => toggleG3Multi(i, k)} />
+                            <span className={`child-icon ${g === 'M' ? 'm' : 'f'}`}>{g === 'M' ? '■' : '●'}</span>{k + 1}
+                          </label>
+                        ))}
+                        <span className="g3-multi-hint">多胞胎</span>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

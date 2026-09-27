@@ -255,6 +255,34 @@ body {
 /* 全螢幕進行中：實心狀態讓「再按一次會退出」看得出來。 */
 .icon-btn.is-on { background: var(--dust); color: #fff; border-color: var(--dust); }
 
+/* 最近更新：掛在按鈕正下方的小卡片，右緣對齊按鈕，不蓋住整個畫面。
+ * 手機上寬度收到螢幕寬減兩側留白，內容多時卡片內自己捲動。 */
+.updates-wrap { position: relative; display: inline-flex; }
+.updates-card {
+  position: absolute; z-index: 150; top: calc(100% + 8px); right: 0;
+  width: min(320px, calc(100vw - 32px));
+  background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 6px 20px rgba(74, 69, 61, 0.18);
+  text-align: left;
+}
+.updates-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 10px 8px 14px; border-bottom: 1px solid var(--line-soft);
+  font-size: 14px; font-weight: 700; color: var(--ink);
+}
+.updates-close {
+  border: none; background: none; cursor: pointer; font-size: 14px; line-height: 1;
+  color: var(--ink-faint); padding: 4px 6px; border-radius: 6px;
+}
+.updates-close:hover { background: var(--dust-w); color: var(--ink); }
+.updates-close:focus-visible { outline: 2px solid var(--dust); outline-offset: 1px; }
+.updates-body { max-height: min(60vh, 420px); overflow-y: auto; padding: 6px 14px 10px; }
+.updates-entry { padding: 6px 0; }
+.updates-entry + .updates-entry { border-top: 1px solid var(--line-soft); }
+.updates-entry time { font-size: 12px; font-weight: 700; color: var(--dust-d); }
+.updates-entry ul { margin: 3px 0 0; padding-left: 18px; }
+.updates-entry li { font-size: 13px; line-height: 1.55; color: var(--ink-mid); }
+
 /* 鍵盤操作看得見焦點（滑鼠點擊不會觸發 :focus-visible，不影響視覺）。 */
 .brand-btn:focus-visible, .tab-btn:focus-visible,
 .help-btn:focus-visible, .icon-btn:focus-visible {
@@ -275,6 +303,11 @@ body {
   .tab-btn { flex: 1 1 0; padding: 8px 10px; font-size: 14px; }
   /* 副標在窄螢幕上是可犧牲的資訊，先讓給品牌名與說明按鈕。 */
   .brand-subtitle { display: none; }
+  /* 手機上「更新」按鈕不在最右邊，卡片對齊按鈕會超出螢幕左緣。改成掛在
+   * 整條導覽列底下、左右跟版心切齊，也不會蓋住頁籤。 */
+  .navbar-inner { position: relative; }
+  .updates-wrap { position: static; }
+  .updates-card { top: calc(100% + 6px); left: 0; right: 0; width: auto; }
 }
 
 /* 兩個分頁內容的外層容器：切 tab 只切 display，維持元件不 unmount。
@@ -1093,6 +1126,9 @@ input::placeholder, textarea::placeholder { color: var(--ink-faint); font-weight
 .chk-wrap { display: flex; align-items: center; gap: 3px; font-size: 12px; color: var(--ink-mid); cursor: pointer; margin-left: auto; }
 .gen3-block { padding: 4px 0 4px 26px; }
 .gen3-block label { font-size: 11px; color: var(--ink-soft); display: block; margin-bottom: 2px; }
+.gen3-block .g3-multi-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 4px; }
+.gen3-block .g3-multi-row .chk-wrap { display: inline-flex; margin: 0; font-size: 12px; color: var(--ink-mid); }
+.g3-multi-hint { font-size: 11px; color: var(--ink-soft); }
 
 /* 擴充連線設定裡的一筆連線 */
 .link-card { background: var(--wash); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 8px; margin-top: 6px; color: var(--ink); }

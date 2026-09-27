@@ -21,6 +21,7 @@ src/
 │   ├── TextBoxItem.jsx     # 畫布上的單一文字方塊（選取框、刪除／複製／縮放把手）
 │   ├── CustomLinkPanel.jsx # 左側「擴充連線設定」卡片（含掛在婚姻線下的子女）
 │   ├── CaseMenu.jsx        # 案件清單（搜尋、排序、案號備註、另存、全部備份、空間用量）
+│   ├── UpdatesButton.jsx   # 右上角「最近更新」按鈕與小卡片（想看才點，不自動跳出）
 │   └── InfoTip.jsx         # 浮動提示小工具
 ├── hooks/               # 自訂商業邏輯 Hooks
 │   ├── useCaseDoc.js       # 核心個案文檔狀態管理（整合畫布、紀錄與快照）
@@ -41,6 +42,7 @@ src/
 │   ├── childLinks.js       # 子女放置區、掛在夫妻或單親底下的子女
 │   ├── familyLayout.js     # 主家系與擴充子代的排版（畫布與個案紀錄共用）
 │   ├── kinship.js          # 從連線推算跟案主的關係與稱謂
+│   ├── changelog.js        # 更新公告內容（上線新功能時在最上面加一筆）
 │   ├── __tests__/          # Vitest 單元測試（純函式）
 │   └── helpers.js          # 幾何運算、坐標吸附、防抖、格式轉換
 ├── styles.css           # 全域 CSS（色彩變數、畫布網格、響應式斷點）
