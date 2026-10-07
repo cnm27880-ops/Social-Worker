@@ -1465,7 +1465,7 @@ const GenogramTab = ({
                    /* 雙擊固定代表「刪除擴充個體」，不再看年齡臉色——年齡已經是
                       獨立模式（單擊輸入），原本「年齡開著就不能雙擊刪除」的衝突
                       跟著消失。年齡模式下雙擊等於連點兩次，交給單擊處理就好。 */
-                   if (mode === 'age' || !nd.isFree) return;
+                   if (mode === 'age' || mode === 'link' || !nd.isFree) return;
                    if (await confirmDialog({ title: '刪除這個擴充個體？', message: '相關的連線也會一併刪除，可用「復原」還原。', confirmText: '刪除', danger: true })) {
                      forgetFreeNode(nd.id);
                      setCustomLinks(prev => prev.filter(l => l.sourceId !== nd.id && l.targetId !== nd.id));
@@ -1542,7 +1542,7 @@ const GenogramTab = ({
               <g key={ecoNode.id} transform={`translate(${ecoNode.x},${ecoNode.y})`} style={{ cursor: drag?.id === ecoNode.id ? 'grabbing' : 'grab', touchAction: 'none' }}
                  onPointerDown={e => onDown(e, ecoNode.id)}
                  onClick={e => { if (mode !== 'link') return; e.stopPropagation(); if (nodeDragMoved.current) { nodeDragMoved.current = false; return; } pickLinkNode(ecoNode.id); }}
-                 onDoubleClick={e => { e.stopPropagation(); setEditingEcoId(ecoNode.id); }}>
+                 onDoubleClick={e => { e.stopPropagation(); if (mode !== 'link') setEditingEcoId(ecoNode.id); }}>
                 <ellipse cx="0" cy="0" rx={rx} ry={ECO_RY} fill="#2563eb" stroke="#1e40af" strokeWidth="2.5" />
                 {isEditingThis ? (
                   <foreignObject x={-rx + 4} y={-14} width={(rx - 4) * 2} height={28}>
@@ -1569,6 +1569,7 @@ const GenogramTab = ({
                  onClick={e => { if (mode !== 'link') return; e.stopPropagation(); if (nodeDragMoved.current) { nodeDragMoved.current = false; return; } pickLinkNode(fn.id); }}
                  onDoubleClick={async e => {
                    e.stopPropagation();
+                   if (mode === 'link') return;
                    if (await confirmDialog({ title: `刪除這個${SYMBOL_MAP[fn.type]?.label || '標記'}？`, message: '相關的連線也會一併刪除，可用「復原」還原。', confirmText: '刪除', danger: true })) {
                      forgetFreeNode(fn.id);
                      setCustomLinks(prev => prev.filter(l => l.sourceId !== fn.id && l.targetId !== fn.id));
@@ -1594,6 +1595,8 @@ const GenogramTab = ({
               // 生態圖／獨立個體註記連線：三角函數邊緣偵測，線條精準停在半徑邊緣
               const srcNode = nodes.find(n => n.id === lnk.sourceId) || freeNodes.find(fn => fn.id === lnk.sourceId);
               const tgtNode = nodes.find(n => n.id === lnk.targetId) || freeNodes.find(fn => fn.id === lnk.targetId);
+              // 一端的人不見了（例如第二代人數改少），線就不畫，免得拉到畫布左上角
+              if (!srcNode || !tgtNode) return null;
 
               const dx = tp.x - sp.x, dy = tp.y - sp.y;
               const angle = Math.atan2(dy, dx);
