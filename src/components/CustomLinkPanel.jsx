@@ -1,4 +1,4 @@
-import { G2_STATUSES, G2_BADGE_LABELS, parseGenders, getRelativeTitle } from '../utils/helpers';
+import { G2_STATUSES, G2_LABELS, parseGenders, getRelativeTitle } from '../utils/helpers';
 import { SYMBOL_MAP } from '../utils/symbols';
 import { cycleOnClick, wheelRef } from '../utils/statusBadge';
 import { STANDALONE_TYPES, isPlainLink, LINK_STYLES, LINK_STYLE_LABELS, LINK_STYLE_HINTS, linkStyleOf } from '../utils/standalone';
@@ -11,7 +11,7 @@ import { STANDALONE_TYPES, isPlainLink, LINK_STYLES, LINK_STYLE_LABELS, LINK_STY
  * =========================================================================== */
 
 const CUSTOM_LINK_STATUSES = ['married', 'cohab', 'divorced'];
-const CUSTOM_LINK_LABELS = { married: '已婚', cohab: G2_BADGE_LABELS.cohab, divorced: '離婚' };
+const CUSTOM_LINK_LABELS = { married: '已婚', cohab: G2_LABELS.cohab, divorced: '離婚' };
 
 const CustomLinkPanel = ({
   customLinks, setCustomLinks, nodes, freeNodes, updateCustomLink, deleteCustomLink,
@@ -91,7 +91,7 @@ const CustomLinkPanel = ({
                             <span className="status-badge" data-status={kc.partner || 'none'}
                                   onClick={cycleOnClick(G2_STATUSES, kc.partner || 'none', v => setCustomLinks(prev => prev.map(l => l.id === lnk.id ? { ...l, kidsCfg: l.kidsCfg.map((k, idx) => idx === ki ? { ...k, partner: v, g3Str: v === 'none' ? '' : k.g3Str } : k) } : l)))}
                                   ref={el => wheelRef(el, G2_STATUSES, kc.partner || 'none', v => setCustomLinks(prev => prev.map(l => l.id === lnk.id ? { ...l, kidsCfg: l.kidsCfg.map((k, idx) => idx === ki ? { ...k, partner: v, g3Str: v === 'none' ? '' : k.g3Str } : k) } : l)))}
->{G2_BADGE_LABELS[kc.partner || 'none']}</span>
+>{G2_LABELS[kc.partner || 'none']}</span>
                           </div>
                         </div>
                         {kc.partner !== 'none' && (

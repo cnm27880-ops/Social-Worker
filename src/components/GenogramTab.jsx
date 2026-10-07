@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import {
   SZ, R, COUPLE_GAP, SIBLING_GAP, GEN_Y, TEXT_FONT,
-  G2_STATUSES, G2_BADGE_LABELS, G1_STATUSES, G1_LABELS,
+  G2_STATUSES, G2_LABELS, G1_STATUSES, G1_LABELS,
   TEXT_DIRS, TEXT_DIR_LABELS,
   LINE_STYLES, LINE_STYLE_LABELS, LINE_WIDTHS, marriageGeom,
   parseGenders, getSmoothPath, getRelativeTitle, getGen2Title,
@@ -1113,7 +1113,7 @@ const GenogramTab = ({
         <div className="section">
           <div className="section-title-row">
             <label>第二代子女順序</label>
-            <InfoTip text="輸入「男/女」(中文)、「M/F」(英文) 或「1/2」(數字)，即時產生子代節點。" />
+            <InfoTip text="輸入「男/女」(中文)、「M/F」(英文) 或「1/2」(數字)，即時產生子代節點。每位子女右側的標籤可切換伴侶狀態：選「同居」會把兩人之間畫成虛線，交往中（沒住在一起）的伴侶也用它。" />
           </div>
           <input type="text" value={gen2Str} onChange={e => onGen2Change(e.target.value)} placeholder="例：女女男男女 或 FFMMF 或 11221" />
         </div>
@@ -1132,7 +1132,7 @@ const GenogramTab = ({
                     <span className="status-badge" data-status={c.partner || 'none'}
                           onClick={cycleOnClick(G2_STATUSES, c.partner || 'none', v => changePartner(i, v))}
                           ref={el => wheelRef(el, G2_STATUSES, c.partner || 'none', v => changePartner(i, v))}
-                          style={{ marginLeft: '8px' }}>{G2_BADGE_LABELS[c.partner || 'none']}</span>
+                          style={{ marginLeft: '8px' }}>{G2_LABELS[c.partner || 'none']}</span>
                   </div>
                 </div>
                 {c.partner !== 'none' && (
