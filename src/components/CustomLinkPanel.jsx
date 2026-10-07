@@ -1,7 +1,7 @@
 import { G2_STATUSES, G2_LABELS, parseGenders, getRelativeTitle } from '../utils/helpers';
 import { SYMBOL_MAP } from '../utils/symbols';
 import { cycleOnClick, wheelRef } from '../utils/statusBadge';
-import { STANDALONE_TYPES } from '../utils/standalone';
+import { STANDALONE_TYPES, isPlainLink, LINK_STYLES, LINK_STYLE_LABELS, LINK_STYLE_HINTS, linkStyleOf } from '../utils/standalone';
 
 /* ===========================================================================
  * 左側面板的「🔗 擴充連線設定」
@@ -10,8 +10,8 @@ import { STANDALONE_TYPES } from '../utils/standalone';
  * 狀態、填子代與第三代。只讀寫 customLinks，跟畫布的拖曳狀態無關。
  * =========================================================================== */
 
-const CUSTOM_LINK_STATUSES = ['married', 'divorced'];
-const CUSTOM_LINK_LABELS = { married: '已婚', divorced: '離婚' };
+const CUSTOM_LINK_STATUSES = ['married', 'cohab', 'divorced'];
+const CUSTOM_LINK_LABELS = { married: '已婚', cohab: G2_LABELS.cohab, divorced: '離婚' };
 
 const CustomLinkPanel = ({
   customLinks, setCustomLinks, nodes, freeNodes, updateCustomLink, deleteCustomLink,
@@ -40,7 +40,7 @@ const CustomLinkPanel = ({
       {customLinks.map(lnk => {
         const isEcoLink = lnk.type === 'eco';
         const isAnnotationLink = lnk.type === 'annotation';
-        const isSpecialLink = isEcoLink || isAnnotationLink;
+        const isSpecialLink = isPlainLink(lnk);
         const srcNode = nodes.find(n => n.id === lnk.sourceId) || freeNodes.find(n => n.id === lnk.sourceId);
         const tgtNode = nodes.find(n => n.id === lnk.targetId) || freeNodes.find(n => n.id === lnk.targetId);
         const linkNodeLabel = (node) => {
@@ -54,7 +54,14 @@ const CustomLinkPanel = ({
         return (
           <div key={lnk.id} className={`link-card ${isEcoLink ? 'eco' : isAnnotationLink ? 'annotation' : ''}`}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}>
-              <span>{isEcoLink ? '🌐 ' : isAnnotationLink ? '📎 ' : ''}{srcLabel} ↔ {tgtLabel}</span>
+              <span>{isEcoLink ? '🌐 ' : isAnnotationLink ? '📎 ' : isSpecialLink ? '➖ ' : ''}{srcLabel} ↔ {tgtLabel}</span>
+              {isSpecialLink && (
+                <span className="status-badge" data-status={linkStyleOf(lnk)}
+                      title={`${LINK_STYLE_HINTS[linkStyleOf(lnk)]}（點擊或滾輪切換線型）`}
+                      onClick={cycleOnClick(LINK_STYLES, linkStyleOf(lnk), v => updateCustomLink(lnk.id, 'lineStyle', v))}
+                      ref={el => wheelRef(el, LINK_STYLES, linkStyleOf(lnk), v => updateCustomLink(lnk.id, 'lineStyle', v))}
+>{LINK_STYLE_LABELS[linkStyleOf(lnk)]}</span>
+              )}
               {!isSpecialLink && (
                 <span className="status-badge" data-status={lnk.status}
                       onClick={cycleOnClick(CUSTOM_LINK_STATUSES, lnk.status, v => updateCustomLink(lnk.id, 'status', v))}

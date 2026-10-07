@@ -5,6 +5,7 @@ import { getGen2Title, getIndexGen2Idx, formatKidsText, G2_LABELS, G1_LABELS } f
 import { buildFamily } from '../utils/familyLayout';
 import { extraMembersText } from '../utils/kinship';
 import { alertDialog } from '../utils/dialog';
+import { isPlainLink } from '../utils/standalone';
 
 const DEFAULT_TAGS = {
   identity: ['一般民眾', '就養榮民', '非就養榮民', '榮眷', '遺眷'],
@@ -176,19 +177,23 @@ const RecordTab = ({
     if (indexId && customLinks && customLinks.length > 0) {
       const indexGender = getIndexGender(indexId);
       customLinks.forEach(lnk => {
-        if (lnk.type === 'eco') return; // 生態圖連線不納入個案紀錄
+        if (isPlainLink(lnk)) return; // 生態圖／註記／自畫線不納入個案紀錄
         if (lnk.sourceId !== indexId && lnk.targetId !== indexId) return;
         const otherId = lnk.sourceId === indexId ? lnk.targetId : lnk.sourceId;
         if (/^c\d+$/.test(otherId)) return;
         const spouseLabel = indexGender === 'M' ? '前妻' : '前夫';
         const remarryLabel = indexGender === 'M' ? '案妻' : '案夫';
-        const partnerLabel = lnk.status === 'divorced' ? spouseLabel : remarryLabel;
+        const partnerLabel = lnk.status === 'divorced' ? spouseLabel : lnk.status === 'cohab' ? '同居人' : remarryLabel;
         if (lnk.status === 'divorced') {
           let line = `與${spouseLabel}`;
           if (lnk.kidsStr) line += `，${formatKidsText(lnk.kidsStr)}`;
           txt += `${line}；\n`;
         } else if (lnk.status === 'married') {
           let line = `再婚，與${remarryLabel}`;
+          if (lnk.kidsStr) line += `，${formatKidsText(lnk.kidsStr)}`;
+          txt += `${line}；\n`;
+        } else if (lnk.status === 'cohab') {
+          let line = '與同居人';
           if (lnk.kidsStr) line += `，${formatKidsText(lnk.kidsStr)}`;
           txt += `${line}；\n`;
         }
@@ -411,13 +416,13 @@ const RecordTab = ({
           const indexGender = getIndexGender(indexId);
           const allCards = [];
           customLinks.forEach(lnk => {
-            if (lnk.type === 'eco') return; // 生態圖連線不納入動態卡片
+            if (isPlainLink(lnk)) return; // 生態圖／註記／自畫線不納入動態卡片
             if (!((lnk.sourceId === indexId || lnk.targetId === indexId) && lnk.kidsCfg && lnk.kidsCfg.length > 0)) return;
             const otherId = lnk.sourceId === indexId ? lnk.targetId : lnk.sourceId;
             if (/^c\d+$/.test(otherId)) return;
             const spouseLabel = indexGender === 'M' ? '前妻' : '前夫';
             const remarryLabel = indexGender === 'M' ? '案妻' : '案夫';
-            const partnerLabel = lnk.status === 'divorced' ? spouseLabel : remarryLabel;
+            const partnerLabel = lnk.status === 'divorced' ? spouseLabel : lnk.status === 'cohab' ? '同居人' : remarryLabel;
             const sameGenderCount = {};
             lnk.kidsCfg.forEach(kc => { sameGenderCount[kc.gender] = (sameGenderCount[kc.gender] || 0) + 1; });
             const rankCount = { M: 0, F: 0 };

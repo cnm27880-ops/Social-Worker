@@ -17,6 +17,8 @@
  * （符號正下方）時，會出現「↓子女」的小區塊，放進去就成立。見 dropZones()。
  * =========================================================================== */
 
+import { isPlainLink } from './standalone';
+
 /** 把 childLinks 併進已經算好的線條清單（不改動傳入的陣列）。 */
 export const mergeChildLinks = (lines, customLinks = [], childLinks = [], nodeIds = []) => {
   if (!childLinks.length) return lines;
@@ -25,7 +27,7 @@ export const mergeChildLinks = (lines, customLinks = [], childLinks = [], nodeId
   const ends = new Map();
   lines.forEach(ln => { if (ln.type === 'marry') ends.set(ln.id, [ln.a, ln.b]); });
   customLinks.forEach(l => {
-    if (l.type === 'eco' || l.type === 'annotation') return;
+    if (isPlainLink(l)) return;
     ends.set(l.id, [l.sourceId, l.targetId]);
   });
 

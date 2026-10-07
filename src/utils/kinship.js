@@ -19,6 +19,7 @@
  * =========================================================================== */
 
 import { formatKidsText } from './helpers';
+import { isPlainLink } from './standalone';
 
 /** 兩層關係的慣用簡稱。key 是每一步的代號，用 '>' 串起來（見 stepCode）。 */
 const SHORT = {
@@ -65,7 +66,7 @@ export const buildKinGraph = ({ nodes = [], lines = [], freeNodes = [], customLi
     }
   });
   customLinks.forEach(l => {
-    if (l.type === 'eco' || l.type === 'annotation') return;
+    if (isPlainLink(l)) return;
     push(spouses, l.sourceId, { id: l.targetId, status: l.status });
     push(spouses, l.targetId, { id: l.sourceId, status: l.status });
   });
@@ -147,7 +148,7 @@ export const extraMembersText = ({ family, freeNodes = [], customLinks = [], pos
 
   // 直接跟案主有擴充連線的（再婚配偶、前配偶）已經寫在上面的段落
   const describedAbove = new Set(customLinks
-    .filter(l => l.type !== 'eco' && l.type !== 'annotation' && (l.sourceId === indexId || l.targetId === indexId))
+    .filter(l => !isPlainLink(l) && (l.sourceId === indexId || l.targetId === indexId))
     .map(l => (l.sourceId === indexId ? l.targetId : l.sourceId)));
 
   const rows = persons
