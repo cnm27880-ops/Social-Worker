@@ -36,7 +36,7 @@ src/
 │   ├── exportImage.js      # 下載 PNG／JPG、列印 A4、裁切範圍計算
 │   ├── textBox.js          # 文字方塊尺寸估算、直式排版、吸附到節點
 │   ├── age.js              # 民國生年 ⇄ 實歲的判斷與換算
-│   ├── standalone.js       # 獨立個體（三角、寵物）的類型與形狀
+│   ├── standalone.js       # 獨立個體（三角、寵物）的類型與形狀、一般連線（生態圖／註記／自畫線）的線型
 │   ├── statusBadge.js      # 狀態標籤的點擊／滾輪切換
 │   ├── ids.js              # 畫布物件 id 產生器（同一毫秒不撞號）
 │   ├── childLinks.js       # 子女放置區、掛在夫妻或單親底下的子女

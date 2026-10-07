@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   verticalCells, textBoxSize, anchoredXY, resolveText, pickSide,
   snapWhileDragging, detachTextsFrom, duplicateText, effectiveVertical, ANCHOR_GAP,
-  textCenter, xyForCenter,
+  textCenter, xyForCenter, textAlignOf, lineAnchor, verticalGlyphs,
 } from '../textBox';
 
 const R = 18;
@@ -155,5 +155,24 @@ describe('duplicateText', () => {
     const shown = { ...src, x: 50, y: 60, vertical: true };
     const copy = duplicateText(src, shown, 'new');
     expect(copy).toEqual({ id: 'new', x: 70, y: 80, text: '務農', fontSize: 20, vertical: true });
+  });
+});
+
+describe('文字對齊', () => {
+  it('沒填 align 當作靠左，維持舊存檔的畫法', () => {
+    expect(textAlignOf({})).toBe('left');
+    expect(textAlignOf({ align: '亂填' })).toBe('left');
+    expect(lineAnchor({ text: '王小明' }, 48)).toEqual({ x: 0, textAnchor: 'start' });
+  });
+  it('橫式：置中的起點在方塊正中央，靠右在右緣', () => {
+    expect(lineAnchor({ align: 'center' }, 48)).toEqual({ x: 24, textAnchor: 'middle' });
+    expect(lineAnchor({ align: 'right' }, 48)).toEqual({ x: 48, textAnchor: 'end' });
+  });
+  it('直式：較短的那一欄依對齊往下挪', () => {
+    const t = { text: 'abcdef\n王', fontSize: 10, vertical: true };
+    const firstOfShort = (align) => verticalGlyphs({ ...t, align }).find(g => g.key === '1-0').y;
+    const top = firstOfShort('left');
+    expect(firstOfShort('center')).toBeGreaterThan(top);
+    expect(firstOfShort('right')).toBeGreaterThan(firstOfShort('center'));
   });
 });

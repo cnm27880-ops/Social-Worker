@@ -19,6 +19,18 @@
 
 export const TEXT_SIDES = ['top', 'right', 'bottom', 'left'];
 
+/** 文字對齊：橫式是每一行靠左／置中／靠右，直式是每一欄靠上／置中／靠下。
+ *  舊存檔沒有這個欄位，一律當靠左（跟以前畫出來的一樣）；新增的方塊預設置中。 */
+export const TEXT_ALIGNS = ['left', 'center', 'right'];
+export const textAlignOf = (t) => (TEXT_ALIGNS.includes(t?.align) ? t.align : 'left');
+const ALIGN_K = { left: 0, center: 0.5, right: 1 };
+
+/** 橫式每一行的起點 x（相對方塊左緣）與對應的 SVG text-anchor。 */
+export const lineAnchor = (t, w) => {
+  const a = textAlignOf(t);
+  return { x: w * ALIGN_K[a], textAnchor: a === 'center' ? 'middle' : a === 'right' ? 'end' : 'start' };
+};
+
 /** 標籤跟節點邊緣的距離。 */
 export const ANCHOR_GAP = 6;
 
@@ -186,11 +198,15 @@ export const verticalGlyphs = (t) => {
   const fs = t.fontSize || 16;
   const lines = (t.text || '').split('\n');
   const w = lines.length * fs * COL_W;
+  const k = ALIGN_K[textAlignOf(t)];
+  const maxCells = Math.max(1, ...lines.map(l => verticalCells(l).length));
   const out = [];
   lines.forEach((line, li) => {
     const cx = w - (li + 0.5) * fs * COL_W;
-    verticalCells(line).forEach((cell, ci) => {
-      out.push({ key: `${li}-${ci}`, text: cell, x: cx, y: ci * fs * CELL_H + fs * 0.9 });
+    const cells = verticalCells(line);
+    const shift = (maxCells - cells.length) * fs * CELL_H * k;   // 短的那一欄往下挪
+    cells.forEach((cell, ci) => {
+      out.push({ key: `${li}-${ci}`, text: cell, x: cx, y: shift + ci * fs * CELL_H + fs * 0.9 });
     });
   });
   return out;

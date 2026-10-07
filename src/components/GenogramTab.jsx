@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import {
   SZ, R, COUPLE_GAP, SIBLING_GAP, GEN_Y, TEXT_FONT,
-  G2_STATUSES, G2_LABELS, G1_STATUSES, G1_LABELS,
+  G2_STATUSES, G2_BADGE_LABELS, G1_STATUSES, G1_LABELS,
   TEXT_DIRS, TEXT_DIR_LABELS,
   LINE_STYLES, LINE_STYLE_LABELS, LINE_WIDTHS, marriageGeom,
   parseGenders, getSmoothPath, getRelativeTitle, getGen2Title,
@@ -20,7 +20,7 @@ import {
 } from '../utils/exportImage';
 import {
   resolveText, anchoredXY, snapWhileDragging, detachTextsFrom, duplicateText,
-  textCenter, xyForCenter,
+  textCenter, xyForCenter, TEXT_ALIGNS, textAlignOf,
 } from '../utils/textBox';
 import { displayAge, currentRocYear, parseAgeInput } from '../utils/age';
 import { newId } from '../utils/ids';
@@ -28,7 +28,10 @@ import { confirmDialog } from '../utils/dialog';
 import { setChildLink, dropChildLinks, childRestPos, dropZones, hitZone, descendantsOf } from '../utils/childLinks';
 import { buildFamily } from '../utils/familyLayout';
 import { cycleOnClick, wheelRef } from '../utils/statusBadge';
-import { STANDALONE_TYPES, standaloneRadius, diamondPath, diamondEdge } from '../utils/standalone';
+import {
+  STANDALONE_TYPES, standaloneRadius, diamondPath, diamondEdge,
+  isPlainLink, LINK_STYLES, LINK_STYLE_LABELS, LINK_STYLE_HINTS, linkStyleOf, linkStrokeSpec,
+} from '../utils/standalone';
 import TextBoxItem from './TextBoxItem';
 import CustomLinkPanel from './CustomLinkPanel';
 import {
@@ -192,6 +195,7 @@ const GenogramTab = ({
       if (e.key === 'Enter' && bgAdjust) setBgAdjust(false);
       if (e.key === 'Escape' && draftPoly.length > 0) { setDraftPoly([]); setMousePos(null); }
       if (e.key === 'Escape' && bgAdjust) setBgAdjust(false);
+      if (e.key === 'Escape' && mode === 'link') setMode(null);
       /* 定位模式下用方向鍵微調底圖：滑鼠拖曳最小就是一個像素的抖動，
          要把舊圖跟已經畫好的符號對齊時，一格一格推才對得準。 */
       if (bgAdjust && e.key.startsWith('Arrow')) {
@@ -257,8 +261,14 @@ const GenogramTab = ({
 
   const addText = () => {
     const id = newId('txt_');
-    setTexts(prev => [...prev, { id, x: 300, y: 200, text: '文字', fontSize: 16, vertical: textDirection === 'vertical' }]);
+    setTexts(prev => [...prev, { id, x: 300, y: 200, text: '文字', fontSize: 16, vertical: textDirection === 'vertical', align: 'center' }]);
   };
+  /* 選取中的方塊：左 → 中 → 右 → 左…（舊存檔沒有 align，當作靠左） */
+  const cycleTextAlign = (id) => setTexts(prev => prev.map(t => {
+    if (t.id !== id) return t;
+    const i = TEXT_ALIGNS.indexOf(textAlignOf(t));
+    return { ...t, align: TEXT_ALIGNS[(i + 1) % TEXT_ALIGNS.length] };
+  }));
   const deleteText = (id) => {
     setTexts(prev => prev.filter(t => t.id !== id));
     setSelectedTextId(null);
@@ -295,6 +305,26 @@ const GenogramTab = ({
     if (hasIndex) {
       setCustomLinks(prev => [...prev, { id: newId('l_'), sourceId: indexId, targetId: id, type: 'eco', status: 'married', kidsStr: '', kidsCfg: [] }]);
     }
+  };
+  /* ===== 畫線工具（mode === 'link'） =====
+   * 點第一個物件、再點第二個，兩者之間就多一條線。物件可以是人物、
+   * 生態圖的圓、三角與寵物；線型沿用生態圖的慣例（粗＝強、虛＝弱、鋸齒＝壓力），
+   * 之後也能在左側「擴充連線設定」改。兩個「家庭」之間的關係，作法是
+   * 各放一個生態圖的圓、取名（例如「原生家庭」），再用這個工具連起來。 */
+  const [linkFrom, setLinkFrom] = useState(null);
+  const [linkStyle, setLinkStyle] = useState('solid');
+  useEffect(() => { if (mode !== 'link') setLinkFrom(null); }, [mode]);
+  const pickLinkNode = (id) => {
+    if (!linkFrom) { setLinkFrom(id); return; }
+    if (linkFrom === id) { setLinkFrom(null); return; }
+    const exists = customLinks.some(l => (l.sourceId === linkFrom && l.targetId === id) || (l.sourceId === id && l.targetId === linkFrom));
+    if (!exists) {
+      const typeOf = (nid) => freeNodes.find(fn => fn.id === nid)?.type;
+      const kinds = [typeOf(linkFrom), typeOf(id)];
+      const type = kinds.includes('eco') ? 'eco' : kinds.some(k => STANDALONE_TYPES.includes(k)) ? 'annotation' : 'line';
+      setCustomLinks(prev => [...prev, { id: newId('l_'), sourceId: linkFrom, targetId: id, type, lineStyle: linkStyle, status: 'married', kidsStr: '', kidsCfg: [] }]);
+    }
+    setLinkFrom(null);
   };
   const updateCustomLink = (linkId, field, val) => {
     setCustomLinks(prev => prev.map(l => l.id === linkId ? { ...l, [field]: val } : l));
@@ -759,6 +789,7 @@ const GenogramTab = ({
     e.stopPropagation();
     // 放手前如果真的拖動過，這是一次拖曳的收尾，不是要標記這個節點
     if (nodeDragMoved.current) { nodeDragMoved.current = false; return; }
+    if (mode === 'link') { pickLinkNode(id); return; }
     if (mode === 'index') { setIndexId(p => p === id ? null : id); return; }
     if (mode === 'cohab' && cohabMode === 'auto') { setCohabMembers(p => p.includes(id) ? p.filter(m => m !== id) : [...p, id]); return; }
     if (mode === 'age') { setEditingAgeId(id); return; }
@@ -1101,7 +1132,7 @@ const GenogramTab = ({
                     <span className="status-badge" data-status={c.partner || 'none'}
                           onClick={cycleOnClick(G2_STATUSES, c.partner || 'none', v => changePartner(i, v))}
                           ref={el => wheelRef(el, G2_STATUSES, c.partner || 'none', v => changePartner(i, v))}
-                          style={{ marginLeft: '8px' }}>{G2_LABELS[c.partner || 'none']}</span>
+                          style={{ marginLeft: '8px' }}>{G2_BADGE_LABELS[c.partner || 'none']}</span>
                   </div>
                 </div>
                 {c.partner !== 'none' && (
@@ -1155,7 +1186,7 @@ const GenogramTab = ({
         <div className="section">
           <div className="section-title-row">
             <label>🧩 自由擴充區</label>
-            <InfoTip text="男性／女性／三角／寵物／生態圖：點按鈕即在畫布上新增一個獨立個體。拖著新增的人靠近別人時會出現綠色「↓子女」小框：夫妻的在婚姻線下方，單身者在他正下方（單親）。放進去就成為子女，並回到原本的位置。寵物畫成菱形，拖到飼主身上會連一條細線；名字可以用文字方塊吸在旁邊。把新增的個體拖到目標人物上疊在一起放開，就會自動產生連線；生態圖新增後預設連結案主。按下「編輯」會把擴充個體改用藍色畫，方便跟原本的家系區分。" />
+            <InfoTip text="男性／女性／三角／寵物／生態圖：點按鈕即在畫布上新增一個獨立個體。「🔗 畫線」：依序點兩個物件就會連一條線，可選實線／粗線／虛線／鋸齒，想表示兩個家庭（例如原生家庭）之間的關係，就各放一個生態圖的圓取名後連起來。拖著新增的人靠近別人時會出現綠色「↓子女」小框：夫妻的在婚姻線下方，單身者在他正下方（單親）。放進去就成為子女，並回到原本的位置。寵物畫成菱形，拖到飼主身上會連一條細線；名字可以用文字方塊吸在旁邊。把新增的個體拖到目標人物上疊在一起放開，就會自動產生連線；生態圖新增後預設連結案主。按下「編輯」會把擴充個體改用藍色畫，方便跟原本的家系區分。" />
           </div>
           <div className="btn-row">
             <button className="btn-soft tone-dust" onClick={() => addFreeNode('M')}>男性</button>
@@ -1173,6 +1204,25 @@ const GenogramTab = ({
               aria-pressed={extColorMode === 'blue'}
             >{EXT_COLOR_LABELS[extColorMode]}</button>
           </div>
+          <div className="btn-row" style={{ marginTop: '6px' }}>
+            <button
+              className={`btn-toggle ${mode === 'link' ? 'on' : ''}`}
+              onClick={() => setMode(mode === 'link' ? null : 'link')}
+              aria-pressed={mode === 'link'}
+              title="畫線：依序點兩個物件，中間就多一條線（Esc 結束）"
+            >🔗 畫線</button>
+            {mode === 'link' && (
+              <span className="status-badge" data-status={linkStyle}
+                    onClick={cycleOnClick(LINK_STYLES, linkStyle, setLinkStyle)}
+                    ref={el => wheelRef(el, LINK_STYLES, linkStyle, setLinkStyle)}
+                    title={`${LINK_STYLE_HINTS[linkStyle]}（點擊或滾輪切換線型）`}>{LINK_STYLE_LABELS[linkStyle]}</span>
+            )}
+          </div>
+          {mode === 'link' && (
+            <div style={{ fontSize: '12px', color: 'var(--ink-soft)', marginTop: '6px' }}>
+              {linkFrom ? '再點第二個物件完成連線（點空白處取消）' : '點第一個物件（人物、生態圖的圓、三角或寵物）'}
+            </div>
+          )}
         </div>
 
         <ImagePatchPanel
@@ -1230,6 +1280,7 @@ const GenogramTab = ({
                  if (lineId) clearLineAttr(lineId);
                  return;
                }
+               if (mode === 'link') { setLinkFrom(null); return; }
                // 快捷列表選中「關係線」或「獨立個體」這兩類符號時，點畫布即套用
                // ——點在節點上不會走到這裡（onClick(e,id) 已經 stopPropagation）。
                const sym = mode && SYMBOL_MAP[mode];
@@ -1245,7 +1296,7 @@ const GenogramTab = ({
                  }
                }
              }}
-             style={{ background: '#fefefe', minWidth: '600px', cursor: mode === 'cohab' && cohabMode === 'poly' ? 'crosshair' : undefined }}>
+             style={{ background: '#fefefe', minWidth: '600px', cursor: (mode === 'cohab' && cohabMode === 'poly') || mode === 'link' ? 'crosshair' : undefined }}>
           <defs>
             <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="#f0f0f0" strokeWidth="0.5" /></pattern>
             {/* 橡皮擦遮罩：白＝留下、黑＝挖掉。用遮罩而不是在底圖上塗白色，
@@ -1490,6 +1541,7 @@ const GenogramTab = ({
             return (
               <g key={ecoNode.id} transform={`translate(${ecoNode.x},${ecoNode.y})`} style={{ cursor: drag?.id === ecoNode.id ? 'grabbing' : 'grab', touchAction: 'none' }}
                  onPointerDown={e => onDown(e, ecoNode.id)}
+                 onClick={e => { if (mode !== 'link') return; e.stopPropagation(); if (nodeDragMoved.current) { nodeDragMoved.current = false; return; } pickLinkNode(ecoNode.id); }}
                  onDoubleClick={e => { e.stopPropagation(); setEditingEcoId(ecoNode.id); }}>
                 <ellipse cx="0" cy="0" rx={rx} ry={ECO_RY} fill="#2563eb" stroke="#1e40af" strokeWidth="2.5" />
                 {isEditingThis ? (
@@ -1514,6 +1566,7 @@ const GenogramTab = ({
             return (
               <g key={fn.id} transform={`translate(${fn.x},${fn.y})`} style={{ cursor: drag?.id === fn.id ? 'grabbing' : 'grab', touchAction: 'none' }}
                  onPointerDown={e => onDown(e, fn.id)}
+                 onClick={e => { if (mode !== 'link') return; e.stopPropagation(); if (nodeDragMoved.current) { nodeDragMoved.current = false; return; } pickLinkNode(fn.id); }}
                  onDoubleClick={async e => {
                    e.stopPropagation();
                    if (await confirmDialog({ title: `刪除這個${SYMBOL_MAP[fn.type]?.label || '標記'}？`, message: '相關的連線也會一併刪除，可用「復原」還原。', confirmText: '刪除', danger: true })) {
@@ -1537,7 +1590,7 @@ const GenogramTab = ({
             const isEcoLink = lnk.type === 'eco';
             const isAnnotationLink = lnk.type === 'annotation';
 
-            if (isEcoLink || isAnnotationLink) {
+            if (isPlainLink(lnk)) {
               // 生態圖／獨立個體註記連線：三角函數邊緣偵測，線條精準停在半徑邊緣
               const srcNode = nodes.find(n => n.id === lnk.sourceId) || freeNodes.find(fn => fn.id === lnk.sourceId);
               const tgtNode = nodes.find(n => n.id === lnk.targetId) || freeNodes.find(fn => fn.id === lnk.targetId);
@@ -1565,10 +1618,15 @@ const GenogramTab = ({
               const x1 = sp.x + Math.cos(angle) * r1, y1 = sp.y + Math.sin(angle) * r1;
               const x2 = tp.x - Math.cos(angle) * r2, y2 = tp.y - Math.sin(angle) * r2;
 
-              const cStroke = isEcoLink ? '#2563eb' : '#8b5cf6';
+              const cStroke = isEcoLink ? '#2563eb' : isAnnotationLink ? '#8b5cf6' : '#444';
+              const style = linkStyleOf(lnk);
+              const spec = linkStrokeSpec(style, isEcoLink || !isAnnotationLink ? 2 : 1.5);
+              const segs = Math.max(4, Math.round(Math.hypot(x2 - x1, y2 - y1) / 12));
               return (
                 <g key={lnk.id}>
-                  <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={cStroke} strokeWidth={isEcoLink ? '2' : '1.5'} />
+                  {style === 'zigzag'
+                    ? <polyline points={zigzagPoints(x1, y1, x2, y2, 5, segs)} fill="none" stroke={cStroke} strokeWidth={spec.strokeWidth} strokeLinejoin="round" />
+                    : <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={cStroke} strokeWidth={spec.strokeWidth} strokeDasharray={spec.strokeDasharray} />}
                   <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent" strokeWidth="12" style={{ cursor: 'pointer' }} onDoubleClick={e => { e.stopPropagation(); deleteCustomLink(lnk.id); }} />
                 </g>
               );
@@ -1582,7 +1640,8 @@ const GenogramTab = ({
             return (
               <g key={lnk.id}>
                 {geom.segs.map(([x1, y1, x2, y2], i) => (
-                  <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke={cStroke} strokeWidth={lineWidth} />
+                  <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke={cStroke} strokeWidth={lineWidth}
+                        strokeDasharray={lnk.status === 'cohab' ? '8,6' : undefined} />
                 ))}
                 {lnk.status === 'divorced' && <>
                   <line x1={midX-8} y1={midY-8} x2={midX+8} y2={midY+8} stroke={cStroke} strokeWidth={lineWidth} />
@@ -1592,6 +1651,15 @@ const GenogramTab = ({
               </g>
             );
           })}
+
+          {/* 畫線工具：已經點了第一個物件，圈起來提示「再點另一個」。不進下載的圖 */}
+          {mode === 'link' && linkFrom && (() => {
+            const fn = freeNodes.find(f => f.id === linkFrom);
+            const c = pos(linkFrom);
+            return fn?.type === 'eco'
+              ? <ellipse className={NO_EXPORT} cx={c.x} cy={c.y} rx={ecoRx(fn.text) + 6} ry={ECO_RY + 6} fill="none" stroke="#f59e0b" strokeWidth="3" strokeDasharray="6,4" pointerEvents="none" />
+              : <circle className={NO_EXPORT} cx={c.x} cy={c.y} r={R + 8} fill="none" stroke="#f59e0b" strokeWidth="3" strokeDasharray="6,4" pointerEvents="none" />;
+          })()}
 
           {/* 工具箱拖曳「關係品質」符號經過時的高亮：只是預覽，放開才會真的貼上 */}
           {symbolDrag?.hoverLineId && (() => {
@@ -1687,6 +1755,7 @@ const GenogramTab = ({
               onDelete={() => deleteText(t.id)}
               onDuplicate={() => duplicateSelectedText(t.id)}
               onResizeDown={e => onResizeDown(e, t.id)}
+              onCycleAlign={() => cycleTextAlign(t.id)}
             />
           ))}
 

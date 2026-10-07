@@ -9,6 +9,9 @@ export const TEXT_FONT = "'Times New Roman', 'DFKai-SB', 'BiauKai', serif";
 /* --- 狀態標籤文字對照 --- */
 export const G2_STATUSES = ['none', 'married', 'cohab', 'separated', 'divorced'];
 export const G2_LABELS = { none: '未婚', married: '已婚', cohab: '同居', separated: '分居', divorced: '離婚' };
+/* 標籤上顯示的字：「同居」畫出來是虛線，交往中（沒住一起）的伴侶也用它，
+   所以標籤寫成「同居/交往」讓人找得到；個案紀錄的文字仍用 G2_LABELS。 */
+export const G2_BADGE_LABELS = { ...G2_LABELS, cohab: '同居/交往' };
 export const G1_STATUSES = ['married', 'divorced'];
 export const G1_LABELS = { married: '已婚', divorced: '離婚' };
 export const TEXT_DIRS = ['horizontal', 'vertical'];

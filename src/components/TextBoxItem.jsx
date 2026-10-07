@@ -1,5 +1,5 @@
 import { TEXT_FONT } from '../utils/helpers';
-import { textBoxSize, verticalGlyphs } from '../utils/textBox';
+import { textBoxSize, verticalGlyphs, lineAnchor, textAlignOf } from '../utils/textBox';
 import { NO_EXPORT } from '../utils/exportImage';
 
 /* ===========================================================================
@@ -14,12 +14,14 @@ import { NO_EXPORT } from '../utils/exportImage';
 const TextBoxItem = ({
   t, isSel, isEditing, anchorPt,
   onPointerDown, onClick, onDoubleClick, onFinishEdit,
-  onDelete, onDuplicate, onResizeDown,
+  onDelete, onDuplicate, onResizeDown, onCycleAlign,
 }) => {
   const lines = (t.text || '').split('\n');
   const { left, top, w, h } = textBoxSize(t);
   const bx = left - 4, by = top - 4, bw = w + 8, bh = h + 8;   // 選取框
   const handleX = bx + bw + 8;
+  const anchor = lineAnchor(t, w);
+  const alignWord = { left: t.vertical ? '上' : '左', center: '中', right: t.vertical ? '下' : '右' }[textAlignOf(t)];
 
   return (
     <g transform={`translate(${t.x},${t.y})`}>
@@ -37,7 +39,7 @@ const TextBoxItem = ({
             defaultValue={t.text}
             onBlur={(e) => onFinishEdit(e.target.value)}
             onKeyDown={(e) => { e.stopPropagation(); }}
-            style={{ width: '100%', height: '100%', fontSize: `${t.fontSize}px`, fontFamily: TEXT_FONT, border: '2px dashed #3b82f6', outline: 'none', background: 'rgba(255,255,255,0.95)', resize: 'both', borderRadius: '4px', padding: '4px' }}
+            style={{ width: '100%', height: '100%', fontSize: `${t.fontSize}px`, fontFamily: TEXT_FONT, border: '2px dashed #3b82f6', outline: 'none', textAlign: t.vertical ? 'left' : textAlignOf(t), background: 'rgba(255,255,255,0.95)', resize: 'both', borderRadius: '4px', padding: '4px' }}
           />
         </foreignObject>
       ) : (
@@ -52,9 +54,9 @@ const TextBoxItem = ({
               ))}
             </text>
           ) : (
-            <text style={{ fontFamily: TEXT_FONT, fontSize: t.fontSize }} fill="#333">
+            <text style={{ fontFamily: TEXT_FONT, fontSize: t.fontSize }} fill="#333" textAnchor={anchor.textAnchor}>
               {lines.map((line, idx) => (
-                <tspan key={idx} x="0" dy={idx === 0 ? 0 : '1.3em'}>{line}</tspan>
+                <tspan key={idx} x={anchor.x} dy={idx === 0 ? 0 : '1.3em'}>{line}</tspan>
               ))}
             </text>
           )}
@@ -72,6 +74,11 @@ const TextBoxItem = ({
             <title>複製一份（Ctrl+D）</title>
             <circle r="10" fill="white" stroke="#0d9488" strokeWidth="1.5" />
             <text y="4" textAnchor="middle" fontSize="11" fill="#0d9488" style={{ fontFamily: TEXT_FONT }}>⧉</text>
+          </g>
+          <g transform={`translate(${handleX + 48},${by})`} style={{ cursor: 'pointer' }} onClick={e => { e.stopPropagation(); onCycleAlign(); }}>
+            <title>{t.vertical ? '對齊：上／中／下（點一下切換）' : '對齊：左／中／右（點一下切換）'}</title>
+            <circle r="10" fill="white" stroke="#7c3aed" strokeWidth="1.5" />
+            <text y="4" textAnchor="middle" fontSize="10" fill="#7c3aed" style={{ fontFamily: TEXT_FONT }}>{alignWord}</text>
           </g>
           <g transform={`translate(${handleX},${by + bh})`} style={{ cursor: 'nwse-resize', touchAction: 'none' }} onPointerDown={onResizeDown}>
             <title>拖曳縮放字級</title>

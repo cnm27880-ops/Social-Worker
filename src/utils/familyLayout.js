@@ -16,6 +16,7 @@
 
 import { SZ, COUPLE_GAP, SIBLING_GAP, GEN_Y, parseGenders, getRelativeTitle, computeMainLayout } from './helpers';
 import { mergeChildLinks } from './childLinks';
+import { isPlainLink } from './standalone';
 
 export const buildFamily = ({
   gen2Cfg = [], g1Status = 'married', customLinks = [], mainFamily = true,
@@ -60,7 +61,7 @@ export const buildFamily = ({
 
   // === customLink kidsCfg → 整合為完全體節點 ===
   customLinks.forEach(lnk => {
-    if (lnk.type === 'eco' || lnk.type === 'annotation') return; // 生態圖／獨立個體連線不參與節點生成
+    if (isPlainLink(lnk)) return; // 生態圖／獨立個體／自畫線不參與節點生成
     if (!lnk.kidsCfg || lnk.kidsCfg.length === 0) return;
     const srcN = N.find(n => n.id === lnk.sourceId); const srcF = freeNodes.find(fn => fn.id === lnk.sourceId);
     const tgtN = N.find(n => n.id === lnk.targetId); const tgtF = freeNodes.find(fn => fn.id === lnk.targetId);
