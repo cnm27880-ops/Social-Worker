@@ -23,7 +23,10 @@ const eduText = (edu) => {
   return `${edu}學歷`;
 };
 
-const getRankStr = (rank, total) => {
+// 第二對父母在個案紀錄裡的寫法（畫布符號上的字見 helpers.js 的 P2_LABELS）
+const P2_RECORD_WORDS = { adopt: '養父母', step: '繼父母', foster: '寄養父母' };
+
+const getRankStr =(rank, total) => {
   if (total === 1 || rank === 1) return '長';
   if (rank === 2) return '次';
   if (rank === total && rank > 2) return '么';
@@ -34,6 +37,7 @@ const getRankStr = (rank, total) => {
 const RecordTab = ({
   gen2Cfg, indexId, g1Status, cohabMembers, deceasedIds, disabledIds = [], customLinks,
   mainFamily = true,
+  parents2On = false, parents2Type = 'adopt', parents2Status = 'married',
   /* 自由擴充區的成員與「放進子女區」的親子關係：用來推算他們跟案主的關係，
      寫進紀錄最後的「其他家屬」幾行（見 utils/kinship.js）。 */
   freeNodes = [], childLinks = [], positions = {},
@@ -79,9 +83,13 @@ const RecordTab = ({
 
   /* 自由擴充區裡連得到案主的人：跟畫布用同一份排版結果推算稱謂 */
   const extra = useMemo(() => extraMembersText({
-    family: buildFamily({ gen2Cfg, g1Status, customLinks, mainFamily, childLinks, positions, freeNodes }),
+    family: buildFamily({
+      gen2Cfg, g1Status, customLinks, mainFamily, childLinks, positions, freeNodes,
+      parents2On, parents2Type, parents2Status,
+    }),
     freeNodes, customLinks, positions, indexId, deceasedIds, disabledIds,
-  }), [gen2Cfg, g1Status, customLinks, mainFamily, childLinks, positions, freeNodes, indexId, deceasedIds, disabledIds]);
+  }), [gen2Cfg, g1Status, customLinks, mainFamily, childLinks, positions, freeNodes, indexId, deceasedIds, disabledIds,
+      parents2On, parents2Type, parents2Status]);
 
   /* ===== 紀錄產生器邏輯 ===== */
   const generatedText = useMemo(() => {
@@ -92,7 +100,7 @@ const RecordTab = ({
     if (subjInfo.religion) txt += `，${subjInfo.religion}信仰`;
     if (subjInfo.disability) txt += `，${subjInfo.disability}`;
     // 案主是第二代時，婚姻狀態要看案主自己的，不是第一代（案父母）的
-    txt += `，${isGen2Index ? (G2_LABELS[gen2Cfg[selfIdx].partner] || '未婚') : (g1Status === 'married' ? '已婚' : '離婚')}`;
+    txt += `，${isGen2Index ? (G2_LABELS[gen2Cfg[selfIdx].partner] || '未婚') : (G1_LABELS[g1Status] || '已婚')}`;
 
     /* 沒指定案主就不知道是誰跟誰同住，整句略過。原本無條件預設「獨居」——
        畫布上明明圈了同住範圍，只因為忘了指定案主，紀錄就斷言獨居，
@@ -140,6 +148,10 @@ const RecordTab = ({
       // 案主自己的子嗣（第三代）
       const own = gen2Cfg[selfIdx].g3Str;
       if (own) txt += `${formatKidsText(own)}；\n`;
+      // 第二對父母（收養、繼親、寄養）：案主有勾選連到才寫
+      if (parents2On && gen2Cfg[selfIdx].p2) {
+        txt += `案${P2_RECORD_WORDS[parents2Type] || '養父母'}${G1_LABELS[parents2Status] || '已婚'}；\n`;
+      }
       // 原生家庭：案父母的婚姻狀態與子代總數（含案主）
       let originTxt = `案父母${G1_LABELS[g1Status] || '已婚'}`;
       if (gen2Cfg.length > 0) originTxt += `，${countKids(gen2Cfg.map(c => c.gender))}`;
@@ -229,7 +241,7 @@ const RecordTab = ({
     txt += extra.text;
 
     return txt;
-  }, [subjInfo, gen2Cfg, g1Status, cohabMembers, deceasedIds, disabledIds, famExtras, indexId, customLinks, extra]);
+  }, [subjInfo, gen2Cfg, g1Status, parents2On, parents2Type, parents2Status, cohabMembers, deceasedIds, disabledIds, famExtras, indexId, customLinks, extra]);
 
   /* 預覽可以直接改。recordEdit 非空＝使用者動過手，之後家系圖再變動也不會
      覆蓋掉他寫的字（不然改一個節點就把整段心血洗掉）；按「還原」清空它，

@@ -190,6 +190,9 @@ const App = () => {
           gen2Cfg={doc.gen2Cfg}
           indexId={doc.indexId}
           g1Status={doc.g1Status}
+          parents2On={doc.parents2On}
+          parents2Type={doc.parents2Type}
+          parents2Status={doc.parents2Status}
           mainFamily={doc.mainFamily}
           cohabMembers={doc.cohabMembers}
           deceasedIds={deceasedIds}

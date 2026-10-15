@@ -35,6 +35,30 @@ describe('remapGen2Keys', () => {
   });
 });
 
+describe('第一代分居與第二對父母的存檔', () => {
+  it('舊存檔沒有第二對父母的欄位，補預設值（關閉）', () => {
+    const d = migrateDoc({ g1Status: 'divorced' });
+    expect([d.parents2On, d.parents2Type, d.parents2Status]).toEqual([false, 'adopt', 'married']);
+  });
+
+  it('分居與第二對父母的設定原樣存回', () => {
+    const d = migrateDoc({ g1Status: 'separated', parents2On: true, parents2Type: 'step', parents2Status: 'divorced' });
+    expect([d.g1Status, d.parents2On, d.parents2Type, d.parents2Status]).toEqual(['separated', true, 'step', 'divorced']);
+  });
+
+  it('不認得的值退回預設，不讓畫面壞掉', () => {
+    const d = migrateDoc({ g1Status: 'cohab', parents2Type: 'x', parents2Status: 'none' });
+    expect([d.g1Status, d.parents2Type, d.parents2Status]).toEqual(['married', 'adopt', 'married']);
+  });
+
+  it('子女清單變動時 p2 跟著人走', () => {
+    const cfg = [{ gender: 'F', p2: true }, { gender: 'M' }];
+    const newToOld = alignGen2(['F', 'M'], ['M', 'F', 'M']);
+    const next = newToOld.map((from, i) => from >= 0 ? cfg[from] : { gender: 'M' });
+    expect(next.map(c => !!c.p2)).toEqual([false, true, false]);
+  });
+});
+
 describe('migrateDoc', () => {
   it('舊存檔沒有 ageDisplay 時補預設', () => {
     expect(migrateDoc({ ages: { c0: '1' } }).ageDisplay).toBe('raw');
