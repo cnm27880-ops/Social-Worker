@@ -70,8 +70,8 @@ export const buildFamily = ({
       const [faLabel, moLabel] = P2_NODE_LABELS[type];
       const f2X = Math.max(mX + 110, originX + totalW + 40);
       N.push(
-        { id: 'fa2', gender: 'M', gen: 0, dx: f2X, dy: GEN_Y[0], label: faLabel },
-        { id: 'mo2', gender: 'F', gen: 0, dx: f2X + COUPLE_GAP, dy: GEN_Y[0], label: moLabel },
+        { id: 'fa2', gender: 'M', gen: 0, dx: f2X, dy: GEN_Y[0], label: faLabel, p2: true },
+        { id: 'mo2', gender: 'F', gen: 0, dx: f2X + COUPLE_GAP, dy: GEN_Y[0], label: moLabel, p2: true },
       );
       L.push({ id: 'ml-g1b', type: 'marry', a: 'fa2', b: 'mo2', status: parents2Status });
       const p2kids = gen2Cfg.map((c, i) => (c.p2 ? `c${i}` : null)).filter(Boolean);

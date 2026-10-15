@@ -96,3 +96,20 @@ describe('extraMembersText', () => {
     expect(extraMembersText({ family, freeNodes, customLinks, indexId: null })).toEqual({ text: '', unlinked: 0 });
   });
 });
+
+describe('kinTitles 第二對父母', () => {
+  it('養父母用符號上的字，養父母的上一代接在後面，不誤用「案祖父」', () => {
+    const cfg = [{ gender: 'F', partner: 'none', g3Str: '', p2: true }];
+    const fam = buildFamily({
+      gen2Cfg: cfg, parents2On: true, parents2Type: 'adopt',
+      customLinks: [{ id: 'l_g', sourceId: 'gf', targetId: 'gm', status: 'married' }],
+      childLinks: [{ id: 'k', lineId: 'l_g', childId: 'fa2' }],
+      freeNodes: [{ id: 'gf', gender: 'M', x: 700, y: 20 }, { id: 'gm', gender: 'F', x: 760, y: 20 }],
+    });
+    const t = kinTitles(buildKinGraph({ ...fam, freeNodes: [{ id: 'gf', gender: 'M', x: 700, y: 20 }, { id: 'gm', gender: 'F', x: 760, y: 20 }], customLinks: [{ id: 'l_g', sourceId: 'gf', targetId: 'gm', status: 'married' }] }), 'c0');
+    expect(t.get('fa').title).toBe('案父');
+    expect(t.get('fa2').title).toBe('案養父');
+    expect(t.get('mo2').title).toBe('案養母');
+    expect(t.get('gf').title).toBe('案養父之父');
+  });
+});
