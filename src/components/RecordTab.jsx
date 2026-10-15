@@ -72,6 +72,8 @@ const RecordTab = ({
   const getIndexGender = (id) => {
     if (id === 'fa') return 'M';
     if (id === 'mo') return 'F';
+    if (id === 'fa2') return 'M';
+    if (id === 'mo2') return 'F';
     if (id?.startsWith('c')) return gen2Cfg[parseInt(id.replace('c', ''))]?.gender;
     return null;
   };
@@ -110,6 +112,7 @@ const RecordTab = ({
       const others = cohabMembers.filter(id => id !== indexId).map(id => {
         if (id === 'fa') return '案父';
         if (id === 'mo') return '案母';
+        if (id === 'fa2' || id === 'mo2') return `案${id === 'fa2' ? '養父' : '養母'}`;
         if (/^c\d+$/.test(id)) {
           const idx = parseInt(id.replace('c',''));
           if (idx >= 0 && idx < gen2Cfg.length) return titleOf(idx);
