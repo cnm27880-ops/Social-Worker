@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import {
   SZ, R, COUPLE_GAP, SIBLING_GAP, GEN_Y, TEXT_FONT,
-  G2_STATUSES, G2_LABELS, G1_STATUSES, G1_LABELS,
+  G2_STATUSES, G2_LABELS, G1_STATUSES, G1_LABELS, P2_TYPES, P2_LABELS,
   TEXT_DIRS, TEXT_DIR_LABELS,
   LINE_STYLES, LINE_STYLE_LABELS, LINE_WIDTHS, marriageGeom,
   parseGenders, getSmoothPath, getRelativeTitle, getGen2Title,
@@ -81,6 +81,10 @@ const GenogramTab = ({
   const mainFamily = doc.mainFamily,    setMainFamily = setField('mainFamily');
 
   /* --- 關係線畫法 --- */
+  /* --- 第二對父母（收養、繼親、寄養）--- */
+  const parents2On = doc.parents2On,           setParents2On = setField('parents2On');
+  const parents2Type = doc.parents2Type,       setParents2Type = setField('parents2Type');
+  const parents2Status = doc.parents2Status,   setParents2Status = setField('parents2Status');
   const lineStyle = doc.lineStyle,      setLineStyle = setField('lineStyle');
   const lineWidth = doc.lineWidth,      setLineWidth = setField('lineWidth');
 
@@ -251,6 +255,9 @@ const GenogramTab = ({
   const setG3 = (i, v) => applyGen2Cfg(gen2Cfg.map((d, j) => j === i
     ? { ...d, g3Str: v, g3Multi: parseGenders(v).map((_, k) => !!d.g3Multi?.[k]) }
     : d));
+  /* 第二代某位成員是否也連到第二對父母（p2 跟著 gen2Cfg 的那一格走，
+     子女清單變動時 remapGen2Keys／alignGen2 會一起搬，不會跟錯人） */
+  const toggleP2 = (i) => setGen2Cfg(p => p.map((d, j) => j === i ? { ...d, p2: !d.p2 } : d));
   const toggleMulti = (i) => setGen2Cfg(p => p.map((d, j) => j === i ? { ...d, isMulti: !d.isMulti } : d));
   const toggleG3Multi = (i, k) => setGen2Cfg(p => p.map((d, j) => {
     if (j !== i) return d;
@@ -352,7 +359,8 @@ const GenogramTab = ({
   const { nodes, lines } = useMemo(() => buildFamily({
     gen2Cfg, g1Status, customLinks, mainFamily, childLinks: doc.childLinks,
     positions: positionsRef.current, freeNodes: freeNodesRef.current,
-  }), [gen2Cfg, g1Status, customLinks, mainFamily, doc.childLinks]);
+    parents2On, parents2Type, parents2Status,
+  }), [gen2Cfg, g1Status, customLinks, mainFamily, doc.childLinks, parents2On, parents2Type, parents2Status]);
 
 
   const pos = useCallback((id) => {
@@ -896,12 +904,13 @@ const GenogramTab = ({
     gen2Cfg.length === 0
     && indexId === null
     && g1Status === INITIAL_DOC.g1Status
+    && !parents2On
     && cohabMembers.length === 0
     && Object.keys(positions).length === 0
     && Object.keys(doc.nodeAttrs).length === 0
     && Object.keys(doc.lineAttrs).length === 0
     && Object.keys(doc.ages).length === 0
-  ), [gen2Cfg, indexId, g1Status, cohabMembers, positions, doc.nodeAttrs, doc.lineAttrs, doc.ages]);
+  ), [gen2Cfg, indexId, g1Status, parents2On, cohabMembers, positions, doc.nodeAttrs, doc.lineAttrs, doc.ages]);
 
   /* 匯入底圖：連同「要不要收起主家系」寫成同一次更新，Ctrl+Z 才是一步還原
      ——分兩次寫的話，復原一次只收回底圖，主家系還是不見的。 */
@@ -968,6 +977,8 @@ const GenogramTab = ({
               if (!(await confirmDialog({ title: '確定重置？', message: '家系圖與個案紀錄都會清空，可用「復原」（Ctrl+Z）還原。', confirmText: '重置', danger: true }))) return;
               patchDoc({
                 gen2Str: '', gen2Cfg: [], indexId: null, cohabMembers: [], nodeAttrs: {}, lineAttrs: {},
+                parents2On: false,
+                parents2Type: INITIAL_DOC.parents2Type, parents2Status: INITIAL_DOC.parents2Status,
                 cohabSolid: false, polygons: [], texts: [], ages: {},
                 freeNodes: [], customLinks: [], childLinks: [], positions: {}, ipStyle: 'filled',
                 bgImage: null, bgErase: [], mainFamily: true,
@@ -1103,12 +1114,35 @@ const GenogramTab = ({
           <div className="section-title-row">
             <label>第一代（父母）</label>
             <InfoTip text="系統預設一對父母（■ 父、● 母）。右側標籤可點擊切換婚姻狀態，滑鼠停在上面滾動滾輪也可以。子女人數變動時，父母會自動對回整排子女的正中央；位置被拉亂時，手動拖曳會吸附中線，出現綠色虛線就是對準了。" />
+            {/* 開關：預設「一對」。打開變「兩對」，下面多一張第二對父母的卡片 */}
+            <span className="status-badge" data-status={parents2On ? 'cohab' : 'none'}
+                  title="再按一下切換：一對／兩對父母"
+                  onClick={() => setParents2On(!parents2On)}
+                  ref={el => wheelRef(el, [false, true], parents2On, setParents2On)}
+                  style={{ marginLeft: 'auto' }}>{parents2On ? '兩對' : '一對'}</span>
             <span className="status-badge" data-status={g1Status}
                   onClick={cycleOnClick(G1_STATUSES, g1Status, setG1Status)}
                   ref={el => wheelRef(el, G1_STATUSES, g1Status, setG1Status)}
-                  style={{ marginLeft: 'auto' }}>{G1_LABELS[g1Status]}</span>
+                  style={{ marginLeft: '6px' }}>{G1_LABELS[g1Status]}</span>
           </div>
         </div>
+
+        {parents2On && (
+          <div className="section">
+            <div className="section-title-row">
+              <label>第二對父母</label>
+              <InfoTip text="收養、繼親或寄養的第二對父母，畫在第一對的右邊。右側標籤可切換類型（養父母／繼父母／寄養）與婚姻狀態。下方第二代成員勾選「二組」，才會連到這一對；收養與寄養的親子線畫成虛線，繼親是實線。關掉開關不會清掉勾選。" />
+              <span className="status-badge" data-status="vertical"
+                    onClick={cycleOnClick(P2_TYPES, parents2Type, setParents2Type)}
+                    ref={el => wheelRef(el, P2_TYPES, parents2Type, setParents2Type)}
+                    style={{ marginLeft: 'auto' }}>{P2_LABELS[parents2Type]}</span>
+              <span className="status-badge" data-status={parents2Status}
+                    onClick={cycleOnClick(G1_STATUSES, parents2Status, setParents2Status)}
+                    ref={el => wheelRef(el, G1_STATUSES, parents2Status, setParents2Status)}
+                    style={{ marginLeft: '6px' }}>{G1_LABELS[parents2Status]}</span>
+            </div>
+          </div>
+        )}
 
         <div className="section">
           <div className="section-title-row">
@@ -1128,6 +1162,7 @@ const GenogramTab = ({
                   <span className={`child-icon ${c.gender === 'M' ? 'm' : 'f'}`}>{c.gender === 'M' ? '■' : '●'}</span>
                   <span className={`child-name ${c.gender === 'M' ? 'm' : 'f'}`}>{getGen2Title(i, gen2Cfg, indexId)}</span>
                   <div className="chk-wrap">
+                    {parents2On && <label><input type="checkbox" checked={c.p2 || false} onChange={() => toggleP2(i)} /> 二組</label>}
                     <label><input type="checkbox" checked={c.isMulti || false} onChange={() => toggleMulti(i)} /> 多胞胎</label>
                     <span className="status-badge" data-status={c.partner || 'none'}
                           onClick={cycleOnClick(G2_STATUSES, c.partner || 'none', v => changePartner(i, v))}
@@ -1387,16 +1422,21 @@ const GenogramTab = ({
               const coupleY = single ? pA.y + R : marriageGeom(pA, pB, lineStyle).barY;
               const topY = single || lineStyle === 'below' ? coupleY : coupleY + R;
               // 子女被拖到很靠近父母時，中點會跑到婚姻線上方，橫線就會反向
-              const barY = Math.max(topY + 10, (topY + kidPos[0].y - R) / 2), els = [];
-              els.push(<line key={`${ln.id}-v`} x1={midX} y1={coupleY} x2={midX} y2={barY} stroke={lineColor} strokeWidth={lineWidth} />);
+              const baseBarY = Math.max(topY + 10, (topY + kidPos[0].y - R) / 2);
+              // barDrop：第二對父母那條親子線的橫線往下挪，才不會跟第一條疊在一起（上限是離子女頂端 6px）
+              const barY = ln.barDrop ? Math.min(baseBarY + ln.barDrop, Math.max(baseBarY, kidPos[0].y - R - 6)) : baseBarY;
+              const els = [];
+              // 收養、寄養的親子線畫成虛線（家系圖慣例）；繼親與一般親子線是實線
+              const pcDash = ln.dashed ? '6,4' : undefined;
+              els.push(<line key={`${ln.id}-v`} x1={midX} y1={coupleY} x2={midX} y2={barY} stroke={lineColor} strokeWidth={lineWidth} strokeDasharray={pcDash} />);
               const groups = []; let cur = []; ln.kids.forEach((k, i) => { if (nodes.find(n => n.id === k)?.isMulti) cur.push(i); else { if (cur.length >= 2) groups.push(cur); cur = []; } }); if (cur.length >= 2) groups.push(cur);
               // 計算水平線端點：多胞胎用匯集中心點，非多胞胎用個體 X
               const barXs = kidPos.map((kp, j) => { const g = groups.find(x => x.includes(j)); return g ? g.map(i => kidPos[i].x).reduce((a, b) => a + b, 0) / g.length : kp.x; });
-              els.push(<line key={`${ln.id}-h`} x1={Math.min(midX, ...barXs)} y1={barY} x2={Math.max(midX, ...barXs)} y2={barY} stroke={lineColor} strokeWidth={lineWidth} />);
+              els.push(<line key={`${ln.id}-h`} x1={Math.min(midX, ...barXs)} y1={barY} x2={Math.max(midX, ...barXs)} y2={barY} stroke={lineColor} strokeWidth={lineWidth} strokeDasharray={pcDash} />);
               kidPos.forEach((kp, j) => {
                 const g = groups.find(x => x.includes(j));
-                if (g) els.push(<line key={`${ln.id}-m${j}`} x1={g.map(i=>kidPos[i].x).reduce((a,b)=>a+b,0)/g.length} y1={barY} x2={kp.x} y2={kp.y - R} stroke={lineColor} strokeWidth={lineWidth} />);
-                else els.push(<line key={`${ln.id}-k${j}`} x1={kp.x} y1={barY} x2={kp.x} y2={kp.y - R} stroke={lineColor} strokeWidth={lineWidth} strokeDasharray={kinshipDashFor(doc.nodeAttrs[ln.kids[j]])} />);
+                if (g) els.push(<line key={`${ln.id}-m${j}`} x1={g.map(i=>kidPos[i].x).reduce((a,b)=>a+b,0)/g.length} y1={barY} x2={kp.x} y2={kp.y - R} stroke={lineColor} strokeWidth={lineWidth} strokeDasharray={pcDash} />);
+                else els.push(<line key={`${ln.id}-k${j}`} x1={kp.x} y1={barY} x2={kp.x} y2={kp.y - R} stroke={lineColor} strokeWidth={lineWidth} strokeDasharray={pcDash || kinshipDashFor(doc.nodeAttrs[ln.kids[j]])} />);
                 /* 放進子女區才連上的子女：他那一段豎線可以雙擊解除（跟其他關係線
                    一樣雙擊刪除，Ctrl+Z 可還原）。填表產生的子女不給刪——那要回左側
                    面板改人數。透明的粗線只負責好點，畫面上看不到。 */

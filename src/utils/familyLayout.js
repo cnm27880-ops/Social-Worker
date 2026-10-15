@@ -14,17 +14,21 @@
  *   lines — [{ id, type: 'marry', a, b, status }] 或 [{ id, type: 'pc', pa, pb, kids }]
  * =========================================================================== */
 
-import { SZ, COUPLE_GAP, SIBLING_GAP, GEN_Y, parseGenders, getRelativeTitle, computeMainLayout } from './helpers';
+import {
+  SZ, COUPLE_GAP, SIBLING_GAP, GEN_Y, parseGenders, getRelativeTitle, computeMainLayout,
+  P2_TYPES, P2_NODE_LABELS, P2_DASHED,
+} from './helpers';
 import { mergeChildLinks } from './childLinks';
 import { isPlainLink } from './standalone';
 
 export const buildFamily = ({
   gen2Cfg = [], g1Status = 'married', customLinks = [], mainFamily = true,
   childLinks = [], positions = {}, freeNodes = [],
+  parents2On = false, parents2Type = 'adopt', parents2Status = 'married',
 }) => {
   const N = [], L = [];
   // 版面幾何（含第一代夫妻自動置中）與子女變動時的重新置中共用同一份計算
-  const { units, fX, mX } = computeMainLayout(gen2Cfg);
+  const { units, fX, mX, originX, totalW } = computeMainLayout(gen2Cfg);
   /* 舊圖修補模式（mainFamily === false）整組主家系都不產生：畫布上只剩
      自由擴充區、文字方塊與底圖。下面的 customLinks 區塊照跑 —— 舊圖上的
      人物就是靠它們加的，找不到主家系節點時會退回 freeNodes 的座標。 */
@@ -57,6 +61,26 @@ export const buildFamily = ({
       }
     });
     if (g2ids.length > 0) L.push({ id: 'pc-g1', type: 'pc', pa: 'fa', pb: 'mo', kids: g2ids });
+
+    /* 第二對父母：擺在第一對的右邊，跟整排子女錯開。第二代各自勾了 p2 才連過來，
+       連線是「另外一條」親子線（不是取代原本那條），所以案主同時有兩對父母。
+       沒有任何人勾選時兩個符號仍會畫出來，使用者可以先擺好再勾。 */
+    if (parents2On) {
+      const type = P2_TYPES.includes(parents2Type) ? parents2Type : 'adopt';
+      const [faLabel, moLabel] = P2_NODE_LABELS[type];
+      const f2X = Math.max(mX + 110, originX + totalW + 40);
+      N.push(
+        { id: 'fa2', gender: 'M', gen: 0, dx: f2X, dy: GEN_Y[0], label: faLabel, p2: true },
+        { id: 'mo2', gender: 'F', gen: 0, dx: f2X + COUPLE_GAP, dy: GEN_Y[0], label: moLabel, p2: true },
+      );
+      L.push({ id: 'ml-g1b', type: 'marry', a: 'fa2', b: 'mo2', status: parents2Status });
+      const p2kids = gen2Cfg.map((c, i) => (c.p2 ? `c${i}` : null)).filter(Boolean);
+      if (p2kids.length > 0) {
+        /* barDrop：兩條親子線的手足橫線原本會落在同一個高度、疊在一起，
+           虛線看起來就變成實線；第二條往下挪一點才分得開。 */
+        L.push({ id: 'pc-g1b', type: 'pc', pa: 'fa2', pb: 'mo2', kids: p2kids, dashed: P2_DASHED[type], barDrop: 10 });
+      }
+    }
   }
 
   // === customLink kidsCfg → 整合為完全體節點 ===

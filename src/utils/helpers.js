@@ -9,8 +9,18 @@ export const TEXT_FONT = "'Times New Roman', 'DFKai-SB', 'BiauKai', serif";
 /* --- 狀態標籤文字對照 --- */
 export const G2_STATUSES = ['none', 'married', 'cohab', 'separated', 'divorced'];
 export const G2_LABELS = { none: '未婚', married: '已婚', cohab: '同居', separated: '分居', divorced: '離婚' };
-export const G1_STATUSES = ['married', 'divorced'];
-export const G1_LABELS = { married: '已婚', divorced: '離婚' };
+export const G1_STATUSES = ['married', 'separated', 'divorced'];
+export const G1_LABELS = { married: '已婚', separated: '分居', divorced: '離婚' };
+
+/* --- 第二對父母（收養、繼親、寄養） ---
+ * 案主可以同時連到兩對父母：原本那對（生父母）＋這一對。類型決定符號上的
+ * 字，以及親子線的畫法——家系圖慣例收養與寄養用虛線，繼親用實線。 */
+export const P2_TYPES = ['adopt', 'step', 'foster'];
+export const P2_LABELS = { adopt: '養父母', step: '繼父母', foster: '寄養' };
+export const P2_NODE_LABELS = {
+  adopt: ['養父', '養母'], step: ['繼父', '繼母'], foster: ['寄養父', '寄養母'],
+};
+export const P2_DASHED = { adopt: true, step: false, foster: true };
 export const TEXT_DIRS = ['horizontal', 'vertical'];
 export const TEXT_DIR_LABELS = { horizontal: '橫式排版', vertical: '直式排版' };
 

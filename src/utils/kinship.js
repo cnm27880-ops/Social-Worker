@@ -45,7 +45,7 @@ const MARITAL = { married: '已婚', divorced: '離婚', separated: '分居', co
  */
 export const buildKinGraph = ({ nodes = [], lines = [], freeNodes = [], customLinks = [], positions = {} }) => {
   const people = new Map();
-  nodes.forEach(n => people.set(n.id, { gender: n.gender, x: positions[n.id]?.x ?? n.dx }));
+  nodes.forEach(n => people.set(n.id, { gender: n.gender, x: positions[n.id]?.x ?? n.dx, ...(n.p2 ? { p2Label: n.label } : {}) }));
   freeNodes.forEach(fn => {
     if (fn.gender === 'M' || fn.gender === 'F') people.set(fn.id, { gender: fn.gender, x: fn.x });
   });
@@ -84,6 +84,8 @@ const siblingsOf = (g, id) => {
 const describeStep = (g, type, from, to, status) => {
   const t = g.people.get(to), f = g.people.get(from);
   const M = t.gender === 'M';
+  // 第二對父母（收養、繼親、寄養）：用符號上的字（養父、繼母…），不套用簡稱表
+  if (type === 'U' && t.p2Label) return { code: `U2-${t.gender}`, word: t.p2Label };
   if (type === 'U') return { code: `U-${t.gender}`, word: M ? '父' : '母' };
   if (type === 'D') return { code: `D-${t.gender}`, word: M ? '子' : '女' };
   if (type === 'S') {

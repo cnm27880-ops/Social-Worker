@@ -13,6 +13,7 @@
 import { migrateBgPatch } from './bgImage';
 import { TEXT_SIDES } from './textBox';
 import { AGE_DISPLAYS } from './age';
+import { G1_STATUSES, P2_TYPES } from './helpers';
 
 /** 文件格式版本。日後改變資料形狀時 +1，並在 migrateDoc 補上轉換。 */
 export const DOC_VERSION = 1;
@@ -28,6 +29,12 @@ export const INITIAL_DOC = {
   gen2Cfg: [],
   indexId: null,
   g1Status: 'married',
+  /* 第二對父母（收養、繼親、寄養）：預設關閉。開啟後多一對 fa2／mo2，
+     第二代成員各自勾選「二組」才會連到它（gen2Cfg[i].p2）；關閉不會清掉
+     勾選，再打開還在。類型與婚姻狀態見 utils/helpers.js 的 P2_TYPES。 */
+  parents2On: false,
+  parents2Type: 'adopt',
+  parents2Status: 'married',
   cohabMembers: [],
 
   /* --- 主家系開關 ---
@@ -345,6 +352,10 @@ export const migrateDoc = (raw) => {
     cl && typeof cl.id === 'string' && typeof cl.childId === 'string'
     && (typeof cl.lineId === 'string' || typeof cl.parentId === 'string'));
   if (!AGE_DISPLAYS.includes(doc.ageDisplay)) doc.ageDisplay = INITIAL_DOC.ageDisplay;
+  // 第一代婚姻狀態與第二對父母的設定：不認得的值（例如手改過的檔）退回預設
+  if (!G1_STATUSES.includes(doc.g1Status)) doc.g1Status = INITIAL_DOC.g1Status;
+  if (!P2_TYPES.includes(doc.parents2Type)) doc.parents2Type = INITIAL_DOC.parents2Type;
+  if (!G1_STATUSES.includes(doc.parents2Status)) doc.parents2Status = INITIAL_DOC.parents2Status;
 
   // 底圖與橡皮擦筆跡：形狀不對就當沒有。壞掉的一筆不該讓整張畫布打不開
   if (doc.bgImage && typeof doc.bgImage.src !== 'string') doc.bgImage = null;
